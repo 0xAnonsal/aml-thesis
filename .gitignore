@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+.installed.cfg
+*.egg
+
+# Virtual envs / secrets
+.env
+.venv
+venv/
+ENV/
+
+# Conda
+.conda/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Data — large, regenerable
+data/elliptic/*
+data/amlworld/*
+data/ethereum/*
+data/tron/*
+!data/*/.gitkeep
+*.csv
+*.parquet
+*.h5
+*.npz
+
+# Model checkpoints
+*.pt
+*.pth
+*.ckpt
+checkpoints/
+
+# Experiment tracking
+wandb/
+mlruns/
+lightning_logs/
+outputs/
+
+# Results — keep summary jsons but ignore raw episodes
+results/raw/
+results/episodes/
+!results/.gitkeep
+
+# Allow examples
+!.env.example

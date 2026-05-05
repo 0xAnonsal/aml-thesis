@@ -1,0 +1,66 @@
+name: aml-thesis
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+  - pip
+
+  # PyTorch with CUDA 12.1 (compatible with GTX 1650 Ti and modern drivers)
+  - pytorch=2.4.*
+  - pytorch-cuda=12.1
+  - torchvision
+  - torchaudio
+
+  # Core scientific
+  - numpy
+  - pandas
+  - scikit-learn
+  - matplotlib
+  - seaborn
+  - networkx
+  - scipy
+
+  # Notebooks
+  - jupyter
+  - jupyterlab
+  - ipywidgets
+
+  - pip:
+    # PyTorch Geometric — install via pip for CUDA 12.1 wheel compat
+    - torch-geometric==2.5.3
+    - --find-links https://data.pyg.org/whl/torch-2.4.0+cu121.html
+    - torch-scatter
+    - torch-sparse
+
+    # LLM agents
+    - anthropic>=0.40.0
+    - openai>=1.0.0
+    - langgraph>=0.2.0
+    - langchain>=0.3.0
+    - langchain-anthropic
+    - langsmith
+
+    # Blockchain
+    - web3>=6.0.0
+    - eth-account
+    - eth-utils
+    - tronpy>=0.5.0
+
+    # Data + experiment tooling
+    - python-dotenv
+    - pydantic>=2.0
+    - pyyaml
+    - tqdm
+    - wandb
+    - hydra-core
+
+    # Dev
+    - pytest
+    - pytest-asyncio
+    - ruff
+    - mypy
+    - ipython
