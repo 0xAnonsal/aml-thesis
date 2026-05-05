@@ -1,0 +1,58 @@
+{
+  "experiment": "gcn_baseline_v1",
+  "date": "2026-05-05",
+  "dataset": {
+    "name": "Elliptic Bitcoin",
+    "source": "torch_geometric.datasets.EllipticBitcoinDataset",
+    "nodes": 203769,
+    "edges": 234355,
+    "node_features": 165,
+    "split": "temporal (timesteps 1-34 train, 35-49 test)",
+    "train_labeled": 29894,
+    "test_labeled": 16670,
+    "train_class_balance": {"licit": 26432, "illicit": 3462},
+    "test_class_balance": {"licit": 15587, "illicit": 1083}
+  },
+  "model": {
+    "name": "GCN",
+    "architecture": "2-layer GCNConv, hidden_dim=100, dropout=0.5",
+    "reference": "Weber et al. 2019, Anti-Money Laundering in Bitcoin"
+  },
+  "hyperparameters": {
+    "epochs": 200,
+    "optimizer": "Adam",
+    "lr": 1e-3,
+    "weight_decay": 5e-4,
+    "loss": "cross_entropy with class weights",
+    "class_weights_train": [0.565, 4.317],
+    "seed": 42
+  },
+  "hardware": {
+    "device": "cuda",
+    "gpu": "NVIDIA GeForce GTX 1650 Ti",
+    "vram_gb": 4.3
+  },
+  "wall_time_seconds": 8.0,
+  "test_metrics": {
+    "f1_illicit": 0.3451,
+    "precision_illicit": 0.2340,
+    "recall_illicit": 0.6565,
+    "accuracy": 0.8381,
+    "macro_f1": 0.6263,
+    "weighted_f1": 0.8711
+  },
+  "reference_baselines": {
+    "Weber_2019_GCN": {
+      "f1_illicit": 0.41,
+      "precision_illicit": 0.812,
+      "recall_illicit": 0.273,
+      "note": "Original paper does not use class-balanced loss"
+    }
+  },
+  "notes": [
+    "Loss was still decreasing at epoch 200 — longer training expected to close the gap to 0.41.",
+    "Class-balanced loss inverts the precision/recall tradeoff vs the paper. For AML, false negatives are more costly than false positives, so high recall is desirable — but worth ablating both settings.",
+    "Training takes 8s on full graph — GPU is barely loaded. Could afford 1000+ epochs or larger hidden dim.",
+    "Next: train GAT and EvolveGCN baselines (week 2), then build first launderer agents (week 3+)."
+  ]
+}
