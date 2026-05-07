@@ -45,6 +45,8 @@ This thesis addresses both gaps by building (a) an LLM-based multi-agent launder
 | Tron | Custom event-log simulator + sampled real TRC-20 USDT graph (read-only via TronGrid API). Bridge "mint" events injected as the Tron-side leg of cross-chain transfers. | Stablecoin peel-chain + cross-chain destination experiments |
 | Bitcoin | Elliptic / Elliptic++ dataset | Train baseline victim detectors only — Bitcoin is **not** an attacker target in this thesis. It serves as the labeled-data foundation for the GNN baselines the LLM attacker tries to evade. |
 
+Beyond the chain environments above, a shared **historical price oracle** sources hourly OHLC for ETH, TRX, and USDT vs USD back to 2018, via CoinGecko's free tier and pre-downloaded to a local CSV cache for reproducibility. The oracle is described as a service in §3.2; both attacker and defender call it as a tool, but it is not itself an LLM agent.
+
 ### 3.2 Architecture
 
 **Attacker (Launderer) — LLM multi-agent:**
@@ -61,6 +63,13 @@ This thesis addresses both gaps by building (a) an LLM-based multi-agent launder
 **Victim baseline detectors (off the shelf, used as the attacker's reward signal):**
 - GCN, GAT, EvolveGCN trained on Elliptic + AMLworld
 - Reproduce published F1 / precision / recall before any attack experiments
+
+**Shared infrastructure (used by both attacker and defender — NOT an LLM agent):**
+- *PriceOracle*: deterministic Python service mapping `(asset, timestamp) → USD price`. Backed by a pre-downloaded CoinGecko CSV cache (hourly OHLC for ETH, TRX, USDT, 2018–present).
+  - Attacker uses it to size each laundering leg under FATF USD thresholds (e.g., the $10k smurfing threshold), choose USDT vs ETH for value-stable holding during layering, and time exit ramps relative to recent price movement.
+  - Defender uses it to USD-normalize observed flows across heterogeneous assets, apply USD-denominated suspicion rules, and detect cross-asset smurfing patterns that would be invisible if measured in native units.
+  - Pricing is treated as **data, not strategy**: the oracle is a Python tool that LLM agents call. We do NOT spend LLM tokens on price lookups, and there is no dedicated "pricing agent" on either side.
+  - USDT default: $1.00. Configurable depeg events for ablation (e.g., the March 2023 USDC depeg that briefly dragged USDT off-peg).
 
 ### 3.3 Cost optimization
 
@@ -93,6 +102,7 @@ This thesis addresses both gaps by building (a) an LLM-based multi-agent launder
 
 **Attacker side:**
 - Attack Success Rate (ASR): proportion of laundering campaigns undetected by victim model
+- **USD-volume-weighted ASR**: ASR weighted by the USD-equivalent volume successfully laundered, so a campaign that moves $1M of ETH dominates a campaign that moves $1k of TRX. Prevents the headline number from being inflated by many low-stakes successes.
 - Typology realism: automated scoring against FATF typologies + spot-check by advisor
 - Cost per successful evasion (USD API spend / successful campaign)
 - Cross-chain ASR uplift: ASR using cross-chain bridge layering vs single-chain campaigns of equivalent volume
@@ -102,12 +112,14 @@ This thesis addresses both gaps by building (a) an LLM-based multi-agent launder
 - False positive rate on benign transactions
 - Information sharing efficiency (suspicion signals exchanged per detection)
 - Cross-chain detection rate: proportion of bridge-mediated laundering campaigns flagged by the inter-chain coordinator vs the same defender with cross-chain correlation disabled (ablation)
+- **USD-equivalent detection precision and recall**: standard precision/recall weighted by USD value of the flagged flows, so correctly catching $1M is worth more than correctly catching $100. Prevents the headline number from being padded by easy small-volume catches.
 
 **Comparative:**
 - LLM attacker vs PGD-style gradient attacker on the same victim model
 - Multi-agent defender vs single-model GCN baseline
 - Per-chain breakdown (Ethereum vs Tron) for both attacker and defender
 - Per-asset breakdown (native ETH/TRX vs USDT) for laundering volume and detection
+- **Price-aware-timing ablation**: launderer with full PriceOracle access vs launderer with prices hidden — does intra-campaign price awareness measurably shift ASR, or does the launderer move fast enough that ETH/TRX volatility is irrelevant on the timescale of a single campaign?
 
 ---
 
@@ -134,3 +146,4 @@ This thesis addresses both gaps by building (a) an LLM-based multi-agent launder
 | "Novelty" claim challenged by reviewers | Maintain explicit prior-work comparison table; pre-register experiment design with advisor before running |
 | Reproducibility | All experiments seed-controlled; configs in `experiments/` as YAML; W&B run logging |
 | Tornado Cash legal sensitivity | Mock contracts only; document this prominently; advisor sign-off before week 3 |
+| CoinGecko free-tier rate limits or schema changes break experiments | Pre-download all needed historical prices to a versioned local CSV cache; PriceOracle reads from cache, not live API, during experiments. Live calls only for one-off backfill. |
