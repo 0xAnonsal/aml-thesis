@@ -7,8 +7,9 @@ Currently deploys:
     - MockUSDT (ERC-20, 6 decimals)
     - MockUniswapV2Pool (ETH/USDT constant-product AMM, bootstrapped with
       500 ETH + 1,000,000 USDT)
+    - MockTornado (1-ETH-denomination mixer)
 
-More mocks land as their PRs merge: MockTornado, MockBridge.
+More mocks land as their PRs merge: MockBridge.
 
 Prereqs:
     - Foundry installed (curl -L https://foundry.paradigm.xyz | bash; foundryup)
@@ -20,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -30,10 +32,11 @@ from aml.chains import AnvilNode
 REPO_ROOT = Path(__file__).resolve().parents[1]
 USDT_ARTIFACT = REPO_ROOT / "out" / "MockUSDT.sol" / "MockUSDT.json"
 POOL_ARTIFACT = REPO_ROOT / "out" / "MockUniswapV2Pool.sol" / "MockUniswapV2Pool.json"
+TORNADO_ARTIFACT = REPO_ROOT / "out" / "MockTornado.sol" / "MockTornado.json"
 
-# Bootstrap parameters — picks a clean ETH price ~$2000 (500 ETH x 1M USDT)
 BOOTSTRAP_USDT = 1_000_000 * 10**6
 BOOTSTRAP_ETH_WEI = 500 * 10**18
+TORNADO_DENOMINATION_WEI = 10**18  # 1 ETH
 
 
 def _raw_tx(signed) -> bytes:
@@ -56,7 +59,7 @@ def _send(w3, fn, sender: str, key: str, gas: int = 2_000_000, value: int = 0):
 
 
 def ensure_compiled() -> None:
-    if USDT_ARTIFACT.exists() and POOL_ARTIFACT.exists():
+    if all(p.exists() for p in [USDT_ARTIFACT, POOL_ARTIFACT, TORNADO_ARTIFACT]):
         return
     print("Compiling contracts (forge build)...")
     subprocess.run(["forge", "build"], cwd=REPO_ROOT, check=True)
@@ -72,49 +75,65 @@ def main():
     ensure_compiled()
     usdt_abi, usdt_bytecode = load_artifact(USDT_ARTIFACT)
     pool_abi, pool_bytecode = load_artifact(POOL_ARTIFACT)
+    tornado_abi, tornado_bytecode = load_artifact(TORNADO_ARTIFACT)
 
     with AnvilNode() as node:
         print(f"Anvil: {node.rpc_url}  (chain_id={node.chain_id})\n")
         w3 = Web3(Web3.HTTPProvider(node.rpc_url))
         deployer, key = node.accounts[0], node.private_keys[0]
 
-        # 1. Deploy MockUSDT
+        # --- USDT ---
         usdt_factory = w3.eth.contract(abi=usdt_abi, bytecode=usdt_bytecode)
-        receipt = _send(w3, usdt_factory.constructor(), deployer, key)
-        usdt = w3.eth.contract(address=receipt.contractAddress, abi=usdt_abi)
+        usdt = w3.eth.contract(
+            address=_send(w3, usdt_factory.constructor(), deployer, key).contractAddress,
+            abi=usdt_abi,
+        )
         print(f"MockUSDT:           {usdt.address}")
 
-        # 2. Deploy MockUniswapV2Pool(usdt)
+        # --- Uniswap-style pool ---
         pool_factory = w3.eth.contract(abi=pool_abi, bytecode=pool_bytecode)
-        receipt = _send(w3, pool_factory.constructor(usdt.address), deployer, key)
-        pool = w3.eth.contract(address=receipt.contractAddress, abi=pool_abi)
+        pool = w3.eth.contract(
+            address=_send(w3, pool_factory.constructor(usdt.address), deployer, key).contractAddress,
+            abi=pool_abi,
+        )
         print(f"MockUniswapV2Pool:  {pool.address}")
 
-        # 3. Mint USDT to deployer + approve pool + bootstrap
         _send(w3, usdt.functions.mint(deployer, BOOTSTRAP_USDT), deployer, key, gas=200_000)
         _send(w3, usdt.functions.approve(pool.address, BOOTSTRAP_USDT), deployer, key, gas=200_000)
         _send(w3, pool.functions.bootstrap(BOOTSTRAP_USDT), deployer, key, value=BOOTSTRAP_ETH_WEI)
-
         eth_r, usdt_r = pool.functions.getReserves().call()
-        eth_per_usdt = (eth_r / 10**18) / (usdt_r / 10**6)
         print(
-            f"\nPool bootstrapped:"
-            f"\n  reserveETH:   {eth_r / 10**18:.2f} ETH"
-            f"\n  reserveUSDT:  {usdt_r / 10**6:,.2f} USDT"
-            f"\n  spot price:   1 ETH = {1 / eth_per_usdt:,.2f} USDT"
+            f"  pool reserves:      {eth_r / 10**18:.2f} ETH / {usdt_r / 10**6:,.2f} USDT"
+            f" (spot: 1 ETH = {(usdt_r / 10**6) / (eth_r / 10**18):,.2f} USDT)"
         )
 
-        # 4. Sanity swap: alice swaps 1 ETH for USDT
-        alice, alice_key = node.accounts[1], node.private_keys[1]
-        one_eth = 10**18
-        expected = pool.functions.getAmountOut(one_eth, eth_r, usdt_r).call()
-        _send(w3, pool.functions.swapETHForUSDT(0), alice, alice_key, value=one_eth)
-        alice_usdt = usdt.functions.balanceOf(alice).call()
-        print(
-            f"\nSanity swap (alice 1 ETH -> USDT):"
-            f"\n  quoted out:   {expected / 10**6:,.4f} USDT"
-            f"\n  alice USDT:   {alice_usdt / 10**6:,.4f}"
+        # --- Tornado mixer ---
+        tornado_factory = w3.eth.contract(abi=tornado_abi, bytecode=tornado_bytecode)
+        tornado = w3.eth.contract(
+            address=_send(w3, tornado_factory.constructor(), deployer, key).contractAddress,
+            abi=tornado_abi,
         )
+        print(f"MockTornado:        {tornado.address}")
+        print(f"  denomination:       {tornado.functions.DENOMINATION().call() / 10**18:.0f} ETH")
+
+        # Sanity: alice deposits, charlie withdraws — laundering primitive
+        alice, alice_key = node.accounts[1], node.private_keys[1]
+        charlie = node.accounts[2]
+        secret = os.urandom(32)
+        nullifier = os.urandom(32)
+        commitment = Web3.keccak(secret + nullifier)
+
+        _send(w3, tornado.functions.deposit(commitment), alice, alice_key,
+              value=TORNADO_DENOMINATION_WEI)
+        charlie_before = w3.eth.get_balance(charlie)
+        _send(w3, tornado.functions.withdraw(secret, nullifier, charlie), alice, alice_key)
+        charlie_delta = w3.eth.get_balance(charlie) - charlie_before
+        print(
+            f"  sanity laundering:  alice deposited 1 ETH, charlie received "
+            f"{charlie_delta / 10**18:.4f} ETH (anon set: "
+            f"{tornado.functions.depositCount().call()})"
+        )
+
         print("\nDeployment OK. Anvil tears down when this script exits.")
 
 
