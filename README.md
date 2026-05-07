@@ -2,14 +2,14 @@
 
 Multi-agent LLM systems for cryptocurrency anti-money laundering research:
 
-- **Red team** — an adversarial multi-agent launderer that generates typologically realistic attacks on simulated Ethereum and Tron environments
-- **Blue team** — a multi-agent collaborative detector that operates over partial graph views (one agent per simulated exchange)
+- **Red team** — an adversarial multi-agent launderer that generates typologically realistic attacks on a simulated Ethereum environment, including stablecoin (USDT) flows and real ZK-mixer use
+- **Blue team** — a multi-agent collaborative detector that performs actor-level clustering (related-wallet identification) under partial graph visibility — one agent per simulated exchange
 
 See [ROADMAP.md](ROADMAP.md) for the full proposal: problem statement, novelty claims, methodology, datasets, evaluation metrics, and 12-week timeline.
 
 ## Status
 
-Week 3 — Ethereum simulator: Anvil + mock contracts.
+Week 4 — ZK Tornado upgrade in progress.
 
 ## Setup
 
@@ -23,15 +23,22 @@ pip install -e .
 
 # 3. Install Foundry (anvil + forge + cast)
 curl -L https://foundry.paradigm.xyz | bash
-source ~/.bashrc   # or restart shell
+source ~/.bashrc
 foundryup
 forge --version && anvil --version
 
-# 4. Configure secrets
-cp .env.example .env
-# Edit .env to add: ANTHROPIC_API_KEY, ETHERSCAN_API_KEY, TRONGRID_API_KEY
+# 4. Install ZK proving stack (Node + snarkjs + circom)
+bash scripts/install_zk_tools.sh
+source ~/.bashrc                            # picks up nvm + circom on PATH
 
-# 5. Verify GPU (optional — needed for GNN baselines)
+# 5. Run ZK trusted setup for the test circuit (~30s after the .ptau download)
+bash scripts/setup_zk.sh
+
+# 6. Configure secrets
+cp .env.example .env
+# Edit .env to add: ANTHROPIC_API_KEY, ETHERSCAN_API_KEY
+
+# 7. Verify GPU (optional — needed for GNN baselines)
 python -c "import torch; print('CUDA:', torch.cuda.is_available())"
 ```
 
@@ -50,13 +57,18 @@ pytest tests/test_price_oracle.py
 # Ethereum simulator smoke (week 3)
 forge build
 python scripts/deploy_eth_mocks.py
-pytest tests/test_anvil_usdt.py
+pytest tests/test_anvil_usdt.py tests/test_anvil_uniswap.py tests/test_anvil_tornado.py tests/test_anvil_bridge.py
+
+# ZK toolchain smoke (week 4.1)
+bash scripts/setup_zk.sh
+pytest tests/test_zk_toolchain.py
 ```
 
 ## Project layout
 
 ```
 contracts/     Solidity mock contracts (Foundry-compiled)
+circuits/      circom circuits + snarkjs build artifacts (build/ gitignored)
 src/aml/
   chains/      Ethereum and Tron chain abstractions (Anvil manager etc.)
   detectors/   GNN baselines: GCN, GAT, EvolveGCN (the "victim" models)

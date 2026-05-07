@@ -70,5 +70,10 @@ results/episodes/
 /broadcast/
 /lib/
 
+# Circom / snarkjs build artifacts (regenerable via scripts/setup_zk.sh)
+/circuits/build/
+/circuits/ptau/
+/node_modules/
+
 # Allow examples
 !.env.example
