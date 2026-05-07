@@ -64,5 +64,11 @@ results/raw/
 results/episodes/
 !results/.gitkeep
 
+# Foundry
+/out/
+/cache/
+/broadcast/
+/lib/
+
 # Allow examples
 !.env.example
