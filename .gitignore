@@ -43,6 +43,10 @@ data/tron/*
 *.h5
 *.npz
 
+# Price cache is small + reproducibility-critical, keep it tracked
+!data/prices/
+!data/prices/*.csv
+
 # Model checkpoints
 *.pt
 *.pth
