@@ -4,12 +4,12 @@ Sanity check that proves the full toolchain (Foundry + Anvil + web3.py) works
 end-to-end. Anvil tears down on exit; deployments are ephemeral by design.
 
 Currently deploys:
-    - MockUSDT (ERC-20, 6 decimals)
-    - MockUniswapV2Pool (ETH/USDT constant-product AMM, bootstrapped with
-      500 ETH + 1,000,000 USDT)
-    - MockTornado (1-ETH-denomination mixer)
+    - MockUSDT          (ERC-20, 6 decimals)
+    - MockUniswapV2Pool (ETH/USDT constant-product AMM, 500 ETH + 1M USDT)
+    - MockTornado       (1-ETH-denomination mixer)
+    - MockBridge        (USDT lock-and-release for ETH<->Tron)
 
-More mocks land as their PRs merge: MockBridge.
+Closes the ETH-side mock-contract checklist for ROADMAP §3.1.
 
 Prereqs:
     - Foundry installed (curl -L https://foundry.paradigm.xyz | bash; foundryup)
@@ -33,10 +33,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 USDT_ARTIFACT = REPO_ROOT / "out" / "MockUSDT.sol" / "MockUSDT.json"
 POOL_ARTIFACT = REPO_ROOT / "out" / "MockUniswapV2Pool.sol" / "MockUniswapV2Pool.json"
 TORNADO_ARTIFACT = REPO_ROOT / "out" / "MockTornado.sol" / "MockTornado.json"
+BRIDGE_ARTIFACT = REPO_ROOT / "out" / "MockBridge.sol" / "MockBridge.json"
+
+ALL_ARTIFACTS = [USDT_ARTIFACT, POOL_ARTIFACT, TORNADO_ARTIFACT, BRIDGE_ARTIFACT]
 
 BOOTSTRAP_USDT = 1_000_000 * 10**6
 BOOTSTRAP_ETH_WEI = 500 * 10**18
-TORNADO_DENOMINATION_WEI = 10**18  # 1 ETH
+TORNADO_DENOMINATION_WEI = 10**18
+BRIDGE_DEMO_AMOUNT = 2_500 * 10**6  # 2,500 USDT for the cross-chain demo
+TRON_DEST_DEMO = b"TR1ce9NK4DM7XFq9RzTronAddrPadding"[:32].ljust(32, b"\x00")
 
 
 def _raw_tx(signed) -> bytes:
@@ -59,7 +64,7 @@ def _send(w3, fn, sender: str, key: str, gas: int = 2_000_000, value: int = 0):
 
 
 def ensure_compiled() -> None:
-    if all(p.exists() for p in [USDT_ARTIFACT, POOL_ARTIFACT, TORNADO_ARTIFACT]):
+    if all(p.exists() for p in ALL_ARTIFACTS):
         return
     print("Compiling contracts (forge build)...")
     subprocess.run(["forge", "build"], cwd=REPO_ROOT, check=True)
@@ -76,6 +81,7 @@ def main():
     usdt_abi, usdt_bytecode = load_artifact(USDT_ARTIFACT)
     pool_abi, pool_bytecode = load_artifact(POOL_ARTIFACT)
     tornado_abi, tornado_bytecode = load_artifact(TORNADO_ARTIFACT)
+    bridge_abi, bridge_bytecode = load_artifact(BRIDGE_ARTIFACT)
 
     with AnvilNode() as node:
         print(f"Anvil: {node.rpc_url}  (chain_id={node.chain_id})\n")
@@ -97,7 +103,6 @@ def main():
             abi=pool_abi,
         )
         print(f"MockUniswapV2Pool:  {pool.address}")
-
         _send(w3, usdt.functions.mint(deployer, BOOTSTRAP_USDT), deployer, key, gas=200_000)
         _send(w3, usdt.functions.approve(pool.address, BOOTSTRAP_USDT), deployer, key, gas=200_000)
         _send(w3, pool.functions.bootstrap(BOOTSTRAP_USDT), deployer, key, value=BOOTSTRAP_ETH_WEI)
@@ -114,27 +119,43 @@ def main():
             abi=tornado_abi,
         )
         print(f"MockTornado:        {tornado.address}")
-        print(f"  denomination:       {tornado.functions.DENOMINATION().call() / 10**18:.0f} ETH")
-
-        # Sanity: alice deposits, charlie withdraws — laundering primitive
         alice, alice_key = node.accounts[1], node.private_keys[1]
         charlie = node.accounts[2]
         secret = os.urandom(32)
         nullifier = os.urandom(32)
         commitment = Web3.keccak(secret + nullifier)
-
         _send(w3, tornado.functions.deposit(commitment), alice, alice_key,
               value=TORNADO_DENOMINATION_WEI)
         charlie_before = w3.eth.get_balance(charlie)
         _send(w3, tornado.functions.withdraw(secret, nullifier, charlie), alice, alice_key)
-        charlie_delta = w3.eth.get_balance(charlie) - charlie_before
         print(
-            f"  sanity laundering:  alice deposited 1 ETH, charlie received "
-            f"{charlie_delta / 10**18:.4f} ETH (anon set: "
-            f"{tornado.functions.depositCount().call()})"
+            f"  laundering demo:    alice -> charlie via mixer: "
+            f"{(w3.eth.get_balance(charlie) - charlie_before) / 10**18:.4f} ETH"
         )
 
-        print("\nDeployment OK. Anvil tears down when this script exits.")
+        # --- Bridge ---
+        bridge_factory = w3.eth.contract(abi=bridge_abi, bytecode=bridge_bytecode)
+        bridge = w3.eth.contract(
+            address=_send(w3, bridge_factory.constructor(usdt.address), deployer, key).contractAddress,
+            abi=bridge_abi,
+        )
+        print(f"MockBridge:         {bridge.address}")
+
+        # Cross-chain demo: alice locks USDT toward Tron, operator releases
+        # the mirror amount to dave on this chain (simulating the round-trip).
+        dave = node.accounts[3]
+        _send(w3, usdt.functions.mint(alice, BRIDGE_DEMO_AMOUNT), alice, alice_key, gas=200_000)
+        _send(w3, usdt.functions.approve(bridge.address, BRIDGE_DEMO_AMOUNT),
+              alice, alice_key, gas=200_000)
+        _send(w3, bridge.functions.lockUSDT(BRIDGE_DEMO_AMOUNT, TRON_DEST_DEMO), alice, alice_key)
+        _send(w3, bridge.functions.releaseUSDT(1, dave, BRIDGE_DEMO_AMOUNT), deployer, key)
+        print(
+            f"  bridge demo:        alice locked {BRIDGE_DEMO_AMOUNT / 10**6:,.0f} USDT, "
+            f"dave received {usdt.functions.balanceOf(dave).call() / 10**6:,.0f} USDT"
+        )
+
+        print("\nDeployment OK. All four ETH-side mocks operational.")
+        print("Anvil tears down when this script exits.")
 
 
 if __name__ == "__main__":
