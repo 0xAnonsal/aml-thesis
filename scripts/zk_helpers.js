@@ -10,32 +10,36 @@
 //
 //   mimc2 <integer1> <integer2>
 //     -> MiMCSponge([int1, int2], k=0, nOuts=1) as a decimal string
+//        (this is the hashLeftRight equivalent for the Merkle tree)
 //
 //   prepare-withdraw <secret> <nullifier> <leafIndex> <depth>
 //     -> JSON object with everything the withdraw circuit needs as inputs:
 //        { commitment, nullifierHash, root, pathElements[], pathIndices[] }
-//        Builds a Merkle tree of 2^depth leaves, places `commitment` at
-//        leafIndex, fills the rest with 0n, and computes root + path.
+//
+//   mimc-bytecode
+//     -> creation bytecode of the auto-generated MiMCSponge contract
+//        (seed="mimcsponge", 220 rounds), as a hex string with 0x prefix.
+//        Deploy this bytecode with no constructor args; the resulting
+//        contract exposes MiMCSponge(uint256, uint256) -> (uint256, uint256).
+//
+//   mimc-abi
+//     -> ABI of the deployed MiMC contract, as a JSON array.
 //
 // All numeric inputs are interpreted as bn254 field elements; numeric
 // strings pass through BigInt so values larger than 2^53 are safe.
 
 "use strict";
 
-const { buildMimcSponge } = require("circomlibjs");
+const { buildMimcSponge, mimcSpongecontract } = require("circomlibjs");
 
-// MiMC of two field elements (BigInt in, BigInt out)
 function hash2(mimc, a, b) {
     return mimc.F.toObject(mimc.multiHash([a, b], 0n));
 }
 
-// MiMC of one field element (BigInt in, BigInt out)
 function hash1(mimc, a) {
     return mimc.F.toObject(mimc.multiHash([a], 0n));
 }
 
-// Build a depth-`depth` Merkle tree with `leaves` (zero-padded to 2^depth)
-// and return root + the inclusion path for `leafIndex`.
 function buildTreeAndPath(mimc, leaves, leafIndex, depth) {
     const numLeaves = 1 << depth;
     if (leaves.length > numLeaves) {
@@ -45,7 +49,6 @@ function buildTreeAndPath(mimc, leaves, leafIndex, depth) {
         throw new Error(`leafIndex ${leafIndex} out of range for depth ${depth}`);
     }
 
-    // Pad with zeros up to 2^depth
     const padded = leaves.slice();
     while (padded.length < numLeaves) padded.push(0n);
 
@@ -76,8 +79,23 @@ async function main() {
     const args = process.argv.slice(3);
 
     if (!cmd) {
-        console.error("usage: node zk_helpers.js {mimc|mimc2|prepare-withdraw} <args...>");
+        console.error("usage: node zk_helpers.js {mimc|mimc2|prepare-withdraw|mimc-bytecode|mimc-abi} <args...>");
         process.exit(2);
+    }
+
+    // mimc-bytecode and mimc-abi don't need the buildMimcSponge instance —
+    // they read directly from the contract-generation helper.
+    if (cmd === "mimc-bytecode") {
+        const bytecode = mimcSpongecontract.createCode("mimcsponge", 220);
+        // createCode returns hex without 0x prefix in some versions; normalize.
+        const hex = bytecode.startsWith("0x") ? bytecode : "0x" + bytecode;
+        console.log(hex);
+        return;
+    }
+
+    if (cmd === "mimc-abi") {
+        console.log(JSON.stringify(mimcSpongecontract.abi));
+        return;
     }
 
     const mimc = await buildMimcSponge();
@@ -110,11 +128,9 @@ async function main() {
         const leafIndex = parseInt(args[2], 10);
         const depth = parseInt(args[3], 10);
 
-        // commitment = MiMC(nullifier, secret) — order matches CommitmentHasher in withdraw.circom
         const commitment = hash2(mimc, nullifier, secret);
         const nullifierHash = hash1(mimc, nullifier);
 
-        // Build a tree with this commitment placed at `leafIndex`
         const leaves = new Array(leafIndex).fill(0n);
         leaves.push(commitment);
         const { root, pathElements, pathIndices } = buildTreeAndPath(
