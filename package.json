@@ -1,0 +1,10 @@
+{
+  "name": "aml-thesis",
+  "version": "0.1.0",
+  "private": true,
+  "description": "JS dependencies for circom + ZK proving (circomlib for circuits, circomlibjs for off-chain hashing)",
+  "dependencies": {
+    "circomlib": "^2.0.5",
+    "circomlibjs": "^0.1.7"
+  }
+}

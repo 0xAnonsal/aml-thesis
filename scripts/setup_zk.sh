@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Compile the ZK circuit, run phase-2 trusted setup, export the Solidity
+# Compile a ZK circuit, run phase-2 trusted setup, export the Solidity
 # verifier. Idempotent — skips steps with cached artifacts. Safe to re-run.
 #
 # Prereq: scripts/install_zk_tools.sh has run successfully and circom + snarkjs
 # are on PATH. Re-run this script after editing circuits/.
 #
-# Output (under circuits/build/):
+# Output (under circuits/build/<circuit>/):
 #   <circuit>.r1cs                   compiled constraint system
 #   <circuit>_js/<circuit>.wasm      witness generator
-#   <circuit>_final.zkey             phase-2 proving key (after one contribution)
+#   <circuit>_final.zkey             phase-2 proving key
 #   verification_key.json            verification key in JSON
 #   Verifier.sol                     auto-generated Solidity Groth16 verifier
-set -euo pipefail
+set -eo pipefail   # NB: no -u — sourced shell tooling may have unbound vars
 
 CIRCUIT="${1:-multiplier}"
 ROOT="$(git rev-parse --show-toplevel)"
@@ -22,10 +22,24 @@ PTAU_FILE="$PTAU/phase2.ptau"
 
 # pot=14 supports up to 2^14 = 16384 constraints. Comfortably above the
 # trivial multiplier (1 constraint) and the real Tornado-style withdraw
-# circuit we'll add in PR 4.2 (~4000 constraints with Merkle depth 20).
+# circuit (~4000 constraints with Merkle depth 20).
 PTAU_POWER=14
 
 mkdir -p "$BUILD" "$PTAU"
+
+# --- 0. JS dependencies (circomlib for circuit includes, circomlibjs for ---
+#                         off-chain hashing in tests)
+if [ ! -d "$ROOT/node_modules/circomlib" ] || [ ! -d "$ROOT/node_modules/circomlibjs" ]; then
+    echo "[0/5] Installing JS dependencies (circomlib, circomlibjs) ..."
+    if ! command -v npm >/dev/null 2>&1; then
+        echo "      ERROR: npm not on PATH. Run: bash scripts/install_zk_tools.sh"
+        echo "      then: source ~/.bashrc"
+        exit 1
+    fi
+    (cd "$ROOT" && npm install --silent)
+else
+    echo "[0/5] node_modules cached: $ROOT/node_modules"
+fi
 
 # --- 1. Phase-1 trusted setup ---------------------------------------------
 # Generate locally with one contribution. The Hermez S3 mirror that the
@@ -41,7 +55,6 @@ if [ ! -f "$PTAU_FILE" ]; then
         exit 1
     fi
     pushd "$PTAU" >/dev/null
-    # Don't suppress snarkjs output — we want to see progress and any errors.
     snarkjs powersoftau new bn128 "$PTAU_POWER" pot_0000.ptau
     snarkjs powersoftau contribute pot_0000.ptau pot_0001.ptau \
         --name="aml-thesis local" \
@@ -58,7 +71,11 @@ fi
 echo "[2/5] Compiling $CIRCUIT.circom ..."
 (
     cd "$CIRCUITS"
-    circom "$CIRCUIT.circom" --r1cs --wasm --sym -o "build/$CIRCUIT" >/dev/null
+    # -l flag adds an include search path. Lets circuits use
+    #   include "circomlib/circuits/mimcsponge.circom";
+    # rather than relative paths into node_modules.
+    circom "$CIRCUIT.circom" -l "$ROOT/node_modules" \
+        --r1cs --wasm --sym -o "build/$CIRCUIT" >/dev/null
 )
 echo "      r1cs:  $BUILD/$CIRCUIT.r1cs"
 echo "      wasm:  $BUILD/${CIRCUIT}_js/$CIRCUIT.wasm"
@@ -70,9 +87,6 @@ ZKEY_FINAL="$BUILD/${CIRCUIT}_final.zkey"
 if [ ! -f "$ZKEY_FINAL" ]; then
     echo "[3/5] Phase-2 setup (Groth16) ..."
     snarkjs groth16 setup "$BUILD/$CIRCUIT.r1cs" "$PTAU_FILE" "$ZKEY_0" >/dev/null
-    # Single deterministic contribution. For production-grade research a
-    # multi-party ceremony would replace this; for thesis experiments a
-    # one-shot contribution is sufficient and well-documented.
     snarkjs zkey contribute "$ZKEY_0" "$ZKEY_FINAL" \
         --name="thesis test contribution" \
         -e="aml-thesis $CIRCUIT phase2 contribution" >/dev/null
@@ -99,4 +113,4 @@ echo "      verifier: $VERIFIER"
 
 echo
 echo "=== $CIRCUIT setup complete ==="
-echo "Run: pytest tests/test_zk_toolchain.py"
+echo "Run: pytest tests/"
