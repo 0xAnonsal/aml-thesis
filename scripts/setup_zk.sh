@@ -111,6 +111,15 @@ if [ ! -f "$VERIFIER" ] || [ "$ZKEY_FINAL" -nt "$VERIFIER" ]; then
 fi
 echo "      verifier: $VERIFIER"
 
+# For the withdraw circuit, also copy the verifier into contracts/ so
+# Foundry can compile it for on-chain verification tests. The file is
+# gitignored — every developer's verifier is specific to their local
+# trusted-setup contribution.
+if [ "$CIRCUIT" = "withdraw" ]; then
+    cp "$VERIFIER" "$ROOT/contracts/Verifier.sol"
+    echo "      copied to contracts/Verifier.sol"
+fi
+
 echo
 echo "=== $CIRCUIT setup complete ==="
 echo "Run: pytest tests/"
