@@ -1,78 +1,126 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-/// @title MockTornado — research artifact
-/// @notice Fixed-denomination ETH mixer (1 ETH per pool entry). Mimics the
-///         Tornado Cash deposit/withdraw lifecycle structurally, but WITHOUT
-///         the zero-knowledge proof that hides which commitment is being
-///         withdrawn. The withdrawer reveals (secret, nullifier) on-chain,
-///         which an external observer can hash and match back to a deposit
-///         commitment. Real Tornado uses a Groth16 proof to break that link.
+import {IHasher} from "./IHasher.sol";
+import {IVerifier} from "./IVerifier.sol";
+import {MerkleTreeWithHistory} from "./MerkleTreeWithHistory.sol";
+
+/// @title MockTornado — research artifact (real ZK mixer)
+/// @notice Tornado-Cash-style ZK mixer:
+///           1. Depositor commits MiMC(nullifier, secret) and sends DENOMINATION ETH.
+///           2. Contract inserts the commitment as a leaf in the Merkle tree
+///              (via MerkleTreeWithHistory) and updates the root.
+///           3. Depositor (off-chain) generates a Groth16 proof that the
+///              commitment is in the tree, against any historical root.
+///           4. Anyone can submit the withdraw tx with the proof + recipient.
+///              The contract verifies the proof, records nullifierHash to
+///              prevent double-spend, and pays DENOMINATION ETH to recipient.
 ///
-///         Why this is OK for AML thesis research:
-///           - We are studying detection, so the on-chain link is something
-///             the defender can plausibly use.
-///           - The launderer's *attempted* anonymity behaviour (deposit from
-///             one address, withdraw to another, time delay between) is
-///             preserved.
-///           - The defender's challenge is to detect the laundering pattern
-///             across the deposit/withdraw event pair, which is the actual
-///             research question.
+///         Privacy property: the proof's public signals are
+///         (root, nullifierHash, recipient, fee, refund). The depositor's
+///         actual commitment is NOT in the public signals, so an external
+///         observer can't directly link a withdrawal to a deposit (until
+///         many other deposits accumulate, the anonymity set is the on-chain
+///         leaf count — same as real Tornado).
 ///
-///         For laundering simulation only. NEVER deploy on a real chain.
-///         Tornado Cash is OFAC-sanctioned in the United States.
-/// @dev    Single-denomination, no Merkle tree (anonymity set = list of
-///         commitments stored in a mapping). No relayer.
-contract MockTornado {
+///         Differences from the keccak-mock shipped in week 3.3:
+///           - Commitment scheme: MiMCSponge(2, 220, 1) instead of keccak256
+///           - Withdraw verification: Groth16 proof, no on-chain reveal of
+///             secret/nullifier
+///           - Replay protection: nullifierHash mapping (same idea, but the
+///             hash now matches the in-circuit nullifierHasher)
+///
+/// @dev    Local fork only. Tornado Cash is OFAC-sanctioned in the US.
+contract MockTornado is MerkleTreeWithHistory {
     uint256 public constant DENOMINATION = 1 ether;
 
-    /// @notice Set of deposited commitments. commitment = keccak256(secret, nullifier).
+    IVerifier public immutable verifier;
+
+    /// @notice Spent nullifierHashes. A withdraw can only succeed once per
+    ///         (nullifier).
+    mapping(bytes32 => bool) public nullifierHashes;
+
+    /// @notice Set of inserted commitments. Used to reject duplicate deposits.
     mapping(bytes32 => bool) public commitments;
-    /// @notice Set of spent nullifiers. Prevents double-withdrawal.
-    mapping(bytes32 => bool) public nullifierUsed;
 
-    /// @notice Ordered list of all commitments — for anonymity-set sizing.
-    bytes32[] public depositList;
+    event Deposit(
+        bytes32 indexed commitment,
+        uint32 leafIndex,
+        address indexed depositor,
+        uint256 timestamp
+    );
+    event Withdrawal(
+        address indexed recipient,
+        bytes32 nullifierHash,
+        uint256 timestamp
+    );
 
-    event Deposit(bytes32 indexed commitment, address indexed depositor, uint256 timestamp);
-    event Withdraw(bytes32 indexed nullifier, address indexed recipient, uint256 timestamp);
-
-    /// @notice Deposit exactly DENOMINATION ETH and register `commitment`.
-    /// @param commitment off-chain-computed keccak256(secret, nullifier).
-    function deposit(bytes32 commitment) external payable {
-        require(msg.value == DENOMINATION, "Tornado: wrong denomination");
-        require(!commitments[commitment], "Tornado: duplicate commitment");
-        commitments[commitment] = true;
-        depositList.push(commitment);
-        emit Deposit(commitment, msg.sender, block.timestamp);
+    constructor(IVerifier _verifier, IHasher _hasher, uint32 _levels)
+        MerkleTreeWithHistory(_levels, _hasher)
+    {
+        require(address(_verifier) != address(0), "MockTornado: zero verifier");
+        verifier = _verifier;
     }
 
-    /// @notice Withdraw DENOMINATION ETH to `recipient` by revealing the
-    ///         (secret, nullifier) preimage of an existing commitment. The
-    ///         nullifier is recorded so the same deposit cannot be spent
-    ///         twice. The recipient need not be the original depositor —
-    ///         this is the laundering primitive.
-    function withdraw(bytes32 secret, bytes32 nullifier, address payable recipient) external {
-        require(recipient != address(0), "Tornado: zero recipient");
-        bytes32 commitment = keccak256(abi.encodePacked(secret, nullifier));
-        require(commitments[commitment], "Tornado: unknown commitment");
-        require(!nullifierUsed[nullifier], "Tornado: nullifier already used");
-        nullifierUsed[nullifier] = true;
-        (bool sent, ) = recipient.call{value: DENOMINATION}("");
-        require(sent, "Tornado: ETH transfer");
-        emit Withdraw(nullifier, recipient, block.timestamp);
+    /// @notice Deposit DENOMINATION ETH and register `_commitment` as a leaf.
+    function deposit(bytes32 _commitment) external payable {
+        require(msg.value == DENOMINATION, "MockTornado: wrong denomination");
+        require(!commitments[_commitment], "MockTornado: duplicate commitment");
+        uint32 leafIndex = insert(_commitment);
+        commitments[_commitment] = true;
+        emit Deposit(_commitment, leafIndex, msg.sender, block.timestamp);
     }
 
-    function depositCount() external view returns (uint256) {
-        return depositList.length;
+    /// @notice Withdraw DENOMINATION ETH to `_recipient` by proving knowledge
+    ///         of (secret, nullifier) such that hash(nullifier, secret) is in
+    ///         the Merkle tree at `_root`, and `_nullifierHash = hash(nullifier)`.
+    /// @dev    The proof's public signals must match
+    ///         [_root, _nullifierHash, _recipient, _fee, _refund] in that
+    ///         order. _fee and _refund must be 0 in this research mock —
+    ///         no relayer support.
+    function withdraw(
+        uint[2] calldata _pA,
+        uint[2][2] calldata _pB,
+        uint[2] calldata _pC,
+        bytes32 _root,
+        bytes32 _nullifierHash,
+        address payable _recipient,
+        uint256 _fee,
+        uint256 _refund
+    ) external {
+        require(_recipient != address(0), "MockTornado: zero recipient");
+        require(!nullifierHashes[_nullifierHash], "MockTornado: nullifier already used");
+        require(isKnownRoot(_root), "MockTornado: unknown root");
+        require(_fee == 0 && _refund == 0, "MockTornado: relayer not supported");
+
+        // Public signals order matches the Withdraw circuit:
+        //   [root, nullifierHash, recipient, fee, refund]
+        uint[5] memory pubSignals = [
+            uint(_root),
+            uint(_nullifierHash),
+            uint(uint160(address(_recipient))),
+            _fee,
+            _refund
+        ];
+        require(
+            verifier.verifyProof(_pA, _pB, _pC, pubSignals),
+            "MockTornado: invalid proof"
+        );
+
+        nullifierHashes[_nullifierHash] = true;
+
+        (bool sent, ) = _recipient.call{value: DENOMINATION}("");
+        require(sent, "MockTornado: ETH transfer failed");
+
+        emit Withdrawal(_recipient, _nullifierHash, block.timestamp);
     }
 
-    /// @notice Pool balance — should always equal DENOMINATION × (deposits − withdrawals).
+    /// @notice Pool balance — should equal DENOMINATION × (deposits − withdrawals).
     function poolBalance() external view returns (uint256) {
         return address(this).balance;
     }
 
     receive() external payable {
-        revert("Tornado: use deposit()");
+        revert("MockTornado: use deposit()");
     }
 }
