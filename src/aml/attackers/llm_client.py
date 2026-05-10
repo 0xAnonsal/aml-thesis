@@ -71,6 +71,7 @@ class CallResult:
     cost_usd: float
     request_id: str | None
     raw: anthropic.types.Message   # full SDK response for tool_use, thinking blocks, etc.
+    stop_reason: str | None = None # 'end_turn' | 'tool_use' | 'max_tokens' | 'refusal' | ...
 
 
 @dataclass
@@ -130,8 +131,9 @@ class LLMClient:
 
     def complete(
         self,
-        prompt: str,
+        prompt: str | None = None,
         *,
+        messages: list[dict] | None = None,
         system: str | None = None,
         model: str = "haiku",
         max_tokens: int = 4096,
@@ -144,8 +146,12 @@ class LLMClient:
         """Send a single Messages API call and return parsed text + usage + cost.
 
         Args:
-            prompt: user message content (single user turn — for multi-turn
-                conversations, the agent layer manages the message history).
+            prompt: single user-turn content. Sugar for
+                ``messages=[{"role": "user", "content": prompt}]``. Mutually
+                exclusive with ``messages``.
+            messages: full conversation history (list of role/content dicts).
+                Use this for multi-turn agentic loops (see Coordinator). Mutually
+                exclusive with ``prompt``.
             system: optional system prompt. Cached by default if `cache_system`.
             model: 'haiku' / 'sonnet' / 'opus', or a full model ID for pinning.
             max_tokens: response token cap. Default 4096 (safe for Haiku/Sonnet
@@ -154,20 +160,29 @@ class LLMClient:
                 `cache_control={"type": "ephemeral"}` (5-minute TTL). Cache only
                 fires if `system` ≥ the model's minimum cacheable size; below
                 that the marker is silently ignored.
-            tools: tool definitions for tool use. Empty in v1; populated in the
-                follow-up PR that wires deposit/withdraw/swap actions.
+            tools: tool definitions for tool use. Pass `dispatcher.tool_definitions`.
             tool_choice: tool choice override. Pass-through.
             thinking: thinking config. For Opus 4.7 use `{"type": "adaptive"}`.
                 Default off (matches Opus 4.7's default behavior).
             extra: any additional kwargs forwarded to messages.create — escape
                 hatch for features we haven't surfaced yet.
+
+        Raises:
+            ValueError: if neither `prompt` nor `messages` is provided, or if both are.
         """
+        if prompt is None and messages is None:
+            raise ValueError("LLMClient.complete: provide either `prompt` or `messages`")
+        if prompt is not None and messages is not None:
+            raise ValueError("LLMClient.complete: pass `prompt` OR `messages`, not both")
+
+        msg_list = messages if messages is not None else [{"role": "user", "content": prompt}]
+
         model_id = self.resolve_model(model)
 
         kwargs: dict[str, Any] = {
             "model": model_id,
             "max_tokens": max_tokens,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": msg_list,
         }
 
         if system is not None:
@@ -240,4 +255,5 @@ class LLMClient:
             cost_usd=cost,
             request_id=getattr(response, "_request_id", None),
             raw=response,
+            stop_reason=getattr(response, "stop_reason", None),
         )
