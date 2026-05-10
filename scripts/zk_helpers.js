@@ -10,23 +10,20 @@
 //
 //   mimc2 <integer1> <integer2>
 //     -> MiMCSponge([int1, int2], k=0, nOuts=1) as a decimal string
-//        (this is the hashLeftRight equivalent for the Merkle tree)
 //
 //   prepare-withdraw <secret> <nullifier> <leafIndex> <depth>
-//     -> JSON object with everything the withdraw circuit needs as inputs:
-//        { commitment, nullifierHash, root, pathElements[], pathIndices[] }
+//     -> JSON object with everything the withdraw circuit needs
+//
+//   merkle-root <depth> <leaf0> [<leaf1> ...]
+//     -> { root, depth, numLeavesProvided } for a tree of size 2^depth
+//        where the given leaves occupy positions 0..N-1 and the rest are 0n.
+//        Used to compare on-chain insertion order against off-chain.
 //
 //   mimc-bytecode
-//     -> creation bytecode of the auto-generated MiMCSponge contract
-//        (seed="mimcsponge", 220 rounds), as a hex string with 0x prefix.
-//        Deploy this bytecode with no constructor args; the resulting
-//        contract exposes MiMCSponge(uint256, uint256) -> (uint256, uint256).
+//     -> creation bytecode of the auto-generated MiMC contract
 //
 //   mimc-abi
-//     -> ABI of the deployed MiMC contract, as a JSON array.
-//
-// All numeric inputs are interpreted as bn254 field elements; numeric
-// strings pass through BigInt so values larger than 2^53 are safe.
+//     -> ABI of the auto-generated MiMC contract
 
 "use strict";
 
@@ -74,20 +71,37 @@ function buildTreeAndPath(mimc, leaves, leafIndex, depth) {
     return { root: nodes[0], pathElements, pathIndices };
 }
 
+function computeRoot(mimc, leaves, depth) {
+    const numLeaves = 1 << depth;
+    if (leaves.length > numLeaves) {
+        throw new Error(`too many leaves: ${leaves.length} > 2^${depth}`);
+    }
+
+    const padded = leaves.slice();
+    while (padded.length < numLeaves) padded.push(0n);
+
+    let nodes = padded;
+    while (nodes.length > 1) {
+        const next = [];
+        for (let i = 0; i < nodes.length; i += 2) {
+            next.push(hash2(mimc, nodes[i], nodes[i + 1]));
+        }
+        nodes = next;
+    }
+    return nodes[0];
+}
+
 async function main() {
     const cmd = process.argv[2];
     const args = process.argv.slice(3);
 
     if (!cmd) {
-        console.error("usage: node zk_helpers.js {mimc|mimc2|prepare-withdraw|mimc-bytecode|mimc-abi} <args...>");
+        console.error("usage: node zk_helpers.js {mimc|mimc2|prepare-withdraw|merkle-root|mimc-bytecode|mimc-abi} <args...>");
         process.exit(2);
     }
 
-    // mimc-bytecode and mimc-abi don't need the buildMimcSponge instance —
-    // they read directly from the contract-generation helper.
     if (cmd === "mimc-bytecode") {
         const bytecode = mimcSpongecontract.createCode("mimcsponge", 220);
-        // createCode returns hex without 0x prefix in some versions; normalize.
         const hex = bytecode.startsWith("0x") ? bytecode : "0x" + bytecode;
         console.log(hex);
         return;
@@ -145,6 +159,22 @@ async function main() {
             pathIndices: pathIndices.map((x) => x.toString()),
         };
         console.log(JSON.stringify(out));
+        return;
+    }
+
+    if (cmd === "merkle-root") {
+        if (args.length < 1) {
+            console.error("usage: node zk_helpers.js merkle-root <depth> [<leaf> ...]");
+            process.exit(2);
+        }
+        const depth = parseInt(args[0], 10);
+        const leaves = args.slice(1).map((x) => BigInt(x));
+        const root = computeRoot(mimc, leaves, depth);
+        console.log(JSON.stringify({
+            root: root.toString(),
+            depth,
+            numLeavesProvided: leaves.length,
+        }));
         return;
     }
 
