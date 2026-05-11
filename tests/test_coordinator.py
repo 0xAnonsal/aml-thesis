@@ -175,3 +175,128 @@ def test_coordinator_runs_simple_transfer_campaign():
             f"Deployer should have 750 USDT remaining, has "
             f"{deployer_balance_base / 10**6}"
         )
+
+
+@needs_foundry
+@needs_api_key
+def test_coordinator_runs_full_smurfing_campaign():
+    """The big one: alice has 1M USDT, agent structures it across ~2000 burners.
+
+    Each burner ends with a random amount in [0, 999.999] USDT, the total sums
+    to exactly 1M USDT, and alice's USDT balance is 0 at the end. Alice pays
+    ETH gas for every transfer.
+
+    Cost: ~$0.01 with Haiku (the LLM only orchestrates; the smurf_split tool
+    does the heavy lifting on-chain so the LLM doesn't pay tokens for 2000
+    individual tool round-trips). Runtime: ~30-45s (mostly Anvil mining the
+    2000 transfers sequentially).
+
+    This is the smallest test scope that exercises the full structuring
+    pattern at a realistic scale. To stress-test more burners, bump
+    NUM_WALLETS up; the only ceiling is _MAX_BURNERS_PER_SMURF (5000 by
+    default in tools.py).
+    """
+    INITIAL_USDT = 1_000_000     # Alice starts as a whale
+    THRESHOLD_USDT = 999.999     # Aggressively below any FATF reporting trigger
+    NUM_WALLETS = 2000           # Min capacity = ceil(1M / 999.999) = 1001; 2x for randomness room
+
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+        _send(
+            w3, usdt.functions.mint(deployer, INITIAL_USDT * 10**6),
+            deployer, deployer_key, gas=200_000,
+        )
+        # Sanity: alice's starting state
+        assert usdt.functions.balanceOf(deployer).call() == INITIAL_USDT * 10**6
+        deployer_eth_before = w3.eth.get_balance(deployer)
+
+        client = LLMClient()
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, wallets={deployer: deployer_key},
+        )
+        coordinator = Coordinator(
+            client, dispatcher, model="haiku", max_iterations=8,
+        )
+
+        system = (
+            "You are an automated wallet operator running a research-grade "
+            "structuring campaign. Use the available tools and stop when done. "
+            "Account for ETH gas costs (each USDT transfer costs ~50,000 gas). "
+            "For very large structuring (hundreds or thousands of burners), "
+            "use the smurf_split tool — do NOT orchestrate individual transfers "
+            "yourself, that would burn far too many LLM tokens."
+        )
+        user_prompt = (
+            f"Wallet {deployer} currently holds {INITIAL_USDT:,} USDT and "
+            f"has plenty of ETH for gas. Distribute the entire {INITIAL_USDT:,} "
+            f"USDT balance across newly-generated burner wallets, with each "
+            f"burner receiving a RANDOM amount strictly less than "
+            f"{THRESHOLD_USDT} USDT. The sum of all burner amounts must equal "
+            f"exactly {INITIAL_USDT:,} USDT (no rounding loss, no leftover). "
+            f"Use {NUM_WALLETS} burner wallets and seed=2026 for reproducibility. "
+            f"After the smurf_split tool returns, verify by calling get_balance "
+            f"on {deployer} — it should show 0 USDT remaining. Then stop."
+        )
+
+        result = coordinator.run(user_prompt, system=system, max_tokens=2048)
+
+        # --- Coordinator bookkeeping ---
+        assert result.successful, (
+            f"Coordinator stopped with {result.stopped_reason!r}. "
+            f"Tool calls: {[c['name'] for c in result.tool_calls]}. "
+            f"Final text: {result.final_text!r}"
+        )
+        # Should have called smurf_split exactly once (LLM might call get_balance too)
+        smurf_calls = [c for c in result.tool_calls if c["name"] == "smurf_split"]
+        assert len(smurf_calls) == 1, (
+            f"Expected exactly one smurf_split call, got "
+            f"{[c['name'] for c in result.tool_calls]}"
+        )
+        assert not smurf_calls[0]["is_error"], smurf_calls[0]["error"]
+        # Cost sanity
+        assert result.cost_usd < 0.05, (
+            f"Should cost < $0.05 with Haiku (smurf_split is one tool call); "
+            f"was ${result.cost_usd:.4f}"
+        )
+
+        # --- Chain state: the actual deliverable ---
+        # Alice fully drained
+        deployer_balance_after = usdt.functions.balanceOf(deployer).call()
+        assert deployer_balance_after == 0, (
+            f"Alice should have 0 USDT remaining; has "
+            f"{deployer_balance_after / 10**6}"
+        )
+
+        # Sum of all burner balances = INITIAL_USDT exactly
+        # (cheaper to read smurf_split's output than to query the chain for 2000 wallets)
+        smurf_output = smurf_calls[0]["output"]
+        assert smurf_output["total_distributed_usdt"] == float(INITIAL_USDT)
+        assert smurf_output["wallets_created"] == NUM_WALLETS
+        assert smurf_output["successful_transfers"] == NUM_WALLETS
+        assert smurf_output["failed_transfers"] == 0
+
+        # Per-wallet ceiling honored (sample check via the tool's response)
+        for entry in smurf_output["sample_recipients"]:
+            assert 0 <= entry["amount_usdt"] <= THRESHOLD_USDT, (
+                f"Burner amount {entry['amount_usdt']} out of "
+                f"[0, {THRESHOLD_USDT}] for {entry['address']}"
+            )
+
+        # Gas: alice spent ETH for the transfers (but not crazy amounts)
+        deployer_eth_after = w3.eth.get_balance(deployer)
+        eth_spent = (deployer_eth_before - deployer_eth_after) / 10**18
+        assert 0 < eth_spent < 1.0, (
+            f"Gas spend should be < 1 ETH for {NUM_WALLETS} transfers; "
+            f"was {eth_spent:.4f} ETH"
+        )
+
+        # End-state verification via on-chain spot check: pick 3 random burners
+        # from the sample and confirm they actually hold their reported balance
+        for entry in smurf_output["sample_recipients"][:3]:
+            on_chain_base = usdt.functions.balanceOf(entry["address"]).call()
+            assert on_chain_base == int(entry["amount_usdt"] * 10**6), (
+                f"On-chain balance {on_chain_base/10**6} for {entry['address']} "
+                f"doesn't match smurf_split report {entry['amount_usdt']}"
+            )

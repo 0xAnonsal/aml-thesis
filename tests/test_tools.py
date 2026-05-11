@@ -233,3 +233,144 @@ def test_transfer_negative_amount_rejected():
             })
             assert result.is_error
             assert "positive" in result.error.lower()
+
+
+# --- New tools (PR 5.4) ---------------------------------------------------
+
+
+def test_generate_burner_wallet_no_anvil():
+    """Burner generation is pure off-chain crypto — no Anvil required."""
+    dispatcher = ToolDispatcher(w3=Web3(), usdt_contract=None, wallets={})
+    result = dispatcher.dispatch("generate_burner_wallet", {})
+    assert not result.is_error
+    address = result.output["address"]
+    assert address.startswith("0x") and len(address) == 42
+    # Auto-registered in the dispatcher
+    assert address in dispatcher.wallets
+    # Distinct addresses on each call
+    second = dispatcher.dispatch("generate_burner_wallet", {})
+    assert second.output["address"] != address
+    assert len(dispatcher.wallets) == 2
+
+
+def test_random_split_base_units_sums_exactly():
+    """The split planner returns integers in range that sum to total exactly."""
+    from aml.attackers.tools import ToolDispatcher
+    # 1,000,000 USDT in base units = 10^12; max per wallet 999.999 USDT = 999_999_000
+    total = 10**12
+    max_per = 999_999_000
+    count = 2000
+    amounts = ToolDispatcher._random_split_base_units(total, max_per, count, seed=42)
+    assert len(amounts) == count
+    assert sum(amounts) == total
+    assert all(0 <= a <= max_per for a in amounts)
+
+
+def test_random_split_base_units_capacity_check():
+    """Capacity exceeded → raises before doing any work."""
+    from aml.attackers.tools import ToolDispatcher
+    with pytest.raises(ValueError, match="Capacity"):
+        # 10 wallets × 100 base units = 1000 < total 5000
+        ToolDispatcher._random_split_base_units(5000, 100, 10, seed=1)
+
+
+def test_random_split_base_units_seed_reproducible():
+    from aml.attackers.tools import ToolDispatcher
+    a1 = ToolDispatcher._random_split_base_units(10**6, 10**4, 100, seed=7)
+    a2 = ToolDispatcher._random_split_base_units(10**6, 10**4, 100, seed=7)
+    assert a1 == a2
+
+
+@needs_foundry
+def test_mint_usdt_round_trip():
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        bob = node.accounts[1]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, wallets={deployer: deployer_key},
+        )
+        result = dispatcher.dispatch("mint_usdt", {
+            "to_address": bob, "amount_usdt": 500.0,
+        })
+        assert not result.is_error, result.error
+        assert result.output["new_balance_usdt"] == 500.0
+        assert dispatcher.dispatch(
+            "get_balance", {"address": bob, "asset": "USDT"},
+        ).output["balance"] == 500.0
+
+
+@needs_foundry
+def test_smurf_split_capacity_check_no_chain():
+    """Validation runs before any chain call — bad inputs return error fast."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, wallets={deployer: deployer_key},
+        )
+        # 5 wallets × 100 USDT = 500 < 1000 requested
+        result = dispatcher.dispatch("smurf_split", {
+            "from_address": deployer, "total_usdt": 1000.0,
+            "num_wallets": 5, "max_per_wallet": 100.0,
+        })
+        assert result.is_error
+        assert "capacity" in result.error.lower()
+
+
+@needs_foundry
+def test_smurf_split_cap_enforced():
+    """num_wallets > _MAX_BURNERS_PER_SMURF: rejected, no chain calls."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, wallets={deployer: deployer_key},
+        )
+        result = dispatcher.dispatch("smurf_split", {
+            "from_address": deployer, "total_usdt": 1.0,
+            "num_wallets": 10**9, "max_per_wallet": 1.0,
+        })
+        assert result.is_error
+        assert "cap" in result.error.lower()
+
+
+@needs_foundry
+def test_smurf_split_small_round_trip():
+    """End-to-end at small scale (50 burners): sums exact, balances match."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+        # Mint 10,000 USDT to alice
+        _send(w3, usdt.functions.mint(deployer, 10_000 * 10**6),
+              deployer, deployer_key, gas=200_000)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, wallets={deployer: deployer_key},
+        )
+        result = dispatcher.dispatch("smurf_split", {
+            "from_address": deployer,
+            "total_usdt": 10_000.0,
+            "num_wallets": 50,
+            "max_per_wallet": 999.999,
+            "seed": 123,
+        })
+        assert not result.is_error, result.error
+        assert result.output["wallets_created"] == 50
+        assert result.output["successful_transfers"] == 50
+        assert result.output["failed_transfers"] == 0
+        assert result.output["total_distributed_usdt"] == 10_000.0
+        # Alice fully drained
+        assert result.output["from_address_remaining_usdt"] == 0.0
+        # Per-burner ceiling enforced (sample check)
+        for entry in result.output["sample_recipients"]:
+            assert 0 <= entry["amount_usdt"] <= 999.999
+        # Gas was paid
+        assert result.output["total_gas_used"] > 0
+        assert result.output["total_gas_eth"] > 0
