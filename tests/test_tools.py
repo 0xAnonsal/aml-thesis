@@ -19,6 +19,11 @@ from aml.chains import AnvilNode
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 USDT_ARTIFACT = REPO_ROOT / "out" / "MockUSDT.sol" / "MockUSDT.json"
+POOL_ARTIFACT = REPO_ROOT / "out" / "MockUniswapV2Pool.sol" / "MockUniswapV2Pool.json"
+
+# Pool bootstrap parameters: 500 ETH + 1M USDT → spot = $2000/ETH
+POOL_BOOTSTRAP_ETH_WEI = 500 * 10**18
+POOL_BOOTSTRAP_USDT_BASE = 1_000_000 * 10**6
 
 
 needs_foundry = pytest.mark.skipif(
@@ -51,6 +56,29 @@ def _deploy_usdt(w3, deployer, deployer_key):
     factory = w3.eth.contract(abi=a["abi"], bytecode=a["bytecode"]["object"])
     receipt = _send(w3, factory.constructor(), deployer, deployer_key)
     return w3.eth.contract(address=receipt.contractAddress, abi=a["abi"])
+
+
+def _deploy_bootstrapped_pool(w3, deployer, deployer_key, usdt):
+    """Deploy MockUniswapV2Pool, mint+approve USDT, bootstrap with ETH+USDT.
+
+    Returns the bootstrapped pool contract handle. Spot price after bootstrap:
+    1 ETH = 2000 USDT (500 ETH / 1M USDT pool).
+    """
+    if not POOL_ARTIFACT.exists():
+        subprocess.run(["forge", "build"], cwd=REPO_ROOT, check=True)
+    with POOL_ARTIFACT.open() as f:
+        a = json.load(f)
+    factory = w3.eth.contract(abi=a["abi"], bytecode=a["bytecode"]["object"])
+    receipt = _send(w3, factory.constructor(usdt.address), deployer, deployer_key)
+    pool = w3.eth.contract(address=receipt.contractAddress, abi=a["abi"])
+
+    _send(w3, usdt.functions.mint(deployer, POOL_BOOTSTRAP_USDT_BASE),
+          deployer, deployer_key, gas=200_000)
+    _send(w3, usdt.functions.approve(pool.address, POOL_BOOTSTRAP_USDT_BASE),
+          deployer, deployer_key, gas=200_000)
+    _send(w3, pool.functions.bootstrap(POOL_BOOTSTRAP_USDT_BASE),
+          deployer, deployer_key, value=POOL_BOOTSTRAP_ETH_WEI)
+    return pool
 
 
 # --- Schema-only tests (no Anvil needed) -------------------------------------
@@ -338,6 +366,134 @@ def test_smurf_split_cap_enforced():
         })
         assert result.is_error
         assert "cap" in result.error.lower()
+
+
+# --- Swap tools (PR 5.5) -------------------------------------------------
+
+
+@needs_foundry
+def test_get_swap_quote_eth_for_usdt():
+    """Quote 1 ETH → USDT given the bootstrapped pool (500 ETH / 1M USDT)."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+        pool = _deploy_bootstrapped_pool(w3, deployer, deployer_key, usdt)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, pool_contract=pool,
+            wallets={deployer: deployer_key},
+        )
+        result = dispatcher.dispatch("get_swap_quote", {
+            "from_asset": "ETH", "amount": 1.0,
+        })
+        assert not result.is_error, result.error
+        # Spot at 500 ETH / 1M USDT = 2000 USDT/ETH
+        assert abs(result.output["spot_price_usdt_per_eth"] - 2000) < 0.01
+        # 1 ETH swap should yield ~1990 USDT (after 0.3% fee + slippage on 0.2% of pool)
+        assert 1985 < result.output["expected_out_usdt"] < 2000
+        # Total cost (fee + slippage) is small for 1 ETH out of 500
+        assert 0 < result.output["total_cost_pct"] < 1.0
+
+
+@needs_foundry
+def test_swap_eth_for_usdt_matches_quote():
+    """The actual swap result matches the quote within rounding."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+        pool = _deploy_bootstrapped_pool(w3, deployer, deployer_key, usdt)
+        alice = node.accounts[1]
+        alice_key = node.private_keys[1]
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, pool_contract=pool,
+            wallets={alice: alice_key},
+        )
+
+        quote = dispatcher.dispatch("get_swap_quote", {
+            "from_asset": "ETH", "amount": 1.0,
+        })
+        result = dispatcher.dispatch("swap_eth_for_usdt", {
+            "from_address": alice, "eth_amount": 1.0,
+        })
+        assert not result.is_error, result.error
+        # Quote and actual should be within 0.01 USDT (Anvil mines instantly so
+        # no other tx changed reserves between quote and swap)
+        assert abs(result.output["usdt_received"] - quote.output["expected_out_usdt"]) < 0.01
+        # On-chain USDT balance matches what we got back
+        actual = usdt.functions.balanceOf(alice).call() / 10**6
+        assert abs(actual - result.output["usdt_received"]) < 0.001
+
+
+@needs_foundry
+def test_swap_usdt_for_eth_round_trip():
+    """Approve + swap done atomically inside the dispatcher; balances move correctly."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+        pool = _deploy_bootstrapped_pool(w3, deployer, deployer_key, usdt)
+        alice = node.accounts[1]
+        alice_key = node.private_keys[1]
+        # Mint 5000 USDT to alice so she has something to swap
+        _send(w3, usdt.functions.mint(alice, 5000 * 10**6),
+              deployer, deployer_key, gas=200_000)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, pool_contract=pool,
+            wallets={alice: alice_key},
+        )
+        result = dispatcher.dispatch("swap_usdt_for_eth", {
+            "from_address": alice, "usdt_amount": 5000.0,
+        })
+        assert not result.is_error, result.error
+        # 5000 USDT / 2000 spot ≈ 2.5 ETH minus fee/slippage on 0.5% of pool
+        assert 2.4 < result.output["eth_received"] < 2.5
+        # Alice's USDT balance dropped exactly by 5000
+        assert usdt.functions.balanceOf(alice).call() == 0
+
+
+@needs_foundry
+def test_swap_slippage_protection_reverts_cleanly():
+    """min_usdt_out higher than actual output → tool reverts as a clean error, no crash."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+        pool = _deploy_bootstrapped_pool(w3, deployer, deployer_key, usdt)
+        alice = node.accounts[1]
+        alice_key = node.private_keys[1]
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, pool_contract=pool,
+            wallets={alice: alice_key},
+        )
+        # 1 ETH yields ~1990 USDT; asking for 5000 is impossible
+        result = dispatcher.dispatch("swap_eth_for_usdt", {
+            "from_address": alice, "eth_amount": 1.0, "min_usdt_out": 5000.0,
+        })
+        assert result.is_error
+        assert "slippage" in result.error.lower() or "revert" in result.error.lower()
+
+
+def test_swap_tools_no_pool_set_returns_error():
+    """If pool_contract is None, swap tools fail cleanly without crashing."""
+    dispatcher = ToolDispatcher(w3=Web3(), usdt_contract=None, wallets={})
+    zero = "0x" + "0" * 40
+
+    # Each swap tool gets only its own kwargs — dispatcher passes them through
+    # as **kwargs, so spurious keys would raise TypeError before the pool check.
+    cases = [
+        ("get_swap_quote", {"from_asset": "ETH", "amount": 1.0}),
+        ("swap_eth_for_usdt", {"from_address": zero, "eth_amount": 1.0}),
+        ("swap_usdt_for_eth", {"from_address": zero, "usdt_amount": 1.0}),
+    ]
+    for tool, args in cases:
+        result = dispatcher.dispatch(tool, args)
+        assert result.is_error, f"{tool}: expected error, got {result.output}"
+        assert "pool" in result.error.lower(), f"{tool}: {result.error}"
 
 
 @needs_foundry

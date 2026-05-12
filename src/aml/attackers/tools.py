@@ -15,9 +15,14 @@ Tools shipped:
                                across N random burner wallets in one call
                                (avoids burning LLM tokens orchestrating
                                thousands of individual transfers)
+    swap_eth_for_usdt        — Uniswap-style ETH -> USDT swap (caller pays
+                               ETH + gas, receives USDT)
+    swap_usdt_for_eth        — Uniswap-style USDT -> ETH swap (approve +
+                               swap done atomically inside the dispatcher)
+    get_swap_quote           — view-only quote: expected output for a given
+                               input given the pool's current reserves
 
 Future tools (separate PRs):
-    swap_eth_for_usdt, swap_usdt_for_eth   — Uniswap-mock interactions
     mixer_deposit, mixer_withdraw          — ZK Tornado primitives
 """
 from __future__ import annotations
@@ -145,6 +150,92 @@ _TOOL_SCHEMAS: list[dict] = [
         },
     },
     {
+        "name": "get_swap_quote",
+        "description": (
+            "View-only quote: expected output for swapping `amount` of "
+            "`from_asset` ('ETH' or 'USDT') through the Uniswap-style pool, "
+            "given current reserves. Returns the expected output amount "
+            "(after the pool's 0.3% fee), the current spot price (ETH/USDT), "
+            "and the slippage caused by your swap (in percent vs spot). "
+            "Costs no gas. Use this to pick a sensible min_out for the "
+            "actual swap call."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "from_asset": {
+                    "type": "string",
+                    "enum": ["ETH", "USDT"],
+                    "description": "Which asset you're swapping FROM.",
+                },
+                "amount": {
+                    "type": "number",
+                    "description": "How much of from_asset to swap (human units).",
+                },
+            },
+            "required": ["from_asset", "amount"],
+        },
+    },
+    {
+        "name": "swap_eth_for_usdt",
+        "description": (
+            "Swap ETH for USDT via the Uniswap-style pool (constant-product, "
+            "0.3% fee). The caller's wallet (must be in the dispatcher's "
+            "registry) pays `eth_amount` of ETH plus ETH gas, receives USDT. "
+            "Pass `min_usdt_out` to enforce slippage protection (the call "
+            "reverts if the actual output would be less). Defaults to 0 "
+            "(accept any output)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "from_address": {
+                    "type": "string",
+                    "description": "Wallet doing the swap. Must be in the registry.",
+                },
+                "eth_amount": {
+                    "type": "number",
+                    "description": "ETH to swap, human units (e.g. 1.5 for 1.5 ETH).",
+                },
+                "min_usdt_out": {
+                    "type": "number",
+                    "description": "Slippage floor: minimum USDT to accept. Default 0.",
+                },
+            },
+            "required": ["from_address", "eth_amount"],
+        },
+    },
+    {
+        "name": "swap_usdt_for_eth",
+        "description": (
+            "Swap USDT for ETH via the Uniswap-style pool. The caller's "
+            "wallet (must be in the dispatcher's registry) pays USDT and "
+            "gas, receives ETH. This tool does the ERC-20 approve + swap "
+            "as two separate transactions internally (the LLM doesn't need "
+            "to handle approval; just call swap_usdt_for_eth with the "
+            "amount and the dispatcher handles both txs). Pass `min_eth_out` "
+            "to enforce slippage protection."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "from_address": {
+                    "type": "string",
+                    "description": "Wallet doing the swap. Must be in the registry.",
+                },
+                "usdt_amount": {
+                    "type": "number",
+                    "description": "USDT to swap, human units.",
+                },
+                "min_eth_out": {
+                    "type": "number",
+                    "description": "Slippage floor: minimum ETH to accept. Default 0.",
+                },
+            },
+            "required": ["from_address", "usdt_amount"],
+        },
+    },
+    {
         "name": "smurf_split",
         "description": (
             "Random-amount structuring: distribute USDT from one wallet across "
@@ -221,9 +312,11 @@ class ToolDispatcher:
         w3: Web3,
         usdt_contract: Any,
         wallets: dict[str, str],
+        pool_contract: Any = None,
     ):
         self.w3 = w3
         self.usdt = usdt_contract
+        self.pool = pool_contract
         self.wallets: dict[str, str] = {
             Web3.to_checksum_address(addr): key for addr, key in wallets.items()
         }
@@ -249,6 +342,12 @@ class ToolDispatcher:
             return self._mint_usdt(**tool_input)
         if tool_name == "smurf_split":
             return self._smurf_split(**tool_input)
+        if tool_name == "get_swap_quote":
+            return self._get_swap_quote(**tool_input)
+        if tool_name == "swap_eth_for_usdt":
+            return self._swap_eth_for_usdt(**tool_input)
+        if tool_name == "swap_usdt_for_eth":
+            return self._swap_usdt_for_eth(**tool_input)
         return ToolResult(error=f"Unknown tool: {tool_name}")
 
     # --- Tool implementations -----------------------------------------------
@@ -525,3 +624,203 @@ class ToolDispatcher:
         if failures:
             output["first_failures"] = failures[:3]
         return ToolResult(output=output)
+
+    # --- Swap tools (PR 5.5) ------------------------------------------------
+
+    def _get_swap_quote(self, from_asset: str, amount: float) -> ToolResult:
+        if self.pool is None:
+            return ToolResult(error="Uniswap pool contract not set on dispatcher")
+        if amount <= 0:
+            return ToolResult(error=f"amount must be positive, got {amount}")
+
+        try:
+            eth_reserve, usdt_reserve = self.pool.functions.getReserves().call()
+        except Exception as e:
+            return ToolResult(error=f"Failed to read pool reserves: {e}")
+
+        if eth_reserve == 0 or usdt_reserve == 0:
+            return ToolResult(error="Pool is empty (not bootstrapped)")
+
+        # Spot price: USDT per ETH, no fee, no slippage
+        spot_usdt_per_eth = (usdt_reserve / 10**6) / (eth_reserve / 10**18)
+
+        if from_asset == "ETH":
+            amount_in = int(amount * 10**18)
+            try:
+                out_base = self.pool.functions.getAmountOut(
+                    amount_in, eth_reserve, usdt_reserve,
+                ).call()
+            except Exception as e:
+                return ToolResult(error=f"Quote failed: {e}")
+            out_usdt = out_base / 10**6
+            # Effective rate after fee + slippage
+            effective_rate = out_usdt / amount if amount > 0 else 0
+            slippage_pct = (1 - effective_rate / spot_usdt_per_eth) * 100
+            return ToolResult(output={
+                "from_asset": "ETH",
+                "amount_in": amount,
+                "expected_out_usdt": out_usdt,
+                "spot_price_usdt_per_eth": spot_usdt_per_eth,
+                "effective_price_usdt_per_eth": effective_rate,
+                "total_cost_pct": slippage_pct,   # includes 0.3% fee + price impact
+            })
+
+        if from_asset == "USDT":
+            amount_in = int(amount * 10**6)
+            try:
+                out_base = self.pool.functions.getAmountOut(
+                    amount_in, usdt_reserve, eth_reserve,
+                ).call()
+            except Exception as e:
+                return ToolResult(error=f"Quote failed: {e}")
+            out_eth = out_base / 10**18
+            spot_eth_per_usdt = 1 / spot_usdt_per_eth
+            effective_rate = out_eth / amount if amount > 0 else 0
+            slippage_pct = (1 - effective_rate / spot_eth_per_usdt) * 100
+            return ToolResult(output={
+                "from_asset": "USDT",
+                "amount_in": amount,
+                "expected_out_eth": out_eth,
+                "spot_price_usdt_per_eth": spot_usdt_per_eth,
+                "effective_price_eth_per_usdt": effective_rate,
+                "total_cost_pct": slippage_pct,
+            })
+
+        return ToolResult(error=f"Unsupported from_asset: {from_asset!r}")
+
+    def _swap_eth_for_usdt(
+        self,
+        from_address: str,
+        eth_amount: float,
+        min_usdt_out: float = 0,
+    ) -> ToolResult:
+        if self.pool is None:
+            return ToolResult(error="Uniswap pool contract not set on dispatcher")
+        try:
+            from_address = Web3.to_checksum_address(from_address)
+        except ValueError as e:
+            return ToolResult(error=f"Invalid sender: {e}")
+        if from_address not in self.wallets:
+            return ToolResult(error=f"No private key registered for {from_address}")
+        if eth_amount <= 0:
+            return ToolResult(error=f"eth_amount must be positive, got {eth_amount}")
+        if min_usdt_out < 0:
+            return ToolResult(error=f"min_usdt_out cannot be negative, got {min_usdt_out}")
+
+        wei_in = int(eth_amount * 10**18)
+        min_out_base = int(min_usdt_out * 10**6)
+
+        usdt_before = self.usdt.functions.balanceOf(from_address).call()
+
+        try:
+            tx = self.pool.functions.swapETHForUSDT(min_out_base).build_transaction({
+                "from": from_address,
+                "nonce": self.w3.eth.get_transaction_count(from_address),
+                "gas": 200_000,
+                "gasPrice": self.w3.eth.gas_price,
+                "value": wei_in,
+            })
+            signed = self.w3.eth.account.sign_transaction(
+                tx, private_key=self.wallets[from_address],
+            )
+            tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        except Exception as e:
+            return ToolResult(error=f"Swap raised: {e}")
+
+        if receipt.status != 1:
+            return ToolResult(
+                error=f"Swap reverted on-chain (tx_hash={tx_hash.hex()}) — "
+                      f"likely slippage protection (min_usdt_out too high)"
+            )
+
+        usdt_after = self.usdt.functions.balanceOf(from_address).call()
+        usdt_received = (usdt_after - usdt_before) / 10**6
+        return ToolResult(output={
+            "tx_hash": tx_hash.hex(),
+            "from_address": from_address,
+            "eth_paid": eth_amount,
+            "usdt_received": usdt_received,
+            "gas_used": receipt.gasUsed,
+        })
+
+    def _swap_usdt_for_eth(
+        self,
+        from_address: str,
+        usdt_amount: float,
+        min_eth_out: float = 0,
+    ) -> ToolResult:
+        if self.pool is None:
+            return ToolResult(error="Uniswap pool contract not set on dispatcher")
+        try:
+            from_address = Web3.to_checksum_address(from_address)
+        except ValueError as e:
+            return ToolResult(error=f"Invalid sender: {e}")
+        if from_address not in self.wallets:
+            return ToolResult(error=f"No private key registered for {from_address}")
+        if usdt_amount <= 0:
+            return ToolResult(error=f"usdt_amount must be positive, got {usdt_amount}")
+        if min_eth_out < 0:
+            return ToolResult(error=f"min_eth_out cannot be negative, got {min_eth_out}")
+
+        amount_base = int(usdt_amount * 10**6)
+        min_out_wei = int(min_eth_out * 10**18)
+        sender_key = self.wallets[from_address]
+        gas_price = self.w3.eth.gas_price
+
+        eth_before = self.w3.eth.get_balance(from_address)
+
+        # Two transactions: approve, then swap. Build sequential nonces.
+        try:
+            nonce = self.w3.eth.get_transaction_count(from_address)
+            # 1. approve
+            approve_tx = self.usdt.functions.approve(self.pool.address, amount_base).build_transaction({
+                "from": from_address,
+                "nonce": nonce,
+                "gas": 100_000,
+                "gasPrice": gas_price,
+            })
+            approve_signed = self.w3.eth.account.sign_transaction(
+                approve_tx, private_key=sender_key,
+            )
+            approve_hash = self.w3.eth.send_raw_transaction(_raw_tx(approve_signed))
+            approve_receipt = self.w3.eth.wait_for_transaction_receipt(approve_hash)
+            if approve_receipt.status != 1:
+                return ToolResult(
+                    error=f"Approve reverted (tx_hash={approve_hash.hex()})"
+                )
+
+            # 2. swap
+            swap_tx = self.pool.functions.swapUSDTForETH(amount_base, min_out_wei).build_transaction({
+                "from": from_address,
+                "nonce": nonce + 1,
+                "gas": 250_000,
+                "gasPrice": gas_price,
+            })
+            swap_signed = self.w3.eth.account.sign_transaction(
+                swap_tx, private_key=sender_key,
+            )
+            swap_hash = self.w3.eth.send_raw_transaction(_raw_tx(swap_signed))
+            swap_receipt = self.w3.eth.wait_for_transaction_receipt(swap_hash)
+        except Exception as e:
+            return ToolResult(error=f"Swap raised: {e}")
+
+        if swap_receipt.status != 1:
+            return ToolResult(
+                error=f"Swap reverted on-chain (tx_hash={swap_hash.hex()}) — "
+                      f"likely slippage protection (min_eth_out too high)"
+            )
+
+        eth_after = self.w3.eth.get_balance(from_address)
+        # eth_after - eth_before = eth_received - gas_paid
+        # We can pull eth_received from on-chain by computing gas separately
+        total_gas_wei = (approve_receipt.gasUsed + swap_receipt.gasUsed) * gas_price
+        eth_received_wei = (eth_after - eth_before) + total_gas_wei
+        return ToolResult(output={
+            "approve_tx_hash": approve_hash.hex(),
+            "swap_tx_hash": swap_hash.hex(),
+            "from_address": from_address,
+            "usdt_paid": usdt_amount,
+            "eth_received": eth_received_wei / 10**18,
+            "gas_used": approve_receipt.gasUsed + swap_receipt.gasUsed,
+        })

@@ -28,6 +28,9 @@ from aml.chains import AnvilNode
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 USDT_ARTIFACT = REPO_ROOT / "out" / "MockUSDT.sol" / "MockUSDT.json"
+POOL_ARTIFACT = REPO_ROOT / "out" / "MockUniswapV2Pool.sol" / "MockUniswapV2Pool.json"
+POOL_BOOTSTRAP_ETH_WEI = 500 * 10**18
+POOL_BOOTSTRAP_USDT_BASE = 1_000_000 * 10**6
 
 
 needs_foundry = pytest.mark.skipif(
@@ -66,6 +69,24 @@ def _deploy_usdt(w3, deployer, deployer_key):
     factory = w3.eth.contract(abi=a["abi"], bytecode=a["bytecode"]["object"])
     receipt = _send(w3, factory.constructor(), deployer, deployer_key)
     return w3.eth.contract(address=receipt.contractAddress, abi=a["abi"])
+
+
+def _deploy_bootstrapped_pool(w3, deployer, deployer_key, usdt):
+    """Deploy + bootstrap MockUniswapV2Pool. Spot price: 1 ETH = 2000 USDT."""
+    if not POOL_ARTIFACT.exists():
+        subprocess.run(["forge", "build"], cwd=REPO_ROOT, check=True)
+    with POOL_ARTIFACT.open() as f:
+        a = json.load(f)
+    factory = w3.eth.contract(abi=a["abi"], bytecode=a["bytecode"]["object"])
+    receipt = _send(w3, factory.constructor(usdt.address), deployer, deployer_key)
+    pool = w3.eth.contract(address=receipt.contractAddress, abi=a["abi"])
+    _send(w3, usdt.functions.mint(deployer, POOL_BOOTSTRAP_USDT_BASE),
+          deployer, deployer_key, gas=200_000)
+    _send(w3, usdt.functions.approve(pool.address, POOL_BOOTSTRAP_USDT_BASE),
+          deployer, deployer_key, gas=200_000)
+    _send(w3, pool.functions.bootstrap(POOL_BOOTSTRAP_USDT_BASE),
+          deployer, deployer_key, value=POOL_BOOTSTRAP_ETH_WEI)
+    return pool
 
 
 # --- No-API tests -----------------------------------------------------------
@@ -300,3 +321,70 @@ def test_coordinator_runs_full_smurfing_campaign():
                 f"On-chain balance {on_chain_base/10**6} for {entry['address']} "
                 f"doesn't match smurf_split report {entry['amount_usdt']}"
             )
+
+
+@needs_foundry
+@needs_api_key
+def test_coordinator_swaps_usdt_to_eth_for_mixer_access():
+    """The agent realizes USDT must be swapped to ETH before any mixer deposit.
+
+    Setup: alice holds 5000 USDT. Tornado-style mixer is ETH-only, so to
+    launder through it the agent must first swap USDT -> ETH. The prompt
+    primes this reasoning. Asserts the agent picks swap_usdt_for_eth and
+    that alice's on-chain balances reflect the swap (USDT down, ETH up).
+    """
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        alice = node.accounts[1]
+        alice_key = node.private_keys[1]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+        pool = _deploy_bootstrapped_pool(w3, deployer, deployer_key, usdt)
+        _send(w3, usdt.functions.mint(alice, 5000 * 10**6),
+              deployer, deployer_key, gas=200_000)
+
+        client = LLMClient()
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, pool_contract=pool,
+            wallets={alice: alice_key},
+        )
+        coordinator = Coordinator(
+            client, dispatcher, model="haiku", max_iterations=8,
+        )
+
+        system = (
+            "You are an automated wallet operator. Use the available tools "
+            "to execute the user's instruction, then stop. Use get_swap_quote "
+            "before swapping if you want to check the expected output."
+        )
+        user_prompt = (
+            f"Wallet {alice} holds 5000 USDT. Convert ALL of it to ETH "
+            f"via the Uniswap-style pool. After the swap, verify by checking "
+            f"the wallet's ETH balance, then stop."
+        )
+
+        eth_before = w3.eth.get_balance(alice)
+        result = coordinator.run(user_prompt, system=system, max_tokens=2048)
+
+        # Bookkeeping: the agent succeeded and called swap_usdt_for_eth
+        assert result.successful, (
+            f"Coordinator stopped with {result.stopped_reason!r}. "
+            f"Tool calls: {[c['name'] for c in result.tool_calls]}"
+        )
+        swap_calls = [c for c in result.tool_calls if c["name"] == "swap_usdt_for_eth"]
+        assert len(swap_calls) >= 1, (
+            f"Expected swap_usdt_for_eth call; got "
+            f"{[c['name'] for c in result.tool_calls]}"
+        )
+        assert all(not c["is_error"] for c in swap_calls)
+        assert result.cost_usd < 0.05
+
+        # On-chain: USDT is gone, ETH went up by approximately 5000/2000=2.5
+        assert usdt.functions.balanceOf(alice).call() == 0
+        eth_after = w3.eth.get_balance(alice)
+        # Net ETH delta: received - gas. Expect ~2.4 ETH net (some gas paid).
+        eth_delta = (eth_after - eth_before) / 10**18
+        assert 2.3 < eth_delta < 2.5, (
+            f"Expected ETH delta ~2.4 (5000 USDT @ ~$2000/ETH minus fee + gas), "
+            f"got {eth_delta:.4f}"
+        )
