@@ -21,25 +21,58 @@ Tools shipped:
                                swap done atomically inside the dispatcher)
     get_swap_quote           — view-only quote: expected output for a given
                                input given the pool's current reserves
-
-Future tools (separate PRs):
-    mixer_deposit, mixer_withdraw          — ZK Tornado primitives
+    mixer_deposit            — deposit 1 ETH into the ZK Tornado mixer;
+                               returns a secret deposit note
+    mixer_withdraw           — withdraw 1 ETH from the mixer to any
+                               recipient using a deposit note + a Groth16
+                               proof generated internally via snarkjs
 """
 from __future__ import annotations
 
 import json
 import random
+import secrets
+import subprocess
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from eth_account import Account
 from web3 import Web3
+from web3.logs import DISCARD
 
 
 # Hard cap on smurf_split's wallet count to prevent runaway gas / runtime
 # from a misbehaving agent. 5000 burners ≈ 100 seconds on Anvil + ~0.25 ETH
 # in gas — both fine; anything 10× that risks operator pain.
 _MAX_BURNERS_PER_SMURF = 5000
+
+
+# --- ZK mixer (Tornado) wiring ------------------------------------------
+# The mixer tools shell out to Node (zk_helpers.js — MiMC hashing + Merkle
+# path reconstruction) and snarkjs (Groth16 witness + proof generation).
+# Paths are resolved relative to the repo root so they work regardless of
+# the caller's CWD. tools.py lives at src/aml/attackers/, so parents[3] is
+# the repo root.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_ZK_HELPER_JS = _REPO_ROOT / "scripts" / "zk_helpers.js"
+_ZK_CIRCUIT = "withdraw"
+_ZK_BUILD = _REPO_ROOT / "circuits" / "build" / _ZK_CIRCUIT
+_ZK_WASM = _ZK_BUILD / f"{_ZK_CIRCUIT}_js" / f"{_ZK_CIRCUIT}.wasm"
+_ZK_ZKEY = _ZK_BUILD / f"{_ZK_CIRCUIT}_final.zkey"
+
+# Must match `component main = Withdraw(10)` in circuits/withdraw.circom and
+# the `_levels` MockTornado was deployed with.
+_MERKLE_DEPTH = 10
+
+# MockTornado.DENOMINATION — the fixed mixer deposit/withdraw size.
+_MIXER_DENOMINATION_WEI = 10**18
+
+# Deposit-note wire format: "<prefix>:<nullifier_hex>:<secret_hex>", each
+# component zero-padded to 64 hex chars. The note is the *only* secret
+# needed to withdraw — whoever holds it controls the deposited 1 ETH.
+_NOTE_PREFIX = "aml-mixer-note-v1"
 
 
 @dataclass
@@ -285,6 +318,79 @@ _TOOL_SCHEMAS: list[dict] = [
             "required": ["from_address", "total_usdt", "num_wallets", "max_per_wallet"],
         },
     },
+    {
+        "name": "mixer_deposit",
+        "description": (
+            "Deposit exactly 1 ETH into the ZK mixer (Tornado-Cash-style). "
+            "Generates a fresh secret deposit note, commits its hash on-chain, "
+            "and sends 1 ETH from `from_address` (which must be in the wallet "
+            "registry and hold at least 1 ETH plus gas). Returns a "
+            "`deposit_note` string — this is the ONLY way to later withdraw "
+            "the ETH, so it must be remembered and kept secret. The mixer "
+            "breaks the on-chain link between the depositing wallet and "
+            "whatever address later withdraws: a withdrawal cannot be tied to "
+            "this deposit beyond the anonymity set of all deposits. The "
+            "denomination is fixed at 1 ETH — to mix a different amount, make "
+            "multiple deposits."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "from_address": {
+                    "type": "string",
+                    "description": (
+                        "Wallet making the deposit. Must be in the registry "
+                        "and hold >= 1 ETH plus gas."
+                    ),
+                },
+            },
+            "required": ["from_address"],
+        },
+    },
+    {
+        "name": "mixer_withdraw",
+        "description": (
+            "Withdraw 1 ETH from the ZK mixer using a `deposit_note` returned "
+            "by an earlier mixer_deposit call. The 1 ETH is paid to "
+            "`recipient` (any address — does NOT need to be in the registry, "
+            "and a fresh unrelated address gives the best unlinkability). A "
+            "Groth16 zero-knowledge proof is generated internally proving the "
+            "note's commitment is in the mixer's Merkle tree, without "
+            "revealing which deposit it was. Pass `gas_payer` to choose which "
+            "registered wallet submits and pays gas for the withdrawal tx — "
+            "for unlinkability this should be a wallet unrelated to both the "
+            "depositor and the recipient; if omitted, the first registered "
+            "wallet pays. Fails cleanly if the note is malformed, was never "
+            "deposited, or was already withdrawn. Proof generation takes a "
+            "few seconds."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "deposit_note": {
+                    "type": "string",
+                    "description": "The deposit note string from a prior mixer_deposit call.",
+                },
+                "recipient": {
+                    "type": "string",
+                    "description": (
+                        "Address that receives the 1 ETH. Any address; need "
+                        "not be in the registry."
+                    ),
+                },
+                "gas_payer": {
+                    "type": "string",
+                    "description": (
+                        "Optional. Registered wallet that submits the withdraw "
+                        "tx and pays its gas. Defaults to the first registered "
+                        "wallet. For unlinkability, use a wallet unrelated to "
+                        "the deposit and the recipient."
+                    ),
+                },
+            },
+            "required": ["deposit_note", "recipient"],
+        },
+    },
 ]
 
 
@@ -296,15 +402,94 @@ def _raw_tx(signed) -> bytes:
     return raw
 
 
+# --- ZK mixer helpers (module-level — used by mixer_deposit/withdraw) ----
+
+
+def _encode_note(nullifier: int, secret: int) -> str:
+    """Serialize a (nullifier, secret) pair into a deposit-note string."""
+    return f"{_NOTE_PREFIX}:{nullifier:064x}:{secret:064x}"
+
+
+def _decode_note(note: str) -> tuple[int, int]:
+    """Parse a deposit-note string back into (nullifier, secret).
+
+    Raises ValueError with an agent-readable message on any malformation.
+    """
+    parts = note.strip().split(":")
+    if len(parts) != 3 or parts[0] != _NOTE_PREFIX:
+        raise ValueError(
+            f"malformed deposit note (expected '{_NOTE_PREFIX}:<hex>:<hex>')"
+        )
+    try:
+        return int(parts[1], 16), int(parts[2], 16)
+    except ValueError:
+        raise ValueError("deposit note hex components are not valid hex") from None
+
+
+def _run_zk_helper(*args: str) -> str:
+    """Run `node scripts/zk_helpers.js <args...>`, return stripped stdout.
+
+    Raises RuntimeError if node is missing or the helper exits non-zero.
+    """
+    try:
+        proc = subprocess.run(
+            ["node", str(_ZK_HELPER_JS), *args],
+            capture_output=True, text=True,
+        )
+    except FileNotFoundError:
+        raise RuntimeError(
+            "`node` not found on PATH — ZK mixer tools need Node.js"
+        ) from None
+    if proc.returncode != 0:
+        detail = proc.stderr.strip() or proc.stdout.strip() or "no output"
+        raise RuntimeError(f"zk_helpers.js {args[0]} failed: {detail}")
+    return proc.stdout.strip()
+
+
+def _run_snarkjs(*args: str) -> None:
+    """Run `snarkjs <args...>`. Raises RuntimeError on missing binary or failure."""
+    try:
+        proc = subprocess.run(["snarkjs", *args], capture_output=True, text=True)
+    except FileNotFoundError:
+        raise RuntimeError(
+            "`snarkjs` not found on PATH — ZK mixer tools need snarkjs"
+        ) from None
+    if proc.returncode != 0:
+        detail = proc.stderr.strip() or proc.stdout.strip() or "no output"
+        raise RuntimeError(f"snarkjs {' '.join(args[:2])} failed: {detail}")
+
+
+def _proof_to_solidity(proof: dict) -> tuple[list, list, list]:
+    """Convert a snarkjs Groth16 proof.json into the (pA, pB, pC) calldata
+    tuple the on-chain Groth16 verifier expects.
+
+    pB's coordinate pairs are swapped — that's the snarkjs → Solidity
+    calldata convention (the G2 point coordinates are stored in the
+    opposite order on-chain).
+    """
+    pa = [int(proof["pi_a"][0]), int(proof["pi_a"][1])]
+    pb = [
+        [int(proof["pi_b"][0][1]), int(proof["pi_b"][0][0])],
+        [int(proof["pi_b"][1][1]), int(proof["pi_b"][1][0])],
+    ]
+    pc = [int(proof["pi_c"][0]), int(proof["pi_c"][1])]
+    return pa, pb, pc
+
+
 class ToolDispatcher:
     """Maps tool names to Python implementations and holds chain context.
 
     Args:
         w3: Web3 client connected to Anvil.
         usdt_contract: Deployed MockUSDT contract handle (or None for tests
-            that only exercise schema introspection).
+            that only exercise schema introspection — USDT tools then return
+            a clean error instead of crashing).
         wallets: dict mapping address -> private_key for wallets the attacker
             controls. Addresses are normalized to checksum form on insertion.
+        pool_contract: Deployed MockUniswapV2Pool handle (or None). When None,
+            the swap tools return a clean error.
+        tornado_contract: Deployed MockTornado (ZK mixer) handle (or None).
+            When None, the mixer tools return a clean error.
     """
 
     def __init__(
@@ -313,10 +498,12 @@ class ToolDispatcher:
         usdt_contract: Any,
         wallets: dict[str, str],
         pool_contract: Any = None,
+        tornado_contract: Any = None,
     ):
         self.w3 = w3
         self.usdt = usdt_contract
         self.pool = pool_contract
+        self.tornado = tornado_contract
         self.wallets: dict[str, str] = {
             Web3.to_checksum_address(addr): key for addr, key in wallets.items()
         }
@@ -348,6 +535,10 @@ class ToolDispatcher:
             return self._swap_eth_for_usdt(**tool_input)
         if tool_name == "swap_usdt_for_eth":
             return self._swap_usdt_for_eth(**tool_input)
+        if tool_name == "mixer_deposit":
+            return self._mixer_deposit(**tool_input)
+        if tool_name == "mixer_withdraw":
+            return self._mixer_withdraw(**tool_input)
         return ToolResult(error=f"Unknown tool: {tool_name}")
 
     # --- Tool implementations -----------------------------------------------
@@ -823,4 +1014,279 @@ class ToolDispatcher:
             "usdt_paid": usdt_amount,
             "eth_received": eth_received_wei / 10**18,
             "gas_used": approve_receipt.gasUsed + swap_receipt.gasUsed,
+        })
+
+    # --- ZK mixer tools (PR 5.6) --------------------------------------------
+
+    def _mixer_deposit(self, from_address: str) -> ToolResult:
+        """Deposit 1 ETH into the ZK Tornado mixer; return a secret note."""
+        if self.tornado is None:
+            return ToolResult(error="Tornado mixer contract not set on dispatcher")
+        try:
+            from_address = Web3.to_checksum_address(from_address)
+        except ValueError as e:
+            return ToolResult(error=f"Invalid sender: {e}")
+        if from_address not in self.wallets:
+            return ToolResult(error=f"No private key registered for {from_address}")
+
+        balance = self.w3.eth.get_balance(from_address)
+        if balance < _MIXER_DENOMINATION_WEI:
+            return ToolResult(error=(
+                f"Insufficient ETH: {from_address} holds {balance / 10**18} ETH, "
+                f"mixer deposit requires 1 ETH plus gas"
+            ))
+
+        # Fresh deposit note: random (nullifier, secret) in the bn254 field.
+        # 31 random bytes fits comfortably under the 254-bit field prime.
+        nullifier = int.from_bytes(secrets.token_bytes(31), "big")
+        secret = int.from_bytes(secrets.token_bytes(31), "big")
+
+        try:
+            commitment_int = int(_run_zk_helper("mimc2", str(nullifier), str(secret)))
+        except RuntimeError as e:
+            return ToolResult(error=f"Commitment hashing failed: {e}")
+        commitment_bytes = commitment_int.to_bytes(32, "big")
+
+        try:
+            tx = self.tornado.functions.deposit(commitment_bytes).build_transaction({
+                "from": from_address,
+                "nonce": self.w3.eth.get_transaction_count(from_address),
+                "gas": 3_000_000,   # MiMC insert re-hashes the full tree path
+                "gasPrice": self.w3.eth.gas_price,
+                "value": _MIXER_DENOMINATION_WEI,
+            })
+            signed = self.w3.eth.account.sign_transaction(
+                tx, private_key=self.wallets[from_address],
+            )
+            tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        except Exception as e:
+            return ToolResult(error=f"Deposit raised: {e}")
+
+        if receipt.status != 1:
+            return ToolResult(
+                error=f"Deposit reverted on-chain (tx_hash={tx_hash.hex()})"
+            )
+
+        # Leaf index is a nice-to-have (handy for the agent's bookkeeping);
+        # if event parsing fails for any reason, ship the result without it.
+        # `deposit` emits both LeafInserted (from MerkleTreeWithHistory) and
+        # Deposit; errors=DISCARD silently skips the non-matching LeafInserted
+        # log instead of logging a MismatchedABI warning for it.
+        leaf_index = None
+        try:
+            events = self.tornado.events.Deposit().process_receipt(
+                receipt, errors=DISCARD,
+            )
+            if events:
+                leaf_index = events[0]["args"]["leafIndex"]
+        except Exception:   # noqa: BLE001 — leaf_index is optional
+            pass
+
+        return ToolResult(output={
+            "tx_hash": tx_hash.hex(),
+            "from_address": from_address,
+            "deposit_note": _encode_note(nullifier, secret),
+            "commitment": "0x" + commitment_bytes.hex(),
+            "leaf_index": leaf_index,
+            "amount_eth": _MIXER_DENOMINATION_WEI / 10**18,
+            "gas_used": receipt.gasUsed,
+            "warning": (
+                "SAVE the deposit_note — it is the only way to withdraw, and "
+                "anyone holding it can withdraw the 1 ETH to any recipient."
+            ),
+        })
+
+    def _mixer_collect_leaves(
+        self, target_commitment: int,
+    ) -> tuple[list[int], int | None]:
+        """Scan the mixer's Deposit events; rebuild the ordered leaf set.
+
+        Returns (leaves ordered by on-chain index, index of target_commitment
+        within that list). The index is None if the commitment was never
+        deposited. Raises RuntimeError if the event scan itself fails.
+        """
+        deposit_event = self.tornado.events.Deposit()
+        try:
+            try:
+                logs = deposit_event.get_logs(from_block=0)
+            except TypeError:   # web3.py v6 uses fromBlock
+                logs = deposit_event.get_logs(fromBlock=0)
+        except Exception as e:   # noqa: BLE001 — surfaced as a tool error
+            raise RuntimeError(f"failed to scan mixer deposit events: {e}") from e
+
+        by_index: dict[int, int] = {}
+        for log in logs:
+            idx = log["args"]["leafIndex"]
+            by_index[idx] = int.from_bytes(bytes(log["args"]["commitment"]), "big")
+
+        if not by_index:
+            return [], None
+
+        leaves = [by_index.get(i, 0) for i in range(max(by_index) + 1)]
+        target_index = next(
+            (i for i, c in enumerate(leaves) if c == target_commitment), None,
+        )
+        return leaves, target_index
+
+    def _mixer_withdraw(
+        self,
+        deposit_note: str,
+        recipient: str,
+        gas_payer: str | None = None,
+    ) -> ToolResult:
+        """Withdraw 1 ETH from the mixer to `recipient` via a Groth16 proof."""
+        if self.tornado is None:
+            return ToolResult(error="Tornado mixer contract not set on dispatcher")
+
+        try:
+            nullifier, secret = _decode_note(deposit_note)
+        except ValueError as e:
+            return ToolResult(error=str(e))
+
+        try:
+            recipient = Web3.to_checksum_address(recipient)
+        except ValueError as e:
+            return ToolResult(error=f"Invalid recipient: {e}")
+
+        # Who submits (and pays gas for) the withdraw tx. For unlinkability
+        # this should be unrelated to the depositor and recipient — the agent
+        # can pass gas_payer explicitly; otherwise the first registered wallet
+        # pays.
+        if gas_payer is not None:
+            try:
+                gas_payer = Web3.to_checksum_address(gas_payer)
+            except ValueError as e:
+                return ToolResult(error=f"Invalid gas_payer: {e}")
+            if gas_payer not in self.wallets:
+                return ToolResult(
+                    error=f"No private key registered for gas_payer {gas_payer}"
+                )
+        else:
+            if not self.wallets:
+                return ToolResult(
+                    error="No registered wallet available to pay withdraw gas"
+                )
+            gas_payer = next(iter(self.wallets))
+
+        # Reconstruct commitment + nullifierHash from the note.
+        try:
+            commitment_int = int(_run_zk_helper("mimc2", str(nullifier), str(secret)))
+            nullifier_hash_int = int(_run_zk_helper("mimc", str(nullifier)))
+        except RuntimeError as e:
+            return ToolResult(error=f"Note hashing failed: {e}")
+        nullifier_hash_bytes = nullifier_hash_int.to_bytes(32, "big")
+
+        # Already spent?
+        try:
+            if self.tornado.functions.nullifierHashes(nullifier_hash_bytes).call():
+                return ToolResult(
+                    error="This note has already been withdrawn (nullifier spent)"
+                )
+        except Exception as e:
+            return ToolResult(error=f"Failed to read mixer nullifier state: {e}")
+
+        # Rebuild the Merkle tree from on-chain Deposit events.
+        try:
+            leaves, leaf_index = self._mixer_collect_leaves(commitment_int)
+        except RuntimeError as e:
+            return ToolResult(error=str(e))
+        if leaf_index is None:
+            return ToolResult(error=(
+                "Commitment not found in the mixer — this note was never "
+                "deposited (or was deposited to a different mixer instance)"
+            ))
+
+        # Generate the Groth16 proof in an isolated temp dir.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            try:
+                leaves_file = tmp_path / "leaves.json"
+                leaves_file.write_text(json.dumps([str(x) for x in leaves]))
+                prepared = json.loads(_run_zk_helper(
+                    "merkle-path", str(_MERKLE_DEPTH), str(leaf_index),
+                    str(leaves_file),
+                ))
+            except RuntimeError as e:
+                return ToolResult(error=f"Merkle path computation failed: {e}")
+
+            root_int = int(prepared["root"])
+            root_bytes = root_int.to_bytes(32, "big")
+
+            # Defensive: the root we reconstructed must be one the contract
+            # still has in its bounded history.
+            try:
+                if not self.tornado.functions.isKnownRoot(root_bytes).call():
+                    return ToolResult(error=(
+                        "Reconstructed Merkle root is not known on-chain — the "
+                        "off-chain leaf set is out of sync with the contract"
+                    ))
+            except Exception as e:
+                return ToolResult(error=f"Failed to verify Merkle root: {e}")
+
+            circuit_input = {
+                "root": prepared["root"],
+                "nullifierHash": str(nullifier_hash_int),
+                "recipient": str(int(recipient, 16)),
+                "fee": "0",
+                "refund": "0",
+                "nullifier": str(nullifier),
+                "secret": str(secret),
+                "pathElements": prepared["pathElements"],
+                "pathIndices": prepared["pathIndices"],
+            }
+            input_file = tmp_path / "input.json"
+            witness_file = tmp_path / "witness.wtns"
+            proof_file = tmp_path / "proof.json"
+            public_file = tmp_path / "public.json"
+            input_file.write_text(json.dumps(circuit_input))
+
+            try:
+                _run_snarkjs(
+                    "wtns", "calculate",
+                    str(_ZK_WASM), str(input_file), str(witness_file),
+                )
+                _run_snarkjs(
+                    "groth16", "prove",
+                    str(_ZK_ZKEY), str(witness_file),
+                    str(proof_file), str(public_file),
+                )
+            except RuntimeError as e:
+                return ToolResult(error=f"Groth16 proof generation failed: {e}")
+
+            proof = json.loads(proof_file.read_text())
+
+        pa, pb, pc = _proof_to_solidity(proof)
+
+        # Submit the withdraw tx.
+        try:
+            tx = self.tornado.functions.withdraw(
+                pa, pb, pc, root_bytes, nullifier_hash_bytes, recipient, 0, 0,
+            ).build_transaction({
+                "from": gas_payer,
+                "nonce": self.w3.eth.get_transaction_count(gas_payer),
+                "gas": 2_000_000,
+                "gasPrice": self.w3.eth.gas_price,
+            })
+            signed = self.w3.eth.account.sign_transaction(
+                tx, private_key=self.wallets[gas_payer],
+            )
+            tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        except Exception as e:
+            return ToolResult(error=f"Withdraw raised: {e}")
+
+        if receipt.status != 1:
+            return ToolResult(
+                error=f"Withdraw reverted on-chain (tx_hash={tx_hash.hex()})"
+            )
+
+        return ToolResult(output={
+            "tx_hash": tx_hash.hex(),
+            "recipient": recipient,
+            "amount_eth": _MIXER_DENOMINATION_WEI / 10**18,
+            "gas_payer": gas_payer,
+            "nullifier_hash": "0x" + nullifier_hash_bytes.hex(),
+            "anonymity_set_size": len(leaves),
+            "gas_used": receipt.gasUsed,
         })

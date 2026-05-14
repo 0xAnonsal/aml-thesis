@@ -496,6 +496,27 @@ def test_swap_tools_no_pool_set_returns_error():
         assert "pool" in result.error.lower(), f"{tool}: {result.error}"
 
 
+# --- ZK mixer tools (PR 5.6) ---------------------------------------------
+# The Anvil + ZK-backed mixer dispatcher tests live in test_tools_mixer.py
+# (they need the MockTornado + Verifier + MiMC deploy stack and snarkjs).
+# This one only checks the no-contract guard — no Anvil, no ZK toolchain.
+
+
+def test_mixer_tools_no_tornado_set_returns_error():
+    """If tornado_contract is None, mixer tools fail cleanly without crashing."""
+    dispatcher = ToolDispatcher(w3=Web3(), usdt_contract=None, wallets={})
+    zero = "0x" + "0" * 40
+
+    result = dispatcher.dispatch("mixer_deposit", {"from_address": zero})
+    assert result.is_error and "mixer" in result.error.lower()
+
+    valid_note = "aml-mixer-note-v1:" + "0" * 64 + ":" + "0" * 64
+    result = dispatcher.dispatch("mixer_withdraw", {
+        "deposit_note": valid_note, "recipient": zero,
+    })
+    assert result.is_error and "mixer" in result.error.lower()
+
+
 @needs_foundry
 def test_smurf_split_small_round_trip():
     """End-to-end at small scale (50 burners): sums exact, balances match."""

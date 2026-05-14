@@ -19,6 +19,17 @@
 //        where the given leaves occupy positions 0..N-1 and the rest are 0n.
 //        Used to compare on-chain insertion order against off-chain.
 //
+//   merkle-path <depth> <leafIndex> <leavesJsonFile>
+//     -> { root, pathElements, pathIndices } for the leaf at <leafIndex>
+//        within a tree whose leaves 0..N-1 are read (as a JSON array of
+//        decimal strings) from <leavesJsonFile>, the rest padded with 0n.
+//        Unlike prepare-withdraw (which places a single commitment in an
+//        otherwise-empty tree) this reconstructs the path against the
+//        *full* leaf set — needed to withdraw from a mixer that already
+//        holds multiple deposits. Leaves are read from a file rather than
+//        argv so a near-full depth-10 tree (1024 leaves) doesn't blow the
+//        argv length limit.
+//
 //   mimc-bytecode
 //     -> creation bytecode of the auto-generated MiMC contract
 //
@@ -27,6 +38,7 @@
 
 "use strict";
 
+const fs = require("fs");
 const { buildMimcSponge, mimcSpongecontract } = require("circomlibjs");
 
 function hash2(mimc, a, b) {
@@ -96,7 +108,7 @@ async function main() {
     const args = process.argv.slice(3);
 
     if (!cmd) {
-        console.error("usage: node zk_helpers.js {mimc|mimc2|prepare-withdraw|merkle-root|mimc-bytecode|mimc-abi} <args...>");
+        console.error("usage: node zk_helpers.js {mimc|mimc2|prepare-withdraw|merkle-root|merkle-path|mimc-bytecode|mimc-abi} <args...>");
         process.exit(2);
     }
 
@@ -174,6 +186,25 @@ async function main() {
             root: root.toString(),
             depth,
             numLeavesProvided: leaves.length,
+        }));
+        return;
+    }
+
+    if (cmd === "merkle-path") {
+        if (args.length !== 3) {
+            console.error("usage: node zk_helpers.js merkle-path <depth> <leafIndex> <leavesJsonFile>");
+            process.exit(2);
+        }
+        const depth = parseInt(args[0], 10);
+        const leafIndex = parseInt(args[1], 10);
+        const leaves = JSON.parse(fs.readFileSync(args[2], "utf8")).map((x) => BigInt(x));
+        const { root, pathElements, pathIndices } = buildTreeAndPath(
+            mimc, leaves, leafIndex, depth,
+        );
+        console.log(JSON.stringify({
+            root: root.toString(),
+            pathElements: pathElements.map((x) => x.toString()),
+            pathIndices: pathIndices.map((x) => x.toString()),
         }));
         return;
     }
