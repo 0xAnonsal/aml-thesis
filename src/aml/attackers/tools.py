@@ -8,17 +8,32 @@ it just calls `dispatch(name, input)` and gets a structured ToolResult back.
 
 Tools shipped:
     get_balance              — read ETH or USDT balance for an address
+    get_gas_budget           — read-only: spendable ETH above the gas-reserve
+                               floor; lets the LLM plan hop budgets without
+                               flying blind
     transfer_usdt            — write: single USDT transfer
-    generate_burner_wallet   — fresh keypair, auto-registered in registry
+    transfer_eth             — write: single ETH transfer (gas-reserve aware)
+    generate_burner_wallet   — fresh keypair, auto-registered AND auto-seeded
+                               with gas dust so the burner can immediately
+                               be used as a sender (without this, multi-hop
+                               laundering is impossible — burners with no ETH
+                               can't even submit transactions)
     mint_usdt                — permissionless mint (research convenience)
-    smurf_split              — large-scale structuring: distribute USDT
-                               across N random burner wallets in one call
-                               (avoids burning LLM tokens orchestrating
-                               thousands of individual transfers)
-    swap_eth_for_usdt        — Uniswap-style ETH -> USDT swap (caller pays
-                               ETH + gas, receives USDT)
+    smurf_split              — large-scale USDT structuring across N random
+                               burner wallets in one call. Each burner is
+                               also gas-seeded.
+    smurf_eth_split          — ETH-denominated structuring with per-wallet
+                               USDT-equivalent cap (defaults to $999, below
+                               US CTR threshold). Pool spot price drives the
+                               conversion. Each burner gas-seeded. Primary
+                               Placement-stage tool when the stolen asset
+                               is ETH.
+    swap_eth_for_usdt        — Uniswap-style ETH -> USDT swap (gas-reserve
+                               aware: refuses if it would drop wallet below
+                               reserve_eth)
     swap_usdt_for_eth        — Uniswap-style USDT -> ETH swap (approve +
-                               swap done atomically inside the dispatcher)
+                               swap done atomically inside the dispatcher;
+                               gas-reserve aware)
     get_swap_quote           — view-only quote: expected output for a given
                                input given the pool's current reserves
     mixer_deposit            — deposit 1 ETH into the ZK Tornado mixer;
@@ -47,6 +62,24 @@ from web3.logs import DISCARD
 # from a misbehaving agent. 5000 burners ≈ 100 seconds on Anvil + ~0.25 ETH
 # in gas — both fine; anything 10× that risks operator pain.
 _MAX_BURNERS_PER_SMURF = 5000
+
+# Default ETH dust seeded into every freshly-generated burner wallet, AND
+# the default protected gas-floor below which transfer_eth / swap_* refuse
+# to drop a wallet (override per-call with reserve_eth=0 to drain a wallet
+# at end-of-campaign). Single number on purpose: a burner created with
+# `_DEFAULT_GAS_RESERVE_ETH` of ETH is at floor — every operation it does
+# must keep it at or above floor unless explicitly told to drain. Matches
+# real-world launderer OPSEC where the operator drips fixed gas dust into
+# each disposable wallet and never strands one mid-campaign.
+_DEFAULT_GAS_RESERVE_ETH = 0.05
+
+# Gwei budget for a standard ETH transfer (21k gas baseline).
+_ETH_TRANSFER_GAS = 21_000
+
+# Conservative gas headroom we add to `reserve_eth` when deciding whether a
+# swap or eth-transfer is safe to submit — covers this tx's own gas at the
+# current gas price so the wallet doesn't dip below reserve when it lands.
+_GAS_HEADROOM_TX = 300_000   # generous: covers swap (~250k) or USDT xfer (~100k)
 
 
 # --- ZK mixer (Tornado) wiring ------------------------------------------
@@ -158,9 +191,13 @@ _TOOL_SCHEMAS: list[dict] = [
             "Generate a fresh Ethereum keypair and register it in the "
             "dispatcher's wallet registry. The agent only sees the address; "
             "the private key is kept internally so the dispatcher can sign "
-            "future transactions on the wallet's behalf. Returns the new "
-            "address. New burners start with 0 ETH and 0 USDT — fund them "
-            "via transfer_usdt or mint_usdt before they can do anything."
+            "future transactions on the wallet's behalf. The new burner is "
+            f"AUTO-SEEDED with {_DEFAULT_GAS_RESERVE_ETH} ETH from the "
+            "operator's faucet wallet so it can immediately pay gas as a "
+            "sender (without this, USDT received by the burner would be "
+            "stranded — burners with no ETH can't even submit transactions). "
+            "Returns {address, gas_seed_eth}. Still holds 0 USDT — fund it "
+            "via transfer_usdt or mint_usdt to give it a laundering balance."
         ),
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
@@ -216,8 +253,11 @@ _TOOL_SCHEMAS: list[dict] = [
             "0.3% fee). The caller's wallet (must be in the dispatcher's "
             "registry) pays `eth_amount` of ETH plus ETH gas, receives USDT. "
             "Pass `min_usdt_out` to enforce slippage protection (the call "
-            "reverts if the actual output would be less). Defaults to 0 "
-            "(accept any output)."
+            "reverts if the actual output would be less). Respects a "
+            f"gas-reserve floor (default {_DEFAULT_GAS_RESERVE_ETH} ETH): the "
+            "call refuses if `eth_amount` + gas would drop the wallet below "
+            "`reserve_eth`. Pass `reserve_eth=0` to drain — only at "
+            "end-of-campaign."
         ),
         "input_schema": {
             "type": "object",
@@ -234,6 +274,13 @@ _TOOL_SCHEMAS: list[dict] = [
                     "type": "number",
                     "description": "Slippage floor: minimum USDT to accept. Default 0.",
                 },
+                "reserve_eth": {
+                    "type": "number",
+                    "description": (
+                        f"Minimum ETH the wallet must retain post-swap "
+                        f"(default {_DEFAULT_GAS_RESERVE_ETH}). 0 = drain."
+                    ),
+                },
             },
             "required": ["from_address", "eth_amount"],
         },
@@ -247,7 +294,10 @@ _TOOL_SCHEMAS: list[dict] = [
             "as two separate transactions internally (the LLM doesn't need "
             "to handle approval; just call swap_usdt_for_eth with the "
             "amount and the dispatcher handles both txs). Pass `min_eth_out` "
-            "to enforce slippage protection."
+            "to enforce slippage protection. Requires the wallet to hold "
+            f"at least `reserve_eth` (default {_DEFAULT_GAS_RESERVE_ETH}) "
+            "plus gas for the approve+swap — the swap itself increases ETH, "
+            "but you can't even submit the approve tx with zero ETH."
         ),
         "input_schema": {
             "type": "object",
@@ -263,6 +313,14 @@ _TOOL_SCHEMAS: list[dict] = [
                 "min_eth_out": {
                     "type": "number",
                     "description": "Slippage floor: minimum ETH to accept. Default 0.",
+                },
+                "reserve_eth": {
+                    "type": "number",
+                    "description": (
+                        f"Pre-swap gas floor (default "
+                        f"{_DEFAULT_GAS_RESERVE_ETH}). The wallet must hold "
+                        "at least this much ETH plus enough for two txs' gas."
+                    ),
                 },
             },
             "required": ["from_address", "usdt_amount"],
@@ -316,6 +374,129 @@ _TOOL_SCHEMAS: list[dict] = [
                 },
             },
             "required": ["from_address", "total_usdt", "num_wallets", "max_per_wallet"],
+        },
+    },
+    {
+        "name": "transfer_eth",
+        "description": (
+            "Transfer ETH from one wallet to another. The sender must be in "
+            "the dispatcher's wallet registry. Amount is in human ETH units "
+            "(not wei). Respects a gas-reserve floor: the call refuses to "
+            "proceed if it would drop the sender's ETH balance below "
+            f"`reserve_eth` (default {_DEFAULT_GAS_RESERVE_ETH} ETH). Pass "
+            "`reserve_eth=0` to drain the wallet — only do that at "
+            "end-of-campaign when the wallet is being decommissioned, "
+            "otherwise you'll strand it (no gas → can't transact)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "from_address": {
+                    "type": "string",
+                    "description": "Sender address. Must be in the registry.",
+                },
+                "to_address": {
+                    "type": "string",
+                    "description": "Recipient address (need not be in the registry).",
+                },
+                "amount_eth": {
+                    "type": "number",
+                    "description": "ETH to transfer, human units (positive).",
+                },
+                "reserve_eth": {
+                    "type": "number",
+                    "description": (
+                        f"Minimum ETH to leave in sender after the transfer "
+                        f"(default {_DEFAULT_GAS_RESERVE_ETH}). Pass 0 to "
+                        "drain at end-of-campaign."
+                    ),
+                },
+            },
+            "required": ["from_address", "to_address", "amount_eth"],
+        },
+    },
+    {
+        "name": "smurf_eth_split",
+        "description": (
+            "ETH-denominated structuring: distribute `total_eth` from one "
+            "wallet across `num_wallets` newly-generated burner wallets in a "
+            "single call. Each burner receives a random ETH amount strictly "
+            "BELOW `max_per_wallet_usdt` worth of ETH (converted at the "
+            "Uniswap pool's current spot price). The amounts sum to "
+            "`total_eth` exactly. Every fresh burner is auto-seeded with "
+            f"{_DEFAULT_GAS_RESERVE_ETH} ETH from the faucet (separate from "
+            "the laundered amount) so it can immediately pay gas as a sender. "
+            f"Default cap is $999 — well below the US $10k CTR threshold. "
+            "Use this as the Placement-stage structuring primitive when the "
+            "stolen asset is ETH. Returns a bounded summary: wallets_created, "
+            "totals, gas usage, and a sample of the first 5 recipients."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "from_address": {
+                    "type": "string",
+                    "description": "Sender wallet (in registry, holds >= total_eth + gas).",
+                },
+                "total_eth": {
+                    "type": "number",
+                    "description": "Total ETH to distribute across the burners.",
+                },
+                "num_wallets": {
+                    "type": "integer",
+                    "description": (
+                        f"Number of burner wallets to generate. Capped at "
+                        f"{_MAX_BURNERS_PER_SMURF}. Must be large enough that "
+                        "num_wallets × (max_per_wallet_usdt-equivalent in ETH) "
+                        ">= total_eth."
+                    ),
+                },
+                "max_per_wallet_usdt": {
+                    "type": "number",
+                    "description": (
+                        "Per-wallet ceiling expressed in USDT-equivalent. "
+                        "Default 999 (strictly under a $1k structuring "
+                        "threshold). The cap is converted to ETH using the "
+                        "Uniswap pool's current spot price; passing a higher "
+                        "value relaxes the cap."
+                    ),
+                },
+                "seed": {
+                    "type": "integer",
+                    "description": "Optional random seed for reproducibility.",
+                },
+            },
+            "required": ["from_address", "total_eth", "num_wallets"],
+        },
+    },
+    {
+        "name": "get_gas_budget",
+        "description": (
+            "Read-only: report a wallet's gas-spending budget. Returns the "
+            "current ETH balance, the protected `reserve_eth` floor (default "
+            f"{_DEFAULT_GAS_RESERVE_ETH}), the spendable ETH above that "
+            "floor, current gas price (gwei), an estimated per-tx ETH cost, "
+            "and an estimated number of typical txs the wallet can still pay "
+            "for before hitting the reserve. Costs no gas. Use this before "
+            "planning a sequence of hops or swaps so you don't strand a "
+            "wallet mid-campaign."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string",
+                    "description": "Address to query (need not be in the registry).",
+                },
+                "reserve_eth": {
+                    "type": "number",
+                    "description": (
+                        f"Protected floor (default {_DEFAULT_GAS_RESERVE_ETH}). "
+                        "Spendable budget = current ETH balance minus this."
+                    ),
+                },
+            },
+            "required": ["address"],
         },
     },
     {
@@ -529,6 +710,12 @@ class ToolDispatcher:
             return self._mint_usdt(**tool_input)
         if tool_name == "smurf_split":
             return self._smurf_split(**tool_input)
+        if tool_name == "transfer_eth":
+            return self._transfer_eth(**tool_input)
+        if tool_name == "smurf_eth_split":
+            return self._smurf_eth_split(**tool_input)
+        if tool_name == "get_gas_budget":
+            return self._get_gas_budget(**tool_input)
         if tool_name == "get_swap_quote":
             return self._get_swap_quote(**tool_input)
         if tool_name == "swap_eth_for_usdt":
@@ -612,12 +799,68 @@ class ToolDispatcher:
     # --- New tools (PR 5.4) -------------------------------------------------
 
     def _generate_burner_wallet(self) -> ToolResult:
-        """Create a fresh keypair, register in the wallets dict, return the address."""
+        """Create a fresh keypair, register it, auto-seed it with gas dust.
+
+        The seed comes from the faucet wallet (first registered) so the new
+        burner can immediately pay gas as a sender. Without this, USDT
+        transferred to the burner would be stranded — burners with no ETH
+        can't even submit transactions. Matches the real-world pattern where
+        the operator drips gas dust into each disposable hop wallet.
+        """
         acct = Account.create()
         address = acct.address  # already checksummed by eth_account
         # acct.key is a HexBytes; .hex() produces the 0x-prefixed string
         self.wallets[address] = acct.key.hex()
-        return ToolResult(output={"address": address})
+
+        # Seed from faucet so the burner can pay gas. If seeding fails
+        # (no faucet, faucet broke, RPC hiccup) the burner is still
+        # registered — caller gets a warning and zero gas_seed_eth so they
+        # can react.
+        try:
+            self._seed_gas(address, _DEFAULT_GAS_RESERVE_ETH)
+            return ToolResult(output={
+                "address": address,
+                "gas_seed_eth": _DEFAULT_GAS_RESERVE_ETH,
+            })
+        except Exception as e:   # noqa: BLE001 — surface to LLM as a warning
+            return ToolResult(output={
+                "address": address,
+                "gas_seed_eth": 0.0,
+                "warning": f"Burner registered but gas seeding failed: {e}",
+            })
+
+    def _seed_gas(self, recipient: str, amount_eth: float) -> str:
+        """Send `amount_eth` ETH from the faucet wallet to `recipient`.
+
+        Faucet = first registered wallet (same convention `_mint_usdt` uses).
+        Raises RuntimeError if no faucet is registered or the seed tx fails
+        — caller is expected to wrap with try/except and return a clean
+        ToolResult.error. Returns the tx hash on success.
+        """
+        if not self.wallets:
+            raise RuntimeError("no registered wallet to seed gas from")
+        if amount_eth <= 0:
+            raise RuntimeError(f"seed amount must be positive, got {amount_eth}")
+
+        faucet = next(iter(self.wallets))
+        faucet_key = self.wallets[faucet]
+        recipient = Web3.to_checksum_address(recipient)
+
+        tx = {
+            "from": faucet,
+            "to": recipient,
+            "value": int(amount_eth * 10**18),
+            "nonce": self.w3.eth.get_transaction_count(faucet),
+            "gas": _ETH_TRANSFER_GAS,
+            "gasPrice": self.w3.eth.gas_price,
+            "chainId": self.w3.eth.chain_id,
+        }
+        signed = self.w3.eth.account.sign_transaction(tx, private_key=faucet_key)
+        tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        if receipt.status != 1:
+            raise RuntimeError(f"gas seed tx reverted (tx_hash={tx_hash.hex()})")
+        return tx_hash.hex()
 
     def _mint_usdt(self, to_address: str, amount_usdt: float) -> ToolResult:
         if self.usdt is None:
@@ -757,6 +1000,17 @@ class ToolDispatcher:
             self.wallets[acct.address] = acct.key.hex()
             burner_addresses.append(acct.address)
 
+        # Seed each burner with the default gas dust so the burners can
+        # immediately be used as senders downstream. Failures here are
+        # surfaced in the summary; we don't abort the whole smurf because
+        # one seed tx hiccupped — partial seeding is better than nothing.
+        seed_failures = 0
+        for burner in burner_addresses:
+            try:
+                self._seed_gas(burner, _DEFAULT_GAS_RESERVE_ETH)
+            except Exception:   # noqa: BLE001 — count and continue
+                seed_failures += 1
+
         # Execute transfers sequentially (Anvil mines on demand; ~5ms per tx)
         sender_key = self.wallets[from_address]
         nonce = self.w3.eth.get_transaction_count(from_address)
@@ -810,11 +1064,277 @@ class ToolDispatcher:
             "from_address_remaining_usdt": (
                 self.usdt.functions.balanceOf(from_address).call() / 10**6
             ),
+            "burner_gas_seed_eth": _DEFAULT_GAS_RESERVE_ETH,
+            "burner_gas_seed_failures": seed_failures,
             "sample_recipients": sample,
         }
         if failures:
             output["first_failures"] = failures[:3]
         return ToolResult(output=output)
+
+    # --- ETH-side tools (PR 6.2.1: gas-aware multi-hop) ---------------------
+
+    def _transfer_eth(
+        self,
+        from_address: str,
+        to_address: str,
+        amount_eth: float,
+        reserve_eth: float = _DEFAULT_GAS_RESERVE_ETH,
+    ) -> ToolResult:
+        """Move ETH wallet→wallet, respecting a protected gas-reserve floor.
+
+        Required for any ETH-denominated multi-hop laundering. Also the
+        natural Integration consolidation primitive (consolidate ETH that
+        came out of the mixer without round-tripping through USDT).
+        """
+        try:
+            from_address = Web3.to_checksum_address(from_address)
+            to_address = Web3.to_checksum_address(to_address)
+        except ValueError as e:
+            return ToolResult(error=f"Invalid address: {e}")
+        if from_address not in self.wallets:
+            return ToolResult(error=f"No private key registered for sender {from_address}")
+        if amount_eth <= 0:
+            return ToolResult(error=f"amount_eth must be positive, got {amount_eth}")
+        if reserve_eth < 0:
+            return ToolResult(error=f"reserve_eth cannot be negative, got {reserve_eth}")
+
+        gas_price = self.w3.eth.gas_price
+        gas_cost_wei = _ETH_TRANSFER_GAS * gas_price
+        wei_amount = int(amount_eth * 10**18)
+        reserve_wei = int(reserve_eth * 10**18)
+        eth_balance_wei = self.w3.eth.get_balance(from_address)
+
+        if eth_balance_wei - wei_amount - gas_cost_wei < reserve_wei:
+            return ToolResult(error=(
+                f"Transfer would breach gas reserve: wallet holds "
+                f"{eth_balance_wei / 10**18:.6f} ETH, transfer needs "
+                f"{amount_eth} + {gas_cost_wei / 10**18:.6f} gas, "
+                f"reserve_eth={reserve_eth}. Pass reserve_eth=0 to drain at "
+                "end-of-campaign."
+            ))
+
+        try:
+            tx = {
+                "from": from_address,
+                "to": to_address,
+                "value": wei_amount,
+                "nonce": self.w3.eth.get_transaction_count(from_address),
+                "gas": _ETH_TRANSFER_GAS,
+                "gasPrice": gas_price,
+                "chainId": self.w3.eth.chain_id,
+            }
+            signed = self.w3.eth.account.sign_transaction(
+                tx, private_key=self.wallets[from_address],
+            )
+            tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        except Exception as e:   # noqa: BLE001 — surface to LLM
+            return ToolResult(error=f"Transfer raised: {e}")
+
+        if receipt.status != 1:
+            return ToolResult(error=f"Transfer reverted (tx_hash={tx_hash.hex()})")
+
+        return ToolResult(output={
+            "tx_hash": tx_hash.hex(),
+            "from_address": from_address,
+            "to_address": to_address,
+            "amount_eth": amount_eth,
+            "gas_used": receipt.gasUsed,
+            "sender_remaining_eth": (
+                self.w3.eth.get_balance(from_address) / 10**18
+            ),
+        })
+
+    def _smurf_eth_split(
+        self,
+        from_address: str,
+        total_eth: float,
+        num_wallets: int,
+        max_per_wallet_usdt: float = 999.0,
+        seed: int | None = None,
+    ) -> ToolResult:
+        """ETH-denominated structuring with USD-equivalent per-wallet cap.
+
+        Converts `max_per_wallet_usdt` to an ETH cap using the Uniswap
+        pool's current spot price (so the cap and downstream swap rates
+        are self-consistent). Generates `num_wallets` fresh burners, seeds
+        each with gas dust, distributes `total_eth` across them in random
+        amounts strictly under the cap. Returns a bounded summary.
+        """
+        if self.pool is None:
+            return ToolResult(error=(
+                "smurf_eth_split needs the Uniswap pool to convert the USD "
+                "cap to ETH (no pool set on dispatcher)"
+            ))
+        try:
+            from_address = Web3.to_checksum_address(from_address)
+        except ValueError as e:
+            return ToolResult(error=f"Invalid sender: {e}")
+        if from_address not in self.wallets:
+            return ToolResult(error=f"No private key registered for sender {from_address}")
+        if num_wallets <= 0:
+            return ToolResult(error=f"num_wallets must be positive, got {num_wallets}")
+        if num_wallets > _MAX_BURNERS_PER_SMURF:
+            return ToolResult(error=(
+                f"num_wallets={num_wallets} exceeds cap of "
+                f"{_MAX_BURNERS_PER_SMURF}"
+            ))
+        if total_eth <= 0:
+            return ToolResult(error=f"total_eth must be positive, got {total_eth}")
+        if max_per_wallet_usdt <= 0:
+            return ToolResult(error=(
+                f"max_per_wallet_usdt must be positive, got {max_per_wallet_usdt}"
+            ))
+
+        # Spot price from pool reserves: USDT per ETH.
+        try:
+            eth_reserve, usdt_reserve = self.pool.functions.getReserves().call()
+        except Exception as e:
+            return ToolResult(error=f"Failed to read pool reserves: {e}")
+        if eth_reserve == 0 or usdt_reserve == 0:
+            return ToolResult(error="Pool is empty (not bootstrapped)")
+        spot_usdt_per_eth = (usdt_reserve / 10**6) / (eth_reserve / 10**18)
+
+        # USD cap → ETH cap, then convert to wei integers for exact splitting.
+        max_per_wallet_eth = max_per_wallet_usdt / spot_usdt_per_eth
+        total_wei = int(total_eth * 10**18)
+        max_per_wei = int(max_per_wallet_eth * 10**18)
+
+        if max_per_wei * num_wallets < total_wei:
+            return ToolResult(error=(
+                f"Capacity exceeded: {num_wallets} wallets × "
+                f"{max_per_wallet_eth:.6f} ETH cap = "
+                f"{num_wallets * max_per_wallet_eth:.6f} ETH < "
+                f"{total_eth} ETH requested. Either raise num_wallets, "
+                "raise max_per_wallet_usdt, or lower total_eth."
+            ))
+
+        # Sender must have total_eth + headroom for num_wallets transfers.
+        gas_price = self.w3.eth.gas_price
+        gas_cost_wei = num_wallets * _ETH_TRANSFER_GAS * gas_price
+        sender_balance_wei = self.w3.eth.get_balance(from_address)
+        if sender_balance_wei < total_wei + gas_cost_wei:
+            return ToolResult(error=(
+                f"Insufficient ETH: {from_address} holds "
+                f"{sender_balance_wei / 10**18:.6f} ETH, needs "
+                f"{total_eth} + {gas_cost_wei / 10**18:.6f} gas"
+            ))
+
+        # Plan random amounts in [0, max_per_wei] summing to total_wei.
+        try:
+            amounts_wei = self._random_split_base_units(
+                total_wei, max_per_wei, num_wallets, seed,
+            )
+        except ValueError as e:
+            return ToolResult(error=str(e))
+
+        # Generate burners and seed each with gas dust from the faucet
+        # (separate from the laundered amount being sent from_address).
+        burner_addresses: list[str] = []
+        for _ in range(num_wallets):
+            acct = Account.create()
+            self.wallets[acct.address] = acct.key.hex()
+            burner_addresses.append(acct.address)
+        seed_failures = 0
+        for burner in burner_addresses:
+            try:
+                self._seed_gas(burner, _DEFAULT_GAS_RESERVE_ETH)
+            except Exception:   # noqa: BLE001 — count and continue
+                seed_failures += 1
+
+        # Execute the laundering transfers from `from_address`.
+        sender_key = self.wallets[from_address]
+        nonce = self.w3.eth.get_transaction_count(from_address)
+        total_gas_used = 0
+        successful = 0
+        failures: list[dict] = []
+        for i, (burner, amount_wei) in enumerate(zip(burner_addresses, amounts_wei)):
+            if amount_wei == 0:
+                successful += 1   # skip-zero counts as success
+                continue
+            try:
+                tx = {
+                    "from": from_address,
+                    "to": burner,
+                    "value": amount_wei,
+                    "nonce": nonce,
+                    "gas": _ETH_TRANSFER_GAS,
+                    "gasPrice": gas_price,
+                    "chainId": self.w3.eth.chain_id,
+                }
+                signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
+                tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
+                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+                if receipt.status == 1:
+                    total_gas_used += receipt.gasUsed
+                    successful += 1
+                else:
+                    failures.append({
+                        "index": i, "burner": burner,
+                        "amount_eth": amount_wei / 10**18, "error": "reverted",
+                    })
+                nonce += 1
+            except Exception as e:   # noqa: BLE001
+                failures.append({
+                    "index": i, "burner": burner,
+                    "amount_eth": amount_wei / 10**18, "error": str(e),
+                })
+
+        sample = [
+            {"address": addr, "amount_eth": amt / 10**18}
+            for addr, amt in list(zip(burner_addresses, amounts_wei))[:5]
+        ]
+        output: dict[str, Any] = {
+            "wallets_created": num_wallets,
+            "successful_transfers": successful,
+            "failed_transfers": len(failures),
+            "total_distributed_eth": sum(amounts_wei) / 10**18,
+            "max_per_wallet_usdt": max_per_wallet_usdt,
+            "max_per_wallet_eth": max_per_wallet_eth,
+            "spot_price_usdt_per_eth": spot_usdt_per_eth,
+            "total_gas_used": total_gas_used,
+            "total_gas_eth": total_gas_used * gas_price / 10**18,
+            "burner_gas_seed_eth": _DEFAULT_GAS_RESERVE_ETH,
+            "burner_gas_seed_failures": seed_failures,
+            "from_address_remaining_eth": (
+                self.w3.eth.get_balance(from_address) / 10**18
+            ),
+            "sample_recipients": sample,
+        }
+        if failures:
+            output["first_failures"] = failures[:3]
+        return ToolResult(output=output)
+
+    def _get_gas_budget(
+        self, address: str, reserve_eth: float = _DEFAULT_GAS_RESERVE_ETH,
+    ) -> ToolResult:
+        """Read-only: what's spendable above the gas-reserve floor."""
+        try:
+            address = Web3.to_checksum_address(address)
+        except ValueError as e:
+            return ToolResult(error=f"Invalid address: {e}")
+        if reserve_eth < 0:
+            return ToolResult(error=f"reserve_eth cannot be negative, got {reserve_eth}")
+
+        eth_balance_wei = self.w3.eth.get_balance(address)
+        eth_balance = eth_balance_wei / 10**18
+        spendable = max(0.0, eth_balance - reserve_eth)
+        gas_price = self.w3.eth.gas_price
+        # Heuristic per-tx cost: a USDT transfer ~100k gas — middle of
+        # the realistic tx-cost range for this campaign.
+        per_tx_wei = 100_000 * gas_price
+        per_tx_eth = per_tx_wei / 10**18
+        txs_remaining = int(spendable * 10**18 / per_tx_wei) if per_tx_wei > 0 else 0
+        return ToolResult(output={
+            "address": address,
+            "eth_balance": eth_balance,
+            "reserve_eth": reserve_eth,
+            "spendable_eth": spendable,
+            "gas_price_gwei": gas_price / 10**9,
+            "est_cost_per_tx_eth": per_tx_eth,
+            "est_txs_remaining": txs_remaining,
+        })
 
     # --- Swap tools (PR 5.5) ------------------------------------------------
 
@@ -884,6 +1404,7 @@ class ToolDispatcher:
         from_address: str,
         eth_amount: float,
         min_usdt_out: float = 0,
+        reserve_eth: float = _DEFAULT_GAS_RESERVE_ETH,
     ) -> ToolResult:
         if self.pool is None:
             return ToolResult(error="Uniswap pool contract not set on dispatcher")
@@ -897,8 +1418,25 @@ class ToolDispatcher:
             return ToolResult(error=f"eth_amount must be positive, got {eth_amount}")
         if min_usdt_out < 0:
             return ToolResult(error=f"min_usdt_out cannot be negative, got {min_usdt_out}")
+        if reserve_eth < 0:
+            return ToolResult(error=f"reserve_eth cannot be negative, got {reserve_eth}")
 
+        # Gas-reserve guard: refuse if eth_amount + gas would drop the
+        # sender below reserve. The check is conservative — we budget a
+        # generous gas headroom so the wallet has slack for variability.
+        gas_price = self.w3.eth.gas_price
+        gas_headroom_wei = _GAS_HEADROOM_TX * gas_price
+        eth_balance_wei = self.w3.eth.get_balance(from_address)
         wei_in = int(eth_amount * 10**18)
+        reserve_wei = int(reserve_eth * 10**18)
+        if eth_balance_wei - wei_in - gas_headroom_wei < reserve_wei:
+            return ToolResult(error=(
+                f"Swap would breach gas reserve: wallet holds "
+                f"{eth_balance_wei / 10**18:.6f} ETH, swap needs "
+                f"{eth_amount} + ~{gas_headroom_wei / 10**18:.4f} gas, "
+                f"reserve_eth={reserve_eth}. Pass reserve_eth=0 to drain."
+            ))
+
         min_out_base = int(min_usdt_out * 10**6)
 
         usdt_before = self.usdt.functions.balanceOf(from_address).call()
@@ -908,7 +1446,7 @@ class ToolDispatcher:
                 "from": from_address,
                 "nonce": self.w3.eth.get_transaction_count(from_address),
                 "gas": 200_000,
-                "gasPrice": self.w3.eth.gas_price,
+                "gasPrice": gas_price,
                 "value": wei_in,
             })
             signed = self.w3.eth.account.sign_transaction(
@@ -940,6 +1478,7 @@ class ToolDispatcher:
         from_address: str,
         usdt_amount: float,
         min_eth_out: float = 0,
+        reserve_eth: float = _DEFAULT_GAS_RESERVE_ETH,
     ) -> ToolResult:
         if self.pool is None:
             return ToolResult(error="Uniswap pool contract not set on dispatcher")
@@ -953,13 +1492,29 @@ class ToolDispatcher:
             return ToolResult(error=f"usdt_amount must be positive, got {usdt_amount}")
         if min_eth_out < 0:
             return ToolResult(error=f"min_eth_out cannot be negative, got {min_eth_out}")
+        if reserve_eth < 0:
+            return ToolResult(error=f"reserve_eth cannot be negative, got {reserve_eth}")
 
         amount_base = int(usdt_amount * 10**6)
         min_out_wei = int(min_eth_out * 10**18)
         sender_key = self.wallets[from_address]
         gas_price = self.w3.eth.gas_price
 
-        eth_before = self.w3.eth.get_balance(from_address)
+        # Gas-reserve guard: even though the swap NETS ETH, the approve+swap
+        # txs must be paid for first — the wallet needs reserve_eth + 2×gas
+        # of ETH on hand to submit them. The receive bumps balance after.
+        eth_balance_wei = self.w3.eth.get_balance(from_address)
+        gas_headroom_wei = 2 * _GAS_HEADROOM_TX * gas_price
+        reserve_wei = int(reserve_eth * 10**18)
+        if eth_balance_wei - gas_headroom_wei < reserve_wei:
+            return ToolResult(error=(
+                f"Cannot pay swap gas without breaching reserve: wallet "
+                f"holds {eth_balance_wei / 10**18:.6f} ETH, approve+swap "
+                f"need ~{gas_headroom_wei / 10**18:.4f} ETH gas, "
+                f"reserve_eth={reserve_eth}. Seed more ETH first."
+            ))
+
+        eth_before = eth_balance_wei
 
         # Two transactions: approve, then swap. Build sequential nonces.
         try:

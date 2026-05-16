@@ -551,3 +551,270 @@ def test_smurf_split_small_round_trip():
         # Gas was paid
         assert result.output["total_gas_used"] > 0
         assert result.output["total_gas_eth"] > 0
+
+
+# --- ETH-side tools (PR 6.2.1: gas-aware multi-hop) ---------------------------
+
+
+@needs_foundry
+def test_generate_burner_wallet_is_gas_seeded():
+    """Fresh burners are auto-funded with the default gas-reserve ETH dust.
+
+    This is the fix for the "burner roach motel" gap: without seeding,
+    USDT received by a burner is stranded because the burner can't pay gas
+    to send it onward. The seeded ETH makes every burner immediately usable
+    as a sender, which is what multi-hop laundering requires.
+    """
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, wallets={deployer: deployer_key},
+        )
+        result = dispatcher.dispatch("generate_burner_wallet", {})
+        assert not result.is_error
+        addr = result.output["address"]
+        assert result.output["gas_seed_eth"] == 0.05
+        # On-chain check: the burner actually has the seeded ETH
+        assert w3.eth.get_balance(addr) == int(0.05 * 10**18)
+
+
+@needs_foundry
+def test_transfer_eth_round_trip():
+    """ETH transfer between registered wallets; sender debited, recipient credited."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        bob = node.accounts[1]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, wallets={deployer: deployer_key},
+        )
+        bob_before = w3.eth.get_balance(bob)
+        result = dispatcher.dispatch("transfer_eth", {
+            "from_address": deployer, "to_address": bob, "amount_eth": 2.5,
+        })
+        assert not result.is_error, result.error
+        assert result.output["amount_eth"] == 2.5
+        assert result.output["gas_used"] > 0
+        # Bob got exactly 2.5 ETH
+        assert w3.eth.get_balance(bob) - bob_before == int(2.5 * 10**18)
+
+
+@needs_foundry
+def test_transfer_eth_respects_reserve():
+    """transfer_eth refuses to drop sender below `reserve_eth`."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, wallets={deployer: deployer_key},
+        )
+        # Generate a fresh burner (auto-seeded with 0.05 ETH)
+        burner = dispatcher.dispatch(
+            "generate_burner_wallet", {},
+        ).output["address"]
+        bob = node.accounts[1]
+
+        # Burner has 0.05 ETH; try to send 0.04 → after 0.04 + gas it'd
+        # dip below the 0.05 reserve. Should refuse.
+        result = dispatcher.dispatch("transfer_eth", {
+            "from_address": burner, "to_address": bob, "amount_eth": 0.04,
+        })
+        assert result.is_error
+        assert "reserve" in result.error.lower()
+
+
+@needs_foundry
+def test_transfer_eth_drain_with_reserve_zero():
+    """reserve_eth=0 disables the floor — end-of-campaign drain works."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, wallets={deployer: deployer_key},
+        )
+        burner = dispatcher.dispatch(
+            "generate_burner_wallet", {},
+        ).output["address"]
+        bob = node.accounts[1]
+
+        # Send 0.04 ETH (still leaves a tiny dust below 0.05 reserve) but
+        # pass reserve_eth=0 to disable the floor.
+        result = dispatcher.dispatch("transfer_eth", {
+            "from_address": burner, "to_address": bob,
+            "amount_eth": 0.04, "reserve_eth": 0,
+        })
+        assert not result.is_error, result.error
+
+
+@needs_foundry
+def test_get_gas_budget_returns_spendable():
+    """get_gas_budget reports balance, reserve, spendable, and tx estimate."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, wallets={deployer: deployer_key},
+        )
+        burner = dispatcher.dispatch(
+            "generate_burner_wallet", {},
+        ).output["address"]
+
+        result = dispatcher.dispatch(
+            "get_gas_budget", {"address": burner},
+        )
+        assert not result.is_error, result.error
+        assert result.output["eth_balance"] == 0.05
+        assert result.output["reserve_eth"] == 0.05
+        assert result.output["spendable_eth"] == 0.0
+        assert result.output["est_cost_per_tx_eth"] > 0
+        # At the reserve floor, no txs available without dropping below
+        assert result.output["est_txs_remaining"] == 0
+
+        # Custom (lower) reserve → some spendable
+        result2 = dispatcher.dispatch("get_gas_budget", {
+            "address": burner, "reserve_eth": 0,
+        })
+        assert result2.output["spendable_eth"] == 0.05
+        assert result2.output["est_txs_remaining"] > 0
+
+
+@needs_foundry
+def test_smurf_eth_split_distributes_under_cap():
+    """ETH structuring: total preserved, each amount ≤ cap_eth, burners gas-seeded."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+        pool = _deploy_bootstrapped_pool(w3, deployer, deployer_key, usdt)
+        # Move the laundering source to alice so deployer stays as faucet
+        alice, alice_key = node.accounts[1], node.private_keys[1]
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, pool_contract=pool,
+            wallets={deployer: deployer_key, alice: alice_key},
+        )
+        # Spot 2000 USDT/ETH ⇒ $999 cap = ~0.4995 ETH per burner
+        result = dispatcher.dispatch("smurf_eth_split", {
+            "from_address": alice,
+            "total_eth": 3.0,
+            "num_wallets": 10,
+            "max_per_wallet_usdt": 999.0,
+            "seed": 7,
+        })
+        assert not result.is_error, result.error
+        assert result.output["wallets_created"] == 10
+        assert result.output["successful_transfers"] == 10
+        assert result.output["failed_transfers"] == 0
+        # Sum of distributed amounts equals total
+        assert abs(result.output["total_distributed_eth"] - 3.0) < 1e-12
+        # Cap conversion: 999 USDT / 2000 USDT-per-ETH ≈ 0.4995
+        assert abs(result.output["max_per_wallet_eth"] - 0.4995) < 0.01
+        # Each sample amount under the ETH cap
+        for entry in result.output["sample_recipients"]:
+            assert 0 <= entry["amount_eth"] < result.output["max_per_wallet_eth"] + 1e-9
+        # Every burner gas-seeded (no failures)
+        assert result.output["burner_gas_seed_failures"] == 0
+        assert result.output["burner_gas_seed_eth"] == 0.05
+
+
+@needs_foundry
+def test_smurf_eth_split_capacity_check():
+    """num_wallets × cap_eth < total_eth → refused with clear error."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+        pool = _deploy_bootstrapped_pool(w3, deployer, deployer_key, usdt)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, pool_contract=pool,
+            wallets={deployer: deployer_key},
+        )
+        # 2 wallets × 0.5 ETH cap = 1 ETH < 10 ETH requested
+        result = dispatcher.dispatch("smurf_eth_split", {
+            "from_address": deployer,
+            "total_eth": 10.0,
+            "num_wallets": 2,
+            "max_per_wallet_usdt": 999.0,
+        })
+        assert result.is_error
+        assert "capacity" in result.error.lower()
+
+
+def test_smurf_eth_split_requires_pool():
+    """No pool deployed → clean error explaining why (need spot price for cap)."""
+    dispatcher = ToolDispatcher(w3=Web3(), usdt_contract=None, wallets={})
+    result = dispatcher.dispatch("smurf_eth_split", {
+        "from_address": "0x" + "0" * 40,
+        "total_eth": 1.0, "num_wallets": 2,
+    })
+    assert result.is_error
+    assert "pool" in result.error.lower()
+
+
+@needs_foundry
+def test_swap_eth_for_usdt_respects_reserve():
+    """swap_eth_for_usdt refuses if it'd drop sender below reserve_eth."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+        pool = _deploy_bootstrapped_pool(w3, deployer, deployer_key, usdt)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, pool_contract=pool,
+            wallets={deployer: deployer_key},
+        )
+        # Seed a burner with extra ETH so it has 0.5 total
+        burner = dispatcher.dispatch(
+            "generate_burner_wallet", {},
+        ).output["address"]
+        dispatcher.dispatch("transfer_eth", {
+            "from_address": deployer, "to_address": burner, "amount_eth": 0.45,
+        })
+        # Burner now has ~0.5 ETH. Try to swap 0.48 → after swap + gas it'd
+        # dip below the 0.05 reserve. Should refuse.
+        result = dispatcher.dispatch("swap_eth_for_usdt", {
+            "from_address": burner, "eth_amount": 0.48,
+        })
+        assert result.is_error
+        assert "reserve" in result.error.lower()
+
+
+@needs_foundry
+def test_swap_eth_for_usdt_drain_with_reserve_zero():
+    """reserve_eth=0 lets a swap drain a wallet at end-of-campaign."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+        pool = _deploy_bootstrapped_pool(w3, deployer, deployer_key, usdt)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, pool_contract=pool,
+            wallets={deployer: deployer_key},
+        )
+        burner = dispatcher.dispatch(
+            "generate_burner_wallet", {},
+        ).output["address"]
+        dispatcher.dispatch("transfer_eth", {
+            "from_address": deployer, "to_address": burner, "amount_eth": 0.45,
+        })
+        # Burner has ~0.5 ETH. Drain swap: most of the ETH out, leaving
+        # only dust below reserve. With reserve_eth=0 this is allowed.
+        result = dispatcher.dispatch("swap_eth_for_usdt", {
+            "from_address": burner, "eth_amount": 0.48, "reserve_eth": 0,
+        })
+        assert not result.is_error, result.error
+        assert result.output["usdt_received"] > 0
