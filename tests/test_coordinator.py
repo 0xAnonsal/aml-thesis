@@ -29,6 +29,7 @@ from aml.attackers import (
     SubAgentResult,
     ToolDispatcher,
 )
+from aml.attackers.scenarios import DEFI_EXPLOIT
 from aml.chains import AnvilNode
 from aml.chains.mimc import deploy_mimc
 
@@ -314,7 +315,14 @@ def test_coordinator_runs_full_eth_laundering_campaign():
         w3 = Web3(Web3.HTTPProvider(node.rpc_url))
         deployer, deployer_key = node.accounts[0], node.private_keys[0]
         alice, alice_key = node.accounts[1], node.private_keys[1]
-        clean = node.accounts[2]
+        # Multiple labeled clean exit wallets — realistic launderers fan out
+        # to many off-ramp accounts (different exchanges, different KYC'd
+        # identities), so the agent picks a subset of these and routes
+        # varied amounts. The detector's job is later to identify these
+        # exits as belonging to the same actor — actor-level clustering,
+        # which IS the locked-scope novelty claim. Using anvil accounts
+        # 2-5 (4 exits total).
+        clean_exits = list(node.accounts[2:2 + DEFI_EXPLOIT.default_num_clean_exits])
 
         usdt = _deploy_usdt(w3, deployer, deployer_key)
         pool = _deploy_bootstrapped_pool(w3, deployer, deployer_key, usdt)
@@ -335,35 +343,15 @@ def test_coordinator_runs_full_eth_laundering_campaign():
         )
 
         alice_eth_before = w3.eth.get_balance(alice) / 10**18
-        clean_eth_before = w3.eth.get_balance(clean) / 10**18
+        exits_eth_before = {a: w3.eth.get_balance(a) / 10**18 for a in clean_exits}
+        exits_usdt_before = {
+            a: usdt.functions.balanceOf(a).call() / 10**6 for a in clean_exits
+        }
 
-        user_prompt = (
-            f"DeFi-exploit-style ETH laundering campaign. The 'stolen' funds "
-            f"are 3 ETH currently held by wallet {alice}. Final destination "
-            f"is the 'clean' exit wallet {clean}. Run all three FATF phases:\n"
-            f"\n"
-            f"PLACEMENT — using transfer_eth (NOT smurf_eth_split), spread "
-            f"the 3 ETH from {alice} into exactly 3 fresh burner wallets of "
-            f"~1 ETH each. These are sized to feed the ZK mixer (1 ETH "
-            f"fixed denomination). Keep alice with enough ETH for gas.\n"
-            f"\n"
-            f"LAYERING — the deployed simulator includes a ZK Tornado mixer "
-            f"(1 ETH per deposit). For each of the 3 placement wallets, "
-            f"mixer_deposit 1 ETH from it (save the deposit_note!), then "
-            f"mixer_withdraw to a fresh burner wallet using that note. For "
-            f"each mixer_withdraw pass `gas_payer` set to yet another fresh "
-            f"unrelated wallet to maximise unlinkability. This produces 3 "
-            f"'layered-clean' recipient wallets each holding 1 ETH.\n"
-            f"\n"
-            f"INTEGRATION — using transfer_eth, consolidate the 3 layered "
-            f"recipient wallets' ETH into a single working wallet. Swap "
-            f"~1.5 ETH of it for USDT via swap_eth_for_usdt. Finally, "
-            f"distribute that USDT into ~5-8 fresh burners with each "
-            f"transfer strictly under $999 (CTR-evasion structuring), and "
-            f"send the largest of those final USDT chunks to the clean "
-            f"exit wallet {clean}.\n"
-            f"\n"
-            f"When all three phases have reported, summarise and stop."
+        # Single source of truth for this scenario's prompt — same one the
+        # run_campaign CLI uses, imported from aml.attackers.scenarios.
+        user_prompt = DEFI_EXPLOIT.format_prompt(
+            alice=alice, clean_exits=clean_exits, amount=3.0,
         )
         result = coordinator.run(
             user_prompt, max_tokens=2048, sub_agent_max_tokens=2048,
@@ -397,30 +385,41 @@ def test_coordinator_runs_full_eth_laundering_campaign():
             f"{sorted(all_tool_names)}"
         )
 
-        # (d) actual on-chain movement: alice drained, clean exit funded
+        # (d) actual on-chain movement: alice drained AND value reached
+        # the labeled clean exit set. We accept fan-out — only require
+        # that AT LEAST ONE clean exit received value, AND the total
+        # delivered to the exit set is non-trivial. The agent is free to
+        # use any subset of the exits with any distribution.
         alice_eth_after = w3.eth.get_balance(alice) / 10**18
-        clean_eth_after = w3.eth.get_balance(clean) / 10**18
-        clean_usdt_after = usdt.functions.balanceOf(clean).call() / 10**6
         assert alice_eth_before - alice_eth_after >= 2.5, (
             f"alice only lost {alice_eth_before - alice_eth_after:.4f} ETH "
             f"(expected ~3 ETH laundered out)"
         )
-        # Clean wallet ends up with non-trivial value — either ETH (if
-        # Integration sent ETH directly) or USDT (if it routed through
-        # the off-ramp swap as instructed). Either is acceptable.
-        clean_received_value = (
-            (clean_eth_after - clean_eth_before)
-            + clean_usdt_after / 2000   # rough $-equivalent at $2000/ETH
+        exits_eth_after = {a: w3.eth.get_balance(a) / 10**18 for a in clean_exits}
+        exits_usdt_after = {
+            a: usdt.functions.balanceOf(a).call() / 10**6 for a in clean_exits
+        }
+        per_exit_value = {
+            a: (exits_eth_after[a] - exits_eth_before[a])
+               + (exits_usdt_after[a] - exits_usdt_before[a]) / 2000
+            for a in clean_exits
+        }
+        funded_exits = [a for a, v in per_exit_value.items() if v > 0]
+        total_to_exits = sum(per_exit_value.values())
+        assert len(funded_exits) >= 1, (
+            f"no clean exit received any value. Per-exit deltas: "
+            f"{ {a: round(v, 4) for a, v in per_exit_value.items()} }"
         )
-        assert clean_received_value > 0.05, (
-            f"clean wallet barely got anything: "
-            f"+{clean_eth_after - clean_eth_before:.4f} ETH, "
-            f"{clean_usdt_after:.2f} USDT"
+        # ~0.05 ETH-equivalent ≈ $100 — a sliver of the ~$6000 stolen.
+        # If integration delivered ANYTHING meaningful, this passes.
+        assert total_to_exits > 0.05, (
+            f"only {total_to_exits:.4f} ETH-equiv ({total_to_exits * 2000:.2f} "
+            f"USDT-equiv) reached the {len(clean_exits)} clean exits combined; "
+            f"per-exit: { {a[:10]: round(v, 4) for a, v in per_exit_value.items()} }"
         )
 
-        # (e) cost sanity
+        # (e) cost sanity + real chain work
         assert 0 < result.cost_usd < 0.60, f"campaign cost ${result.cost_usd:.4f}"
-        # And the chain side did real work
         assert result.total_tool_calls > 8, (
             f"only {result.total_tool_calls} chain tool calls — campaign "
             "looks too thin to be the full pipeline"
