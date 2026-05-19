@@ -30,183 +30,18 @@ import argparse
 import json
 import os
 import random
-import subprocess
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 from web3 import Web3
 
 from aml.attackers import Coordinator, LLMClient, ToolDispatcher
 from aml.attackers.scenarios import SCENARIOS, Scenario
 from aml.chains import AnvilNode
-from aml.chains.mimc import deploy_mimc
-
-
-REPO_ROOT = Path(__file__).resolve().parents[3]
-USDT_ARTIFACT = REPO_ROOT / "out" / "MockUSDT.sol" / "MockUSDT.json"
-POOL_ARTIFACT = REPO_ROOT / "out" / "MockUniswapV2Pool.sol" / "MockUniswapV2Pool.json"
-TORNADO_ARTIFACT = REPO_ROOT / "out" / "MockTornado.sol" / "MockTornado.json"
-VERIFIER_ARTIFACT = REPO_ROOT / "out" / "Verifier.sol" / "Groth16Verifier.json"
-
-# Spot price at bootstrap: 1 ETH = 2000 USDT (500 ETH / 1M USDT pool).
-POOL_BOOTSTRAP_ETH_WEI = 500 * 10**18
-POOL_BOOTSTRAP_USDT_BASE = 1_000_000 * 10**6
-MERKLE_DEPTH = 10
-
-
-# --- chain setup helpers (duplicated from tests/test_coordinator.py;
-# refactor into aml.chains.eth_stack once a third caller appears) --------
-
-
-def _raw_tx(signed):
-    return getattr(signed, "raw_transaction", None) or getattr(signed, "rawTransaction")
-
-
-def _send(w3, fn, sender, key, gas=4_000_000, value=0):
-    tx = fn.build_transaction({
-        "from": sender,
-        "nonce": w3.eth.get_transaction_count(sender),
-        "gas": gas,
-        "gasPrice": w3.eth.gas_price,
-        "value": value,
-    })
-    signed = w3.eth.account.sign_transaction(tx, private_key=key)
-    return w3.eth.wait_for_transaction_receipt(w3.eth.send_raw_transaction(_raw_tx(signed)))
-
-
-def _load_artifact(path: Path):
-    if not path.exists():
-        subprocess.run(["forge", "build"], cwd=REPO_ROOT, check=True)
-    with path.open() as f:
-        a = json.load(f)
-    return a["abi"], a["bytecode"]["object"]
-
-
-def _deploy_usdt(w3, deployer, deployer_key):
-    abi, bytecode = _load_artifact(USDT_ARTIFACT)
-    factory = w3.eth.contract(abi=abi, bytecode=bytecode)
-    receipt = _send(w3, factory.constructor(), deployer, deployer_key)
-    return w3.eth.contract(address=receipt.contractAddress, abi=abi)
-
-
-def _deploy_pool(w3, deployer, deployer_key, usdt):
-    abi, bytecode = _load_artifact(POOL_ARTIFACT)
-    factory = w3.eth.contract(abi=abi, bytecode=bytecode)
-    receipt = _send(w3, factory.constructor(usdt.address), deployer, deployer_key)
-    pool = w3.eth.contract(address=receipt.contractAddress, abi=abi)
-    _send(w3, usdt.functions.mint(deployer, POOL_BOOTSTRAP_USDT_BASE),
-          deployer, deployer_key, gas=200_000)
-    _send(w3, usdt.functions.approve(pool.address, POOL_BOOTSTRAP_USDT_BASE),
-          deployer, deployer_key, gas=200_000)
-    _send(w3, pool.functions.bootstrap(POOL_BOOTSTRAP_USDT_BASE),
-          deployer, deployer_key, value=POOL_BOOTSTRAP_ETH_WEI)
-    return pool
-
-
-def _deploy_tornado(w3, deployer, deployer_key):
-    mimc = deploy_mimc(w3, deployer, deployer_key)
-    verifier_abi, verifier_bytecode = _load_artifact(VERIFIER_ARTIFACT)
-    v_factory = w3.eth.contract(abi=verifier_abi, bytecode=verifier_bytecode)
-    verifier_addr = _send(
-        w3, v_factory.constructor(), deployer, deployer_key,
-    ).contractAddress
-    tornado_abi, tornado_bytecode = _load_artifact(TORNADO_ARTIFACT)
-    t_factory = w3.eth.contract(abi=tornado_abi, bytecode=tornado_bytecode)
-    tornado_addr = _send(
-        w3, t_factory.constructor(verifier_addr, mimc.address, MERKLE_DEPTH),
-        deployer, deployer_key, gas=10_000_000,
-    ).contractAddress
-    return w3.eth.contract(address=tornado_addr, abi=tornado_abi)
-
-
-# --- chain trace extraction ---------------------------------------------
-
-
-def _jsonable(v: Any) -> Any:
-    """Coerce web3 / bytes / huge-int values into JSON-safe types."""
-    if isinstance(v, (bytes, bytearray)):
-        return "0x" + bytes(v).hex()
-    if hasattr(v, "hex") and not isinstance(v, (str, int)):
-        try:
-            return v.hex()
-        except Exception:   # noqa: BLE001
-            pass
-    if isinstance(v, int) and abs(v) > 2**53:
-        return str(v)   # avoid JS-side int overflow in JSON consumers
-    if isinstance(v, dict):
-        return {k: _jsonable(x) for k, x in v.items()}
-    if isinstance(v, (list, tuple)):
-        return [_jsonable(x) for x in v]
-    return v
-
-
-def _decode_event(log, known_contracts: dict[str, Any]) -> dict | None:
-    """Try to decode a log against each known contract; return event dict or None.
-
-    Walks the contract ABI directly (more stable across web3.py versions
-    than iterating `contract.events`, which has different semantics in v6
-    vs v7). For each event ABI entry, tries `contract.events.<Name>()
-    .process_log(log)`; on the first match returns the decoded fields.
-    """
-    log_addr = log.address.lower()
-    for label, contract in known_contracts.items():
-        if contract is None or contract.address.lower() != log_addr:
-            continue
-        for abi_item in contract.abi:
-            if abi_item.get("type") != "event":
-                continue
-            event_name = abi_item.get("name")
-            if not event_name:
-                continue
-            try:
-                event_obj = getattr(contract.events, event_name)()
-                ev = event_obj.process_log(log)
-            except Exception:   # noqa: BLE001 — wrong event ABI or anon event
-                continue
-            return {
-                "contract": label,
-                "event": ev["event"],
-                "args": _jsonable(dict(ev["args"])),
-            }
-    return None
-
-
-def extract_chain_trace(
-    w3, end_block: int, known_contracts: dict[str, Any],
-) -> list[dict]:
-    """Walk every tx in blocks [0, end_block]; emit one record per tx.
-
-    Each record: tx_hash, block, from, to, value (wei + eth), gas_used,
-    status, and a `events` list of decoded logs matching the known contracts.
-    """
-    trace: list[dict] = []
-    for block_num in range(end_block + 1):
-        block = w3.eth.get_block(block_num, full_transactions=True)
-        for tx in block.transactions:
-            try:
-                receipt = w3.eth.get_transaction_receipt(tx.hash)
-            except Exception:   # noqa: BLE001 — should never happen on local Anvil
-                continue
-            events = []
-            for log in receipt.logs:
-                ev = _decode_event(log, known_contracts)
-                if ev is not None:
-                    events.append(ev)
-            trace.append({
-                "tx_hash": tx.hash.hex(),
-                "block": block_num,
-                "from": tx["from"],
-                "to": tx.to,
-                "value_wei": str(tx.value),   # str: avoid 53-bit JSON int limit
-                "value_eth": tx.value / 10**18,
-                "gas_used": receipt.gasUsed,
-                "status": receipt.status,
-                "events": events,
-            })
-    return trace
+from aml.chains.eth_stack import deploy_pool, deploy_tornado, deploy_usdt
+from aml.chains.trace import extract_chain_trace, jsonable
 
 
 # --- main flow ----------------------------------------------------------
@@ -245,9 +80,9 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
             )
         clean_exits = list(node.accounts[2:2 + num_clean_exits])
 
-        usdt = _deploy_usdt(w3, deployer, deployer_key)
-        pool = _deploy_pool(w3, deployer, deployer_key, usdt) if scenario.needs_pool else None
-        tornado = _deploy_tornado(w3, deployer, deployer_key) if scenario.needs_tornado else None
+        usdt = deploy_usdt(w3, deployer, deployer_key)
+        pool = deploy_pool(w3, deployer, deployer_key, usdt) if scenario.needs_pool else None
+        tornado = deploy_tornado(w3, deployer, deployer_key) if scenario.needs_tornado else None
 
         dispatcher = ToolDispatcher(
             w3=w3, usdt_contract=usdt,
@@ -371,8 +206,8 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
                     "name": getattr(r, "name", None),
                     "status": r.status,
                     "summary": r.summary,
-                    "key_facts": _jsonable(r.key_facts),
-                    "tool_calls": _jsonable(r.tool_calls),
+                    "key_facts": jsonable(r.key_facts),
+                    "tool_calls": jsonable(r.tool_calls),
                     "iterations": r.iterations,
                     "cost_usd": r.cost_usd,
                 }

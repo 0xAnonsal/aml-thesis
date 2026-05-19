@@ -12,10 +12,8 @@ Structural tests run with no API key and no chain. Two live tests:
 """
 from __future__ import annotations
 
-import json
 import os
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -31,13 +29,14 @@ from aml.attackers import (
 )
 from aml.attackers.scenarios import DEFI_EXPLOIT
 from aml.chains import AnvilNode
-from aml.chains.mimc import deploy_mimc
+from aml.chains.eth_stack import (
+    VERIFIER_ARTIFACT,
+    deploy_pool as _deploy_bootstrapped_pool,
+    deploy_tornado as _deploy_tornado,
+    deploy_usdt as _deploy_usdt,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-USDT_ARTIFACT = REPO_ROOT / "out" / "MockUSDT.sol" / "MockUSDT.json"
-POOL_ARTIFACT = REPO_ROOT / "out" / "MockUniswapV2Pool.sol" / "MockUniswapV2Pool.json"
-TORNADO_ARTIFACT = REPO_ROOT / "out" / "MockTornado.sol" / "MockTornado.json"
-VERIFIER_ARTIFACT = REPO_ROOT / "out" / "Verifier.sol" / "Groth16Verifier.json"
 
 # ZK circuit build outputs — only used to gate the headline test; if any are
 # missing the test skips with instructions.
@@ -47,13 +46,6 @@ ZK_WASM = ZK_BUILD / f"{CIRCUIT}_js" / f"{CIRCUIT}.wasm"
 ZK_ZKEY = ZK_BUILD / f"{CIRCUIT}_final.zkey"
 ZK_VKEY = ZK_BUILD / "verification_key.json"
 NODE_MODULES_CIRCOMLIBJS = REPO_ROOT / "node_modules" / "circomlibjs"
-
-MERKLE_DEPTH = 10
-
-# Pool bootstrap parameters (same as test_tools.py): 500 ETH + 1M USDT → spot
-# = $2000/ETH. With this spot, $999 cap → ~0.4995 ETH per smurf-burner.
-POOL_BOOTSTRAP_ETH_WEI = 500 * 10**18
-POOL_BOOTSTRAP_USDT_BASE = 1_000_000 * 10**6
 
 
 needs_foundry = pytest.mark.skipif(
@@ -77,71 +69,6 @@ needs_snarkjs = pytest.mark.skipif(
     shutil.which("snarkjs") is None,
     reason="snarkjs not on PATH",
 )
-
-
-def _raw_tx(signed):
-    return getattr(signed, "raw_transaction", None) or getattr(signed, "rawTransaction")
-
-
-def _send(w3, fn, sender, key, gas=4_000_000, value=0):
-    tx = fn.build_transaction({
-        "from": sender,
-        "nonce": w3.eth.get_transaction_count(sender),
-        "gas": gas,
-        "gasPrice": w3.eth.gas_price,
-        "value": value,
-    })
-    signed = w3.eth.account.sign_transaction(tx, private_key=key)
-    return w3.eth.wait_for_transaction_receipt(w3.eth.send_raw_transaction(_raw_tx(signed)))
-
-
-def _load_artifact(path: Path):
-    if not path.exists():
-        subprocess.run(["forge", "build"], cwd=REPO_ROOT, check=True)
-    with path.open() as f:
-        a = json.load(f)
-    return a["abi"], a["bytecode"]["object"]
-
-
-def _deploy_usdt(w3, deployer, deployer_key):
-    abi, bytecode = _load_artifact(USDT_ARTIFACT)
-    factory = w3.eth.contract(abi=abi, bytecode=bytecode)
-    receipt = _send(w3, factory.constructor(), deployer, deployer_key)
-    return w3.eth.contract(address=receipt.contractAddress, abi=abi)
-
-
-def _deploy_bootstrapped_pool(w3, deployer, deployer_key, usdt):
-    """Spot price after bootstrap: 1 ETH = 2000 USDT."""
-    abi, bytecode = _load_artifact(POOL_ARTIFACT)
-    factory = w3.eth.contract(abi=abi, bytecode=bytecode)
-    receipt = _send(w3, factory.constructor(usdt.address), deployer, deployer_key)
-    pool = w3.eth.contract(address=receipt.contractAddress, abi=abi)
-    _send(w3, usdt.functions.mint(deployer, POOL_BOOTSTRAP_USDT_BASE),
-          deployer, deployer_key, gas=200_000)
-    _send(w3, usdt.functions.approve(pool.address, POOL_BOOTSTRAP_USDT_BASE),
-          deployer, deployer_key, gas=200_000)
-    _send(w3, pool.functions.bootstrap(POOL_BOOTSTRAP_USDT_BASE),
-          deployer, deployer_key, value=POOL_BOOTSTRAP_ETH_WEI)
-    return pool
-
-
-def _deploy_tornado(w3, deployer, deployer_key):
-    """Deploy MiMC + Verifier + MockTornado; return the tornado contract handle."""
-    mimc = deploy_mimc(w3, deployer, deployer_key)
-
-    verifier_abi, verifier_bytecode = _load_artifact(VERIFIER_ARTIFACT)
-    v_factory = w3.eth.contract(abi=verifier_abi, bytecode=verifier_bytecode)
-    verifier_addr = _send(
-        w3, v_factory.constructor(), deployer, deployer_key,
-    ).contractAddress
-
-    tornado_abi, tornado_bytecode = _load_artifact(TORNADO_ARTIFACT)
-    t_factory = w3.eth.contract(abi=tornado_abi, bytecode=tornado_bytecode)
-    tornado_addr = _send(
-        w3, t_factory.constructor(verifier_addr, mimc.address, MERKLE_DEPTH),
-        deployer, deployer_key, gas=10_000_000,
-    ).contractAddress
-    return w3.eth.contract(address=tornado_addr, abi=tornado_abi)
 
 
 # --- Structural tests (no API, no chain) ---------------------------------

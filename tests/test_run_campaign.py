@@ -14,13 +14,9 @@ from io import StringIO
 import pytest
 
 from aml.attackers import scenarios as scen_mod
-from aml.attackers.run_campaign import (
-    _decode_event,
-    _jsonable,
-    build_arg_parser,
-    main,
-)
+from aml.attackers.run_campaign import build_arg_parser, main
 from aml.attackers.scenarios import DEFI_EXPLOIT, SCENARIOS, Scenario
+from aml.chains.trace import decode_event, jsonable
 
 
 # --- scenario registry health ---
@@ -129,7 +125,7 @@ def test_arg_parser_defaults_make_sense():
 
 
 def test_jsonable_handles_bytes_and_big_ints():
-    """`_jsonable` makes web3 / bytes / huge-int values JSON-serializable."""
+    """`jsonable` makes web3 / bytes / huge-int values JSON-serializable."""
     big = 2**100
     payload = {
         "bytes_val": b"\x01\x02\x03",
@@ -140,7 +136,7 @@ def test_jsonable_handles_bytes_and_big_ints():
         "nested": {"inner_bytes": b"\xff", "list_of_bigs": [big, 7]},
         "tuple": (b"\x00", 1, "x"),
     }
-    safe = _jsonable(payload)
+    safe = jsonable(payload)
     # Round-trips through json
     text = json.dumps(safe)
     back = json.loads(text)
@@ -155,9 +151,9 @@ def test_jsonable_handles_bytes_and_big_ints():
 
 
 def test_decode_event_returns_none_for_unknown_contract():
-    """`_decode_event` against an empty known_contracts dict returns None."""
+    """`decode_event` against an empty known_contracts dict returns None."""
     class FakeLog:
         address = "0x" + "f" * 40
-    assert _decode_event(FakeLog(), known_contracts={}) is None
+    assert decode_event(FakeLog(), known_contracts={}) is None
     # None contract entries (e.g. pool not deployed) are skipped, not crashed on
-    assert _decode_event(FakeLog(), known_contracts={"pool": None}) is None
+    assert decode_event(FakeLog(), known_contracts={"pool": None}) is None
