@@ -327,6 +327,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def _load_env_if_available() -> None:
+    """Load .env into os.environ via python-dotenv if installed.
+
+    The pytest suite gets this for free via tests/conftest.py; CLI
+    invocations didn't, which kept biting us — running
+    ``python -m aml.attackers.run_campaign`` from a fresh shell would
+    fail with ``ANTHROPIC_API_KEY not set`` even when the key was
+    sitting in .env. Now both CLIs call this helper themselves. Silent
+    no-op when python-dotenv isn't installed (so it can't break a host
+    that doesn't have it).
+    """
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    load_dotenv()
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
 
@@ -343,9 +361,14 @@ def main(argv: list[str] | None = None) -> int:
         print("error: --scenario is required (or pass --list-scenarios)", file=sys.stderr)
         return 2
 
+    # Pull ANTHROPIC_API_KEY (and anything else in .env) into env BEFORE
+    # the key check, so a fresh shell + .env file just works.
+    _load_env_if_available()
+
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print(
-            "error: ANTHROPIC_API_KEY not set. Source your .env or export it first.",
+            "error: ANTHROPIC_API_KEY not set in environment or .env. "
+            "Add it to .env in the repo root or export it explicitly.",
             file=sys.stderr,
         )
         return 2
