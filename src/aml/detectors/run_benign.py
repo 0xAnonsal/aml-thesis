@@ -501,6 +501,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def _load_env_if_available() -> None:
+    """Load .env into os.environ via python-dotenv if installed.
+
+    The benign generator doesn't currently need an API key, but loading
+    .env eagerly matches what aml.attackers.run_campaign does — keeps
+    CLI ergonomics consistent and future-proofs against new env-driven
+    config. Silent no-op when python-dotenv isn't installed.
+    """
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    load_dotenv()
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     if args.num_users < 2:
@@ -509,6 +524,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.num_txs < 1:
         print("error: --num-txs must be at least 1", file=sys.stderr)
         return 2
+    _load_env_if_available()
     try:
         run_benign_main(args)
     except Exception as e:
