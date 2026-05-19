@@ -226,18 +226,20 @@ def test_draw_run_graph_creates_parent_dirs(tmp_path):
 
 
 def test_draw_run_graph_default_title_includes_run_info(tmp_path):
-    """The auto-generated title mentions scenario + amount + node count."""
-    run = load_run(_write_attacker_run(tmp_path))
-    out = tmp_path / "attacker.png"
-    draw_run_graph(run, out)
-    # Read the title back via the Figure object — easier than parsing PNG
-    # metadata. draw_run_graph closes the figure, so do a fresh call
-    # against the raw helper:
+    """The scenario-aware default title built by _default_title() mentions
+    scenario name + amount + node count.
+
+    Tests `_default_title` directly because that's the function that builds
+    the scenario-aware string. (`draw_graph(g)` without a title falls back
+    to a GENERIC title — that path is intentional for ad-hoc graphs and
+    isn't what we want to assert on here.)
+    """
     from aml.detectors.graph import to_networkx
+    from aml.detectors.viz import _default_title
+
+    run = load_run(_write_attacker_run(tmp_path))
     g = to_networkx(run)
-    fig, ax = draw_graph(g)
-    title = ax.get_title()
+    title = _default_title(run, g)
     assert "defi-exploit" in title
     assert "1.0" in title or "1" in title
     assert "nodes" in title
-    plt.close(fig)
