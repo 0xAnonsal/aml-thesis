@@ -72,13 +72,36 @@ LABEL_COLOURS: dict[str, str] = {
     LABEL_UNKNOWN:            "#bdc3c7",   # light grey — addresses without a role
 }
 
-# Edge styling by kind. (linestyle, base_color, base_alpha).
+# Edge styling by kind. (linestyle, base_color, base_alpha). Tuned after
+# the first round of thesis figures: mixer edges (the project's headline
+# ZK contribution) were getting buried in dense centre clusters. They
+# now use saturated red/crimson, are drawn LAST so they sit on top, and
+# get an extra width boost (see _EDGE_KIND_WIDTH_BOOST below).
 EDGE_STYLES: dict[str, tuple[str, str, float]] = {
-    "transfer_eth":    ("solid", "#2c3e50", 0.55),
-    "transfer_usdt":   ("solid", "#16a085", 0.55),
-    "swap":            ("dotted", "#d35400", 0.65),
-    "mixer_deposit":   ("dashed", "#8e44ad", 0.85),
-    "mixer_withdraw":  ("dashed", "#9b59b6", 0.85),
+    "transfer_eth":    ("solid", "#2c3e50", 0.45),
+    "transfer_usdt":   ("solid", "#16a085", 0.45),
+    "swap":            ("dotted", "#d35400", 0.60),
+    "mixer_deposit":   ("dashed", "#e74c3c", 1.00),   # bright red, fully opaque
+    "mixer_withdraw":  ("dashed", "#922b21", 1.00),   # deep crimson
+}
+
+# Render order: transfer/swap first (they form the background), mixer
+# last (they paint on top of everything so the laundering structure is
+# unmistakable). Anything not listed here renders at the very end.
+_EDGE_DRAW_ORDER: list[str] = [
+    "transfer_eth",
+    "transfer_usdt",
+    "swap",
+    "mixer_deposit",
+    "mixer_withdraw",
+]
+
+# Width multipliers per edge kind. Mixer edges get a 2.5× boost so they
+# read as the visual focus even when they share the centre of a busy
+# graph with denser transfer activity.
+_EDGE_KIND_WIDTH_BOOST: dict[str, float] = {
+    "mixer_deposit":  2.5,
+    "mixer_withdraw": 2.5,
 }
 
 
@@ -131,7 +154,12 @@ def draw_graph(
 
     # --- layout ---
     if layout == "spring":
-        pos = nx.spring_layout(g, seed=seed, k=1.5 / math.sqrt(max(g.number_of_nodes(), 1)))
+        # k controls inter-node spacing. The default 1/sqrt(N) bunches
+        # everything; 2.5/sqrt(N) gives the laundering structure room
+        # to breathe so peripheral nodes (clean exits, unused
+        # distractors) don't get yanked into the centre cluster.
+        n = max(g.number_of_nodes(), 1)
+        pos = nx.spring_layout(g, seed=seed, k=2.5 / math.sqrt(n))
     elif layout == "kamada_kawai":
         pos = nx.kamada_kawai_layout(g)
     elif layout == "circular":
@@ -166,12 +194,29 @@ def draw_graph(
         kind = data.get("kind", "unknown")
         edges_by_kind.setdefault(kind, []).append((u, v, key, data))
 
-    for kind, edge_list in edges_by_kind.items():
+    # Render in explicit priority order: background kinds first, mixer
+    # (the visual focus) LAST so it paints on top of everything else.
+    # Any kind not in the priority list falls through at the end.
+    ordered_kinds: list[str] = (
+        [k for k in _EDGE_DRAW_ORDER if k in edges_by_kind]
+        + [k for k in edges_by_kind if k not in _EDGE_DRAW_ORDER]
+    )
+
+    for kind in ordered_kinds:
+        edge_list = edges_by_kind[kind]
         style, base_colour, base_alpha = EDGE_STYLES.get(
             kind, ("solid", "#7f8c8d", 0.5),
         )
-        alpha = _adaptive_alpha(num_edges, base_alpha)
-        widths = [_edge_width(d.get("value")) for _, _, _, d in edge_list]
+        # Mixer edges are full-opacity by design (they're the thesis
+        # contribution) — let them ignore the density-fade we apply to
+        # background edges.
+        if base_alpha >= 1.0:
+            alpha = 1.0
+        else:
+            alpha = _adaptive_alpha(num_edges, base_alpha)
+        boost = _EDGE_KIND_WIDTH_BOOST.get(kind, 1.0)
+        widths = [_edge_width(d.get("value")) * boost
+                  for _, _, _, d in edge_list]
         nx.draw_networkx_edges(
             g, pos, ax=ax,
             edgelist=[(u, v) for u, v, _, _ in edge_list],
