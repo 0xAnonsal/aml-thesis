@@ -92,6 +92,20 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
 
         deploy_end_block = w3.eth.block_number
         bootstrap_attacker_addrs = sorted(dispatcher.wallets.keys())
+
+        # Snapshot the clean exits' balances BEFORE the campaign runs so
+        # the post-run summary can report DELTAS, not absolute final
+        # balances. Anvil seeds each default account with 10000 ETH;
+        # without this snapshot, `eth_received` would always look like
+        # 10000 even when the agent sent the exit nothing — which would
+        # falsely mark every labeled exit as `clean_exits_funded` and
+        # poison the detector's training labels.
+        exits_eth_before = {a: w3.eth.get_balance(a) for a in clean_exits}
+        exits_usdt_before = (
+            {a: usdt.functions.balanceOf(a).call() for a in clean_exits}
+            if usdt is not None else {a: 0 for a in clean_exits}
+        )
+
         print(
             f"[runner] chain ready (deploy ended at block {deploy_end_block}), "
             f"launching campaign...",
@@ -131,20 +145,25 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
             set(all_attacker_addrs) - set(bootstrap_attacker_addrs)
         )
 
-        # Post-run: record which clean exits actually received value, plus
-        # the per-exit deltas. The detector trains on (chain_trace +
-        # addresses); knowing which exits the agent USED vs which it
-        # ignored is part of the labeled ground truth.
+        # Post-run: record per-exit DELTAS against the pre-campaign
+        # snapshot (see comment above where exits_*_before is captured).
+        # Whether an exit was "funded" must be decided on the delta, not
+        # on the absolute final balance — Anvil's 10000-ETH default for
+        # node.accounts[2..N] would otherwise mark every exit as funded.
         exits_eth_after = {a: w3.eth.get_balance(a) for a in clean_exits}
         exits_usdt_after = (
             {a: usdt.functions.balanceOf(a).call() for a in clean_exits}
-            if usdt is not None else {}
+            if usdt is not None else {a: 0 for a in clean_exits}
         )
         clean_exit_records = [
             {
                 "address": addr,
-                "eth_received": exits_eth_after[addr] / 10**18,
-                "usdt_received": exits_usdt_after.get(addr, 0) / 10**6,
+                "eth_received": (
+                    exits_eth_after[addr] - exits_eth_before[addr]
+                ) / 10**18,
+                "usdt_received": (
+                    exits_usdt_after.get(addr, 0) - exits_usdt_before.get(addr, 0)
+                ) / 10**6,
             }
             for addr in clean_exits
         ]
