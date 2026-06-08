@@ -6,6 +6,11 @@ This is the *victim* model that the multi-agent attacker will later try to evade
 Reference baseline (Weber et al. 2019):
     F1 (illicit) ~ 0.41 on Elliptic temporal split
 Modern re-implementations with class weighting and longer training reach ~ 0.55-0.70.
+
+NOTE on naming — see detectors/__init__.py. This module exports a raw
+torch.nn.Module (`GCN`). For the Week 7 Detector-ABC-compliant version
+used by the simulated-data evaluation pipeline, see detectors.gnn:GCNDetector
+(which wraps a GCN model in the unified fit/predict/predict_proba interface).
 """
 from __future__ import annotations
 

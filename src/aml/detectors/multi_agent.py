@@ -93,7 +93,9 @@ def cluster_by_similarity(
     # at zero — they'll have similarity 0 to everything else.
     matrix = np.array([features[a] for a in addresses], dtype=np.float64)
     norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-    matrix = np.where(norms > 1e-9, matrix / np.where(norms > 1e-9, norms, 1.0), 0.0)
+    safe_norms = np.where(norms > 1e-9, norms, 1.0)   # avoid div-by-zero
+    matrix = matrix / safe_norms                       # divide all rows safely
+    matrix = np.where(norms > 1e-9, matrix, 0.0)       # zero out the zero-norm rows
 
     # Build similarity graph
     g = nx.Graph()
