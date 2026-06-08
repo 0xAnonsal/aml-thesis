@@ -6,6 +6,25 @@ reproducing it here on the simulated dataset gives the standard
 comparison point the thesis's multi-agent detector must beat — and is
 the model the multi-agent attacker is specifically supposed to evade.
 
+NOTE on naming — there are two GCN-related classes in this package:
+
+  - detectors.gcn:GCN          (Week 1-2) — raw torch.nn.Module used
+                                in the original Elliptic Bitcoin
+                                baseline experiments. Takes a feature
+                                tensor + edge_index, returns logits.
+                                Doesn't implement the Detector ABC.
+
+  - detectors.gnn:GCNDetector  (Week 7, this file) — wraps a GCN
+                                model in the unified Detector ABC
+                                with a transductive fit/predict loop
+                                + feature extraction + class-imbalance
+                                handling. Used in the simulated-data
+                                evaluation alongside Louvain and
+                                MultiAgentDetector.
+
+If you're writing eval code, use GCNDetector. If you're reproducing
+the Elliptic baseline numbers from Weber et al., use the raw GCN.
+
 How it decides (one paragraph):
     Each address gets a feature vector — degree, log-sum of value
     moved in/out, unique counterparty count, plus the count of edges

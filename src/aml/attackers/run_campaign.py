@@ -347,21 +347,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def _load_env_if_available() -> None:
-    """Load .env into os.environ via python-dotenv if installed.
+    """Load .env into os.environ using the shared stdlib parser.
 
-    The pytest suite gets this for free via tests/conftest.py; CLI
-    invocations didn't, which kept biting us — running
-    ``python -m aml.attackers.run_campaign`` from a fresh shell would
-    fail with ``ANTHROPIC_API_KEY not set`` even when the key was
-    sitting in .env. Now both CLIs call this helper themselves. Silent
-    no-op when python-dotenv isn't installed (so it can't break a host
-    that doesn't have it).
+    Delegates to aml.utils.env.load_dotenv_if_present so this CLI
+    parses .env the same way pytest's conftest.py does. No dependency
+    on python-dotenv. Silent no-op when no .env is present.
     """
-    try:
-        from dotenv import load_dotenv
-    except ImportError:
-        return
-    load_dotenv()
+    from aml.utils.env import load_dotenv_if_present
+    load_dotenv_if_present()
 
 
 def main(argv: list[str] | None = None) -> int:

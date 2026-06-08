@@ -502,18 +502,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def _load_env_if_available() -> None:
-    """Load .env into os.environ via python-dotenv if installed.
+    """Load .env into os.environ using the shared stdlib parser.
 
-    The benign generator doesn't currently need an API key, but loading
-    .env eagerly matches what aml.attackers.run_campaign does — keeps
-    CLI ergonomics consistent and future-proofs against new env-driven
-    config. Silent no-op when python-dotenv isn't installed.
+    Delegates to aml.utils.env.load_dotenv_if_present so this CLI
+    parses .env the same way pytest's conftest.py and run_campaign do.
+    No dependency on python-dotenv. The benign generator doesn't
+    currently need an API key, but loading .env eagerly matches the
+    attacker CLI and future-proofs against new env-driven config.
     """
-    try:
-        from dotenv import load_dotenv
-    except ImportError:
-        return
-    load_dotenv()
+    from aml.utils.env import load_dotenv_if_present
+    load_dotenv_if_present()
 
 
 def main(argv: list[str] | None = None) -> int:

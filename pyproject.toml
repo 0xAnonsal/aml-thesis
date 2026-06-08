@@ -8,6 +8,44 @@ version = "0.1.0"
 description = "Adversarial multi-agent systems for cryptocurrency AML research"
 requires-python = ">=3.11"
 
+# Core runtime dependencies — minimum needed to import the package
+# and run the community-detection baseline. Heavier deps (PyTorch,
+# matplotlib, anthropic SDK) move to optional extras below so a
+# detector-only install stays lean.
+dependencies = [
+    "web3>=6",
+    "eth-account>=0.10",
+    "networkx>=3",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+# Attacker stack — LLM SDK + retry/timeout helpers.
+attacker = [
+    "anthropic>=0.30",
+]
+# GNN baselines (Elliptic + simulated) need torch + PyG.
+gnn = [
+    "torch>=2.0",
+    "torch-geometric>=2.4",
+]
+# Visualisation module — only matplotlib.
+viz = [
+    "matplotlib>=3.7",
+]
+# Test suite.
+dev = [
+    "pytest>=7",
+]
+# One-shot install for everything.
+all = [
+    "anthropic>=0.30",
+    "torch>=2.0",
+    "torch-geometric>=2.4",
+    "matplotlib>=3.7",
+    "pytest>=7",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
