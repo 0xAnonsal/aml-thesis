@@ -19,10 +19,17 @@ def jsonable(v: Any) -> Any:
     Recursive over dicts / lists / tuples. Huge ints (>2^53) are
     stringified to dodge JS-side int overflow in any downstream consumer
     that uses JSON.parse.
+
+    The `hasattr(v, "hex")` branch is meant for web3.py `HexBytes` and
+    similar — we EXCLUDE str/int/float/bool from it because Python's
+    built-in numeric types also have a `.hex()` method that produces
+    a hex *representation of the bits*, not a chain-trace hex string
+    (e.g. `(1.5).hex() == '0x1.8000000000000p+0'`). Those types should
+    pass through unchanged.
     """
     if isinstance(v, (bytes, bytearray)):
         return "0x" + bytes(v).hex()
-    if hasattr(v, "hex") and not isinstance(v, (str, int)):
+    if hasattr(v, "hex") and not isinstance(v, (str, int, float, bool)):
         # web3.py HexBytes etc. — call .hex() to get a hex string
         try:
             return v.hex()
