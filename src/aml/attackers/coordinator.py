@@ -203,10 +203,31 @@ class Coordinator:
         }
         self._delegate_tools = [_delegate_schema(role) for role in _ROLE_TOOLS]
 
+        # Plus any read-only chain tools the Coordinator can call directly
+        # to verify sub-agent reports against ground-truth state. Currently
+        # just inspect_chain (PR 42, reflection loop). The Coordinator
+        # never gets write tools — write actions stay funneled through
+        # sub-agent delegations to keep the role separation honest.
+        _COORDINATOR_CHAIN_TOOLS = {"inspect_chain"}
+        self._coordinator_chain_tools = [
+            schema for schema in dispatcher.tool_definitions
+            if schema["name"] in _COORDINATOR_CHAIN_TOOLS
+        ]
+
     @property
     def delegate_tool_definitions(self) -> list[dict]:
-        """The Coordinator's tools — exactly the three delegate_to_* tools."""
+        """The Coordinator's delegation tools — the three delegate_to_* schemas."""
         return list(self._delegate_tools)
+
+    @property
+    def coordinator_tool_definitions(self) -> list[dict]:
+        """Full Coordinator tool surface: delegate_to_* + read-only chain audit.
+
+        This is what's passed to the LLM as the `tools=` parameter so the
+        Coordinator can both delegate phases AND verify ground-truth state
+        between them via inspect_chain.
+        """
+        return list(self._delegate_tools) + list(self._coordinator_chain_tools)
 
     def run(
         self,
@@ -226,7 +247,7 @@ class Coordinator:
             system = COORDINATOR_SYSTEM
 
         messages: list[dict] = [{"role": "user", "content": user_prompt}]
-        tools = self._delegate_tools
+        tools = self.coordinator_tool_definitions
         delegations: list[dict] = []
         sub_agent_runs: list[SubAgentResult] = []
         cost = 0.0
@@ -263,11 +284,12 @@ class Coordinator:
             for block in tool_use_blocks:
                 tool_input = dict(block.input) if block.input else {}
                 role = _ROLE_FROM_TOOL.get(block.name)
+                chain_tool_names = {
+                    s["name"] for s in self._coordinator_chain_tools
+                }
 
-                if role is None:
-                    content = f"Error: unknown tool {block.name!r}"
-                    is_error = True
-                else:
+                if role is not None:
+                    # FATF phase delegation — same path as before.
                     objective = tool_input.get("objective", "")
                     context = tool_input.get("context", "")
                     sub_result = self.sub_agents[role].run(
@@ -288,6 +310,18 @@ class Coordinator:
                     # the Coordinator notices and can react; the report's
                     # `status` field carries the same signal in the body.
                     is_error = not sub_result.ok
+                elif block.name in chain_tool_names:
+                    # Coordinator-level read-only chain tool (inspect_chain).
+                    # Dispatched via the shared ToolDispatcher; results go
+                    # straight back to the Coordinator LLM as a tool_result.
+                    tool_result = self.dispatcher.dispatch(
+                        block.name, tool_input,
+                    )
+                    content = tool_result.to_content()
+                    is_error = tool_result.is_error
+                else:
+                    content = f"Error: unknown tool {block.name!r}"
+                    is_error = True
 
                 tool_results.append({
                     "type": "tool_result",

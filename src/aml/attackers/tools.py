@@ -572,6 +572,46 @@ _TOOL_SCHEMAS: list[dict] = [
             "required": ["deposit_note", "recipient"],
         },
     },
+    {
+        "name": "inspect_chain",
+        "description": (
+            "Read-only audit of the current chain state. Returns a "
+            "structured summary of registered wallet balances (ETH + USDT), "
+            "a sample of the top wallets by balance, the deployed contract "
+            "addresses, counts of recent events by kind (mixer deposits / "
+            "withdrawals, swaps, USDT transfers) since `since_block`, and "
+            "detection-relevant signals — e.g. how uniform the burner "
+            "balances are (a low coefficient of variation is a feature "
+            "signature a GCN detector can easily learn). Costs no gas "
+            "and modifies no state. Use this between phase delegations "
+            "to verify what's actually on-chain against what a sub-agent "
+            "reported, and to spot uniformity patterns BEFORE the "
+            "detector does."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "since_block": {
+                    "type": "integer",
+                    "description": (
+                        "Earliest block to scan for event counts. Default 0 "
+                        "(scan from genesis). For incremental audits between "
+                        "phases, pass the block_number from your previous "
+                        "inspect_chain call so the deltas reflect just the "
+                        "last phase's activity."
+                    ),
+                },
+                "max_wallets_sample": {
+                    "type": "integer",
+                    "description": (
+                        "Cap on the wallets sample size (sorted by ETH "
+                        "balance, descending). Default 8."
+                    ),
+                },
+            },
+            "required": [],
+        },
+    },
 ]
 
 
@@ -726,6 +766,8 @@ class ToolDispatcher:
             return self._mixer_deposit(**tool_input)
         if tool_name == "mixer_withdraw":
             return self._mixer_withdraw(**tool_input)
+        if tool_name == "inspect_chain":
+            return self._inspect_chain(**tool_input)
         return ToolResult(error=f"Unknown tool: {tool_name}")
 
     # --- Tool implementations -----------------------------------------------
@@ -1844,4 +1886,149 @@ class ToolDispatcher:
             "nullifier_hash": "0x" + nullifier_hash_bytes.hex(),
             "anonymity_set_size": len(leaves),
             "gas_used": receipt.gasUsed,
+        })
+
+    # --- Coordinator reflection tool (PR 42: smarter attacker, A) -----------
+
+    def _inspect_chain(
+        self, since_block: int = 0, max_wallets_sample: int = 8,
+    ) -> ToolResult:
+        """Read-only chain audit. See schema for what's returned.
+
+        Coordinator-level reflection tool. The sub-agents return SELF-
+        REPORTS via finish_task; this tool gives the Coordinator
+        ground-truth chain state to verify those reports against.
+
+        Defensive on every external call (events vary across web3.py
+        versions; some contracts may not be deployed in a given
+        campaign). Always returns a ToolResult — never raises.
+        """
+        import statistics
+
+        try:
+            current_block = self.w3.eth.block_number
+        except Exception as e:   # noqa: BLE001
+            return ToolResult(error=f"Failed to read block number: {e}")
+
+        wallet_addrs = list(self.wallets.keys())
+        eth_balances: list[float] = []
+        usdt_balances: list[float] = []
+        for addr in wallet_addrs:
+            try:
+                eth_balances.append(self.w3.eth.get_balance(addr) / 10**18)
+            except Exception:   # noqa: BLE001
+                eth_balances.append(0.0)
+            if self.usdt is not None:
+                try:
+                    usdt_balances.append(
+                        self.usdt.functions.balanceOf(addr).call() / 10**6
+                    )
+                except Exception:   # noqa: BLE001
+                    usdt_balances.append(0.0)
+            else:
+                usdt_balances.append(0.0)
+
+        # Sample top-N wallets by ETH (most "interesting" for triage).
+        order = sorted(range(len(wallet_addrs)), key=lambda i: -eth_balances[i])
+        sample_size = min(max(max_wallets_sample, 0), len(wallet_addrs))
+        wallets_sample = [
+            {
+                "address": wallet_addrs[i],
+                "eth": round(eth_balances[i], 4),
+                "usdt": round(usdt_balances[i], 2),
+            }
+            for i in order[:sample_size]
+        ]
+
+        # Event counts since `since_block`.
+        event_counts = {
+            "mixer_deposits": 0,
+            "mixer_withdrawals": 0,
+            "swaps": 0,
+            "usdt_transfers": 0,
+        }
+
+        def _get_logs_compat(event_factory, from_block):
+            """web3.py v6 used fromBlock=, v7 uses from_block=."""
+            try:
+                return list(event_factory().get_logs(from_block=from_block))
+            except TypeError:
+                return list(event_factory().get_logs(fromBlock=from_block))
+
+        if self.tornado is not None:
+            try:
+                event_counts["mixer_deposits"] = len(
+                    _get_logs_compat(self.tornado.events.Deposit, since_block),
+                )
+            except Exception:   # noqa: BLE001
+                pass
+            # Withdrawal event name varies across implementations.
+            for attr in ("Withdrawal", "Withdraw"):
+                if hasattr(self.tornado.events, attr):
+                    try:
+                        event_counts["mixer_withdrawals"] = len(
+                            _get_logs_compat(
+                                getattr(self.tornado.events, attr),
+                                since_block,
+                            ),
+                        )
+                    except Exception:   # noqa: BLE001
+                        pass
+                    break
+        if self.usdt is not None:
+            try:
+                event_counts["usdt_transfers"] = len(
+                    _get_logs_compat(self.usdt.events.Transfer, since_block),
+                )
+            except Exception:   # noqa: BLE001
+                pass
+        if self.pool is not None:
+            for attr in ("Swap", "Swapped"):
+                if hasattr(self.pool.events, attr):
+                    try:
+                        event_counts["swaps"] = len(
+                            _get_logs_compat(
+                                getattr(self.pool.events, attr),
+                                since_block,
+                            ),
+                        )
+                    except Exception:   # noqa: BLE001
+                        pass
+                    break
+
+        # Detection-relevant signals computed over wallets that are
+        # active (ETH > the 0.05 reserve floor by a comfortable margin).
+        active_eth = [b for b in eth_balances if b > 0.06]
+        signals: dict[str, Any] = {
+            "num_registered_wallets": len(wallet_addrs),
+            "num_active_wallets": len(active_eth),
+            "mixer_used": event_counts["mixer_deposits"] > 0,
+        }
+        if len(active_eth) >= 3:
+            mean_eth = statistics.fmean(active_eth)
+            stdev_eth = statistics.stdev(active_eth)
+            cv = stdev_eth / mean_eth if mean_eth > 0 else 0.0
+            signals["burner_eth_coefficient_of_variation"] = round(cv, 4)
+            if cv < 0.1:
+                signals["uniformity_warning"] = (
+                    "Active wallet ETH balances are highly uniform "
+                    "(coefficient of variation < 0.1). This is the kind of "
+                    "feature signature a GCN-style detector trivially "
+                    "learns. Consider varying transaction sizes and routes."
+                )
+
+        return ToolResult(output={
+            "block_number": current_block,
+            "since_block": since_block,
+            "num_registered_wallets": len(wallet_addrs),
+            "total_eth_in_wallets": round(sum(eth_balances), 4),
+            "total_usdt_in_wallets": round(sum(usdt_balances), 2),
+            "wallets_sample": wallets_sample,
+            "contracts": {
+                "usdt": self.usdt.address if self.usdt is not None else None,
+                "pool": self.pool.address if self.pool is not None else None,
+                "tornado": self.tornado.address if self.tornado is not None else None,
+            },
+            "events_since_block": event_counts,
+            "detection_signals": signals,
         })

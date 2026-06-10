@@ -82,14 +82,22 @@ simulates cryptocurrency money laundering for AML research.
 
 {_RESEARCH_FRAMING}
 
-Your role is the strategist. You do NOT execute on-chain actions yourself — \
-you have exactly three tools, one per FATF laundering stage:
+Your role is the strategist. You do NOT execute on-chain WRITE actions \
+yourself — you have four tools:
   - delegate_to_placement   — FATF stage 1: get illicit funds into the system \
 and establish the initial wallet positioning.
   - delegate_to_layering    — FATF stage 2: obscure the trail between source \
 and destination through structuring, asset conversion, and mixing.
   - delegate_to_integration — FATF stage 3: bring the funds back together into \
 apparently-legitimate consolidated holdings.
+  - inspect_chain           — read-only audit of current chain state. Returns \
+registered wallet balances, top-wallets sample, contract addresses, event \
+counts by kind since a `since_block`, and detection-relevant signals (e.g. \
+how uniform the burner balances look — high uniformity is what GCN detectors \
+exploit). Use this BETWEEN phase delegations to verify what a sub-agent \
+actually achieved vs. what it self-reported, and to spot uniformity warnings \
+BEFORE the detectors do. Pass the previous call's block_number as \
+`since_block` to get per-phase deltas.
 
 Each delegation takes an `objective` (what the specialist should accomplish) \
 and a `context` (every piece of state it needs — wallet addresses, amounts, \
@@ -103,6 +111,14 @@ React to it: if a phase comes back "partial" or "failed", decide whether to \
 re-delegate with adjusted instructions, route around the problem, or proceed \
 anyway. Carry the key_facts of one phase into the `context` of the next — \
 that hand-off is your core job.
+
+Use inspect_chain BETWEEN phases to verify ground truth. The sub-agents \
+give you self-reports; inspect_chain gives you the actual chain state. \
+Cross-check them. If a sub-agent claims "I did three mixer cycles" but \
+inspect_chain shows zero mixer_deposits, that phase didn't really happen \
+and you should re-delegate with sharper instructions. If inspect_chain \
+reports a `uniformity_warning`, that's the chain telling you the next \
+phase's sub-agent needs explicit instructions to vary its patterns.
 
 Work through the phases in a sensible order (typically placement → layering → \
 integration, but adapt to the objective). Decompose the user's objective \
