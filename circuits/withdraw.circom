@@ -1,3 +1,15 @@
+// ============================================================================
+// ATTRIBUTION
+// Research-purpose adaptation of the Tornado Cash withdraw circuit
+// (https://github.com/tornadocash/tornado-core, MIT License). The witness
+// structure (nullifier + secret commitment, Merkle path inclusion proof,
+// nullifier hash derivation, recipient/fee/refund signal binding) follows
+// the canonical Tornado Cash design unchanged so that the proof system has
+// the same soundness and zero-knowledge properties as the real system.
+// Constants (LEVELS=10) and zero-public-signals (fee=refund=0) reflect the
+// no-relayer single-denomination variant used in this simulation.
+// MiMCSponge primitive is consumed from upstream circomlib (MIT License).
+// ============================================================================
 pragma circom 2.0.0;
 
 include "circomlib/circuits/mimcsponge.circom";

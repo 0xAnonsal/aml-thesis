@@ -1,4 +1,18 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
+// ============================================================================
+// ATTRIBUTION
+// This contract is a research-purpose adaptation of the Tornado Cash mixer
+// architecture (https://github.com/tornadocash/tornado-core, MIT License).
+// Modifications for AML research simulation:
+//   - Single fixed denomination (no multi-denomination pool routing).
+//   - No relayer support (fee and refund hard-coded to 0 in proofs).
+//   - Comments expanded to document the Groth16 + Merkle invariants for
+//     reviewers from outside the ZK community.
+// The cryptographic primitives (Groth16 verifier, MiMC hasher, Merkle tree
+// commitment scheme) follow the canonical Tornado Cash design unchanged so
+// that the simulation has the same on-chain unlinkability properties as the
+// real system that laundering campaigns exploit on mainnet.
+// ============================================================================
 pragma solidity ^0.8.20;
 
 import {IHasher} from "./IHasher.sol";

@@ -1,4 +1,15 @@
 // SPDX-License-Identifier: MIT
+// ============================================================================
+// ATTRIBUTION
+// Adapted for research use from the Tornado Cash MerkleTreeWithHistory
+// implementation (https://github.com/tornadocash/tornado-core, MIT License).
+// The algorithmic structure (append-only Merkle tree with bounded root
+// history, MiMC-Feistel hashLeftRight, zero-value precomputed subtree
+// digests) is preserved unchanged because it defines the cryptographic
+// contract that the off-chain prover commits to. Modifications are limited
+// to comments and Solidity 0.8+ idioms; no semantic changes to the tree
+// or its invariants.
+// ============================================================================
 pragma solidity ^0.8.20;
 
 import {IHasher} from "./IHasher.sol";
