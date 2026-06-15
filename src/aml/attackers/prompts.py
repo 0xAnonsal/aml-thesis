@@ -215,11 +215,33 @@ or sub-1-ETH amounts, fall back to swaps and smurf_split.
 
 {_DETECTOR_EVASION}
 
-Layering is THE phase where evasion happens. Vary route lengths (some \
-funds go through 2 hops, others 4-5), vary timing (don't do everything \
-back-to-back), vary asset conversions (some funds swap ETH→USDT→ETH, \
-others stay ETH). Mix mixer cycles with non-mixer hops so the trail \
-isn't a uniform "deposit, withdraw, deposit, withdraw" pattern.
+Layering is THE phase where evasion happens. Structure the work as three \
+PARALLEL routes from the incoming burners (do NOT process them all the \
+same way):
+
+  ROUTE A — forward to NEW burners. Generate fresh burner_wallets and \
+transfer a portion of the funds there. Add 1–3 more hops between these \
+new burners before they exit your phase.
+
+  ROUTE B — RECYCLE existing burners. Send a portion BACK to burner \
+wallets that already appear in your context (from Placement, or from \
+earlier hops in your own phase). This creates intentional CYCLES in the \
+transaction graph — Louvain modularity drops sharply on graphs with \
+cycles vs. tree-shaped fan-outs.
+
+  ROUTE C — mixer cycle with DISORDERED timing. Send the remaining \
+portion through the ZK mixer, but do NOT do deposit→immediate-withdraw. \
+Interleave: deposit from one wallet, do an unrelated transfer, deposit \
+from another, withdraw from the first using a third wallet as gas_payer, \
+do another unrelated transfer, withdraw the second. The chronological \
+order of mixer events should NOT match the logical order of your routing.
+
+Split the incoming amount across these three routes in non-uniform \
+fractions (NOT 33/33/33 — pick something like 45/30/25 or 50/20/30 per \
+campaign so the route mix itself varies). Vary route lengths, vary \
+timing, vary asset conversions (some funds swap ETH→USDT→ETH, others \
+stay ETH). Mix mixer cycles with non-mixer hops so the trail isn't a \
+uniform "deposit, withdraw, deposit, withdraw" pattern.
 
 Some tools may be unavailable in a given campaign (no swap pool or no mixer \
 deployed) — they return a clear error if so; route around them using the \
@@ -252,13 +274,31 @@ swaps for converting the consolidated holdings to the final off-ramp asset \
 
 {_DETECTOR_EVASION}
 
-Integration-specific evasion: at off-ramp, vary the per-exit USDT amounts \
-(don't send identical chunks to every clean exit), vary the number of hops \
-between the consolidation wallet and each exit (some exits get funds \
-directly, others through 1-2 intermediate structuring burners), and don't \
-fund every clean exit if the prompt allows skipping some. Funded exits \
-that look like a uniform fan-out from one consolidation point are easy \
-to flag.
+Integration-specific evasion + HARD CONSTRAINTS:
+
+  HARD CONSTRAINT — sub-threshold ceiling. Every clean exit wallet MUST \
+end the campaign with STRICTLY LESS than $999 USD-equivalent in USDT. \
+This is the US CTR threshold. If a single transfer would push an exit \
+over, split it into multiple smaller transfers across different blocks. \
+Check get_balance on each exit BEFORE sending more to it.
+
+  HARD CONSTRAINT — randomised distribution across platforms. The clean \
+exits in your context are labeled with their exchange/platform. \
+Distribute the funds so that SOME platforms receive funds at multiple \
+exit wallets (multi-exit on the same exchange) and OTHERS receive funds \
+at only one exit, AND some labeled exits may receive nothing at all. \
+The choice of which platforms get clustered vs. single-exit should be \
+RANDOMISED per campaign — do NOT use a fixed pattern.
+
+  SOFT TACTICS — vary per-exit USDT amounts (don't send identical \
+chunks), vary the number of hops between consolidation and each exit \
+(some exits get funds directly, others through 1–2 intermediate \
+burners), vary the time (block delay) between successive deliveries to \
+the same exit.
+
+Funded exits that look like a uniform fan-out from one consolidation \
+point with identical amounts and identical hop counts are trivial to \
+flag. Heterogeneity at the off-ramp is the last line of evasion.
 
 End-of-campaign drain: when a wallet is being abandoned and you want every \
 last bit of its ETH out, pass `reserve_eth=0` to swap_eth_for_usdt or \
