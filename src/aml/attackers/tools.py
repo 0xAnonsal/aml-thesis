@@ -202,6 +202,53 @@ _TOOL_SCHEMAS: list[dict] = [
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
+        "name": "register_clean_exit",
+        "description": (
+            "Create a fresh wallet AND register it as an intended CLEAN EXIT "
+            "(off-ramp destination) on a named exchange platform. Use this "
+            "instead of generate_burner_wallet for any wallet that the "
+            "campaign intends to land laundered USDT on — these are the "
+            "campaign's primary deliverables (the labeled 'mule' accounts "
+            "an analyst would seize in a real investigation). The agent "
+            "decides how many to create and across which platforms based on "
+            "the amount being laundered and the sub-$999 per-exit cap. "
+            "Heuristic: at least ceil(total_USDT / 999) exits, multiplied by "
+            "~1.5-3x for headroom; spread across 2-5 real exchange platforms "
+            "(Binance, Coinbase, Kraken, OKX, Kucoin, Bitfinex, Gate); some "
+            "platforms should host multiple exits, others just one. "
+            "The wallet is auto-seeded with gas dust (same as a burner) so "
+            "it can immediately receive USDT and would be usable downstream. "
+            "Returns {address, exchange_platform}. The exchange_platform is "
+            "stored in the dispatcher's registered_clean_exits log and "
+            "surfaced as ground-truth labels in the campaign artifacts so "
+            "the detector training pipeline can score per-platform recovery."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "exchange_platform": {
+                    "type": "string",
+                    "description": (
+                        "Human-readable exchange/platform name this exit "
+                        "represents — e.g. 'Binance', 'Coinbase', 'Kraken', "
+                        "'OKX', 'Kucoin'. Used purely as a ground-truth "
+                        "label; does not affect chain behaviour."
+                    ),
+                },
+                "note": {
+                    "type": "string",
+                    "description": (
+                        "Optional short rationale (max ~80 chars) — e.g. "
+                        "'second Binance account, structured to dodge per-"
+                        "account daily limit'. Stored alongside the exit "
+                        "metadata. Optional."
+                    ),
+                },
+            },
+            "required": ["exchange_platform"],
+        },
+    },
+    {
         "name": "mint_usdt",
         "description": (
             "Permissionlessly mint USDT to an address. MockUSDT has a "
@@ -728,6 +775,14 @@ class ToolDispatcher:
         self.wallets: dict[str, str] = {
             Web3.to_checksum_address(addr): key for addr, key in wallets.items()
         }
+        # Wallets the attacker explicitly registered as intended clean
+        # exits (off-ramp destinations) via register_clean_exit. Each entry
+        # is {address, exchange_platform, note?} and is consumed at end-of-
+        # campaign by run_campaign to write ground-truth labels into
+        # addresses.json. Distinct from `wallets` (the signing registry)
+        # because the SAME address is in both — clean exits ARE wallets the
+        # dispatcher can sign for, they just carry extra label metadata.
+        self.registered_clean_exits: list[dict] = []
 
     @property
     def tool_definitions(self) -> list[dict]:
@@ -746,6 +801,8 @@ class ToolDispatcher:
             return self._transfer_usdt(**tool_input)
         if tool_name == "generate_burner_wallet":
             return self._generate_burner_wallet(**tool_input)
+        if tool_name == "register_clean_exit":
+            return self._register_clean_exit(**tool_input)
         if tool_name == "mint_usdt":
             return self._mint_usdt(**tool_input)
         if tool_name == "smurf_split":
@@ -869,6 +926,50 @@ class ToolDispatcher:
                 "address": address,
                 "gas_seed_eth": 0.0,
                 "warning": f"Burner registered but gas seeding failed: {e}",
+            })
+
+    def _register_clean_exit(
+        self, exchange_platform: str, note: str | None = None,
+    ) -> ToolResult:
+        """Create a fresh wallet and register it as an intended clean exit.
+
+        Same gas-seeding behaviour as _generate_burner_wallet — the new exit
+        wallet is auto-funded with 0.05 ETH so it can immediately receive
+        and (in principle) move USDT. The difference is the extra metadata
+        recorded in self.registered_clean_exits: this is what tells the
+        post-campaign artifact writer which wallets count as labeled
+        off-ramp destinations for detector ground truth.
+        """
+        if not isinstance(exchange_platform, str) or not exchange_platform.strip():
+            return ToolResult(error="exchange_platform must be a non-empty string")
+        platform = exchange_platform.strip()
+
+        acct = Account.create()
+        address = acct.address
+        self.wallets[address] = acct.key.hex()
+
+        entry: dict = {"address": address, "exchange_platform": platform}
+        if note is not None:
+            note_str = str(note).strip()
+            if note_str:
+                entry["note"] = note_str[:200]   # cap to keep artifacts tidy
+        self.registered_clean_exits.append(entry)
+
+        # Auto-seed gas dust — same as burners. If seeding fails the exit
+        # is still registered and the agent gets a warning.
+        try:
+            self._seed_gas(address, _DEFAULT_GAS_RESERVE_ETH)
+            return ToolResult(output={
+                "address": address,
+                "exchange_platform": platform,
+                "gas_seed_eth": _DEFAULT_GAS_RESERVE_ETH,
+            })
+        except Exception as e:   # noqa: BLE001
+            return ToolResult(output={
+                "address": address,
+                "exchange_platform": platform,
+                "gas_seed_eth": 0.0,
+                "warning": f"Clean exit registered but gas seeding failed: {e}",
             })
 
     def _seed_gas(self, recipient: str, amount_eth: float) -> str:

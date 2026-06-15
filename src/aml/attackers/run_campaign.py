@@ -60,25 +60,19 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
     print(f"[runner] starting {run_name} → {out_dir}", file=sys.stderr)
     start_wall = time.time()
 
-    num_clean_exits = (
-        args.num_clean_exits if args.num_clean_exits is not None
-        else scenario.default_num_clean_exits
-    )
-
     with AnvilNode() as node:
         w3 = Web3(Web3.HTTPProvider(node.rpc_url))
         deployer, deployer_key = node.accounts[0], node.private_keys[0]
         alice, alice_key = node.accounts[1], node.private_keys[1]
-        # N labeled clean exit wallets — Anvil starts with 10 funded
-        # accounts; we take 2..2+N for the exit set. These are the
-        # off-ramp destinations the agent fans out to; the detector's
-        # job later is to identify them as belonging to the campaign.
-        if num_clean_exits < 1 or 2 + num_clean_exits > len(node.accounts):
-            raise ValueError(
-                f"num_clean_exits={num_clean_exits} out of range "
-                f"[1, {len(node.accounts) - 2}]"
-            )
-        clean_exits = list(node.accounts[2:2 + num_clean_exits])
+        # Clean exits are NOT pre-allocated. The Integration sub-agent
+        # creates them dynamically via register_clean_exit, and we read
+        # the resulting list from dispatcher.registered_clean_exits at
+        # end-of-campaign. This means we can't pre-snapshot balances
+        # (the exits don't exist yet) — but the wallets are also created
+        # fresh during the campaign, so the natural starting balance is
+        # the auto-seeded gas dust (~0.05 ETH from the faucet) plus
+        # whatever USDT the agent sends them. eth_received is reported
+        # as (final - gas_seed) for honesty.
 
         usdt = deploy_usdt(w3, deployer, deployer_key)
         pool = deploy_pool(w3, deployer, deployer_key, usdt) if scenario.needs_pool else None
@@ -93,19 +87,6 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
         deploy_end_block = w3.eth.block_number
         bootstrap_attacker_addrs = sorted(dispatcher.wallets.keys())
 
-        # Snapshot the clean exits' balances BEFORE the campaign runs so
-        # the post-run summary can report DELTAS, not absolute final
-        # balances. Anvil seeds each default account with 10000 ETH;
-        # without this snapshot, `eth_received` would always look like
-        # 10000 even when the agent sent the exit nothing — which would
-        # falsely mark every labeled exit as `clean_exits_funded` and
-        # poison the detector's training labels.
-        exits_eth_before = {a: w3.eth.get_balance(a) for a in clean_exits}
-        exits_usdt_before = (
-            {a: usdt.functions.balanceOf(a).call() for a in clean_exits}
-            if usdt is not None else {a: 0 for a in clean_exits}
-        )
-
         print(
             f"[runner] chain ready (deploy ended at block {deploy_end_block}), "
             f"launching campaign...",
@@ -119,9 +100,7 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
             sub_agent_max_iterations=args.sub_agent_max_iterations,
         )
 
-        prompt = scenario.format_prompt(
-            alice=alice, clean_exits=clean_exits, amount=amount,
-        )
+        prompt = scenario.format_prompt(alice=alice, amount=amount)
         result = coordinator.run(
             prompt,
             max_tokens=args.max_tokens,
@@ -139,41 +118,55 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
 
         # Every wallet in the dispatcher's registry at end-of-run is
         # attacker-controlled (each was either bootstrapped or generated
-        # by a tool the attacker called).
+        # by a tool the attacker called — either generate_burner_wallet
+        # or register_clean_exit).
         all_attacker_addrs = sorted(dispatcher.wallets.keys())
+
+        # Split the new wallets into burners vs. clean exits using the
+        # dispatcher's registered_clean_exits log (populated by every
+        # register_clean_exit call). Anything attacker-controlled that
+        # is NOT a clean exit and NOT bootstrap is a burner.
+        clean_exit_entries = list(dispatcher.registered_clean_exits)
+        clean_exit_addrs = [e["address"] for e in clean_exit_entries]
+        clean_exit_addr_set = set(clean_exit_addrs)
         new_burner_addrs = sorted(
-            set(all_attacker_addrs) - set(bootstrap_attacker_addrs)
+            set(all_attacker_addrs)
+            - set(bootstrap_attacker_addrs)
+            - clean_exit_addr_set
         )
 
-        # Post-run: record per-exit DELTAS against the pre-campaign
-        # snapshot (see comment above where exits_*_before is captured).
-        # Whether an exit was "funded" must be decided on the delta, not
-        # on the absolute final balance — Anvil's 10000-ETH default for
-        # node.accounts[2..N] would otherwise mark every exit as funded.
-        exits_eth_after = {a: w3.eth.get_balance(a) for a in clean_exits}
-        exits_usdt_after = (
-            {a: usdt.functions.balanceOf(a).call() for a in clean_exits}
-            if usdt is not None else {a: 0 for a in clean_exits}
-        )
-        clean_exit_records = [
-            {
+        # For each registered clean exit: report final ETH (minus the
+        # 0.05 gas seed so eth_received reflects only what the campaign
+        # actually delivered) and USDT received. Wallets were created
+        # fresh during the campaign so the only ETH they hold beyond gas
+        # dust is what the agent routed in.
+        from aml.attackers.tools import _DEFAULT_GAS_RESERVE_ETH  # local to avoid cycle
+        gas_seed_wei = int(_DEFAULT_GAS_RESERVE_ETH * 10**18)
+        clean_exit_records = []
+        for entry in clean_exit_entries:
+            addr = entry["address"]
+            eth_final_wei = w3.eth.get_balance(addr)
+            eth_received = max(0.0, (eth_final_wei - gas_seed_wei) / 10**18)
+            usdt_final = (
+                usdt.functions.balanceOf(addr).call()
+                if usdt is not None else 0
+            )
+            rec = {
                 "address": addr,
-                "eth_received": (
-                    exits_eth_after[addr] - exits_eth_before[addr]
-                ) / 10**18,
-                "usdt_received": (
-                    exits_usdt_after.get(addr, 0) - exits_usdt_before.get(addr, 0)
-                ) / 10**6,
+                "exchange_platform": entry["exchange_platform"],
+                "eth_received": eth_received,
+                "usdt_received": usdt_final / 10**6,
             }
-            for addr in clean_exits
-        ]
+            if "note" in entry:
+                rec["note"] = entry["note"]
+            clean_exit_records.append(rec)
 
         addresses = {
             "attacker_wallets": all_attacker_addrs,
             "bootstrap_attackers": bootstrap_attacker_addrs,
             "burners_generated_during_campaign": new_burner_addrs,
             "source_wallet": alice,
-            "clean_exit_wallets": clean_exits,   # all labeled exits, in order
+            "clean_exit_wallets": clean_exit_addrs,
             "clean_exits_funded": [
                 r["address"] for r in clean_exit_records
                 if r["eth_received"] > 0 or r["usdt_received"] > 0
@@ -245,13 +238,26 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
         total_to_exits_eth = sum(r["eth_received"] for r in clean_exit_records)
         total_to_exits_usdt = sum(r["usdt_received"] for r in clean_exit_records)
 
+        # Per-platform aggregation for the summary.
+        per_platform: dict[str, dict[str, float]] = {}
+        for r in clean_exit_records:
+            p = r["exchange_platform"]
+            slot = per_platform.setdefault(
+                p, {"count": 0, "funded": 0, "usdt": 0.0}
+            )
+            slot["count"] += 1
+            if r["usdt_received"] > 0 or r["eth_received"] > 0:
+                slot["funded"] += 1
+            slot["usdt"] += r["usdt_received"]
+
         summary_lines = [
             f"Run:         {run_name}",
             f"Scenario:    {scenario.name} — {scenario.description}",
             f"Stolen:      {amount} {scenario.asset.upper()}",
             f"Source:      {alice}",
-            f"Clean exits: {len(clean_exits)} labeled "
-            f"({funded_exit_count} actually received funds)",
+            f"Clean exits: {len(clean_exit_records)} created by agent "
+            f"({funded_exit_count} received funds) across "
+            f"{len(per_platform)} platforms",
             "",
             f"Result:      {'SUCCESS' if result.successful else 'INCOMPLETE'} "
             f"({result.stopped_reason})",
@@ -269,12 +275,20 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
         ]
         for d in result.delegations:
             summary_lines.append(f"  - {d['role']:12s} → {d['status']}")
+
+        summary_lines += ["", "Per platform:"]
+        for p, slot in sorted(per_platform.items()):
+            summary_lines.append(
+                f"  {p:12s} {int(slot['funded'])}/{int(slot['count'])} funded  "
+                f"{slot['usdt']:.2f} USDT total"
+            )
+
         summary_lines += ["", "Per clean exit:"]
         for r in clean_exit_records:
             funded = (r["eth_received"] > 0 or r["usdt_received"] > 0)
             marker = "✓" if funded else "·"
             summary_lines.append(
-                f"  {marker} {r['address']}  "
+                f"  {marker} {r['address']}  [{r['exchange_platform']}]  "
                 f"{r['eth_received']:.4f} ETH  {r['usdt_received']:.2f} USDT"
             )
         summary_lines += ["", f"Artifacts: {out_dir}"]
@@ -330,14 +344,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--max-tokens", type=int, default=2048,
         help="Max tokens per LLM completion (default: 2048).",
-    )
-    ap.add_argument(
-        "--num-clean-exits", type=int, default=None,
-        help=(
-            "Number of labeled clean exit wallets the agent can fan out "
-            "to (default: scenario.default_num_clean_exits). Real "
-            "launderers diversify off-ramps across many accounts."
-        ),
     )
     ap.add_argument(
         "--list-scenarios", action="store_true",

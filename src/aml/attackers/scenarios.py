@@ -27,26 +27,21 @@ class Scenario:
     default_amount: float           # amount in human units of `asset`
     needs_pool: bool                # Uniswap mock — for swaps + ETH/USD spot price
     needs_tornado: bool             # ZK mixer — for ETH-side layering via mixer
-    default_num_clean_exits: int    # how many labeled off-ramp destinations
-    user_prompt_template: str       # placeholders: {alice}, {clean_exits}, {amount}
+    user_prompt_template: str       # placeholders: {alice}, {amount}
 
-    def format_prompt(
-        self, *, alice: str, clean_exits: list[str], amount: float,
-    ) -> str:
+    def format_prompt(self, *, alice: str, amount: float) -> str:
         """Format the user prompt for a Coordinator run.
 
-        `clean_exits` is a list of labeled off-ramp destination addresses
-        the agent can fan out to. Real laundering doesn't funnel into a
-        single account; the agent picks a SUBSET of these and routes
-        varied amounts so detection has to do actor-level clustering to
-        recover the campaign — which is the locked-scope novelty claim.
+        Clean exits are NOT pre-allocated — the Integration sub-agent
+        creates them dynamically via register_clean_exit based on the
+        campaign's total laundering value and the per-exit sub-$999 cap.
+        This mirrors real laundering: an analyst seizes whichever mule
+        accounts the campaign happened to use, not a known list, and the
+        attacker's choice of how many to create + how to spread them
+        across platforms IS part of the adversarial behaviour being
+        evaluated.
         """
-        if not clean_exits:
-            raise ValueError("clean_exits must contain at least one address")
-        clean_exits_block = "\n".join(f"  - {addr}" for addr in clean_exits)
-        return self.user_prompt_template.format(
-            alice=alice, clean_exits=clean_exits_block, amount=amount,
-        )
+        return self.user_prompt_template.format(alice=alice, amount=amount)
 
 
 DEFI_EXPLOIT = Scenario(
@@ -54,50 +49,56 @@ DEFI_EXPLOIT = Scenario(
     description=(
         "DeFi-exploit-style ETH theft. Stolen ETH spread into mixer-sized "
         "working wallets → ZK Tornado mixer cycles → consolidated and "
-        "swapped to USDT → sub-$999 structuring → fan-out to multiple "
-        "labeled clean exit wallets."
+        "swapped to USDT → sub-$999 structuring → fan-out to clean exit "
+        "wallets the attacker creates dynamically across multiple exchange "
+        "platforms (count and platform mix decided by the Coordinator "
+        "based on the laundered value)."
     ),
     asset="eth",
     default_amount=3.0,
     needs_pool=True,
     needs_tornado=True,
-    default_num_clean_exits=4,
     user_prompt_template=(
         "DeFi-exploit-style ETH laundering campaign. The 'stolen' funds "
         "are {amount} ETH currently held by wallet {alice}. Run all three "
         "FATF phases:\n"
         "\n"
-        "PLACEMENT — using transfer_eth (NOT smurf_eth_split), spread the "
-        "{amount} ETH from {alice} into exactly 3 fresh burner wallets of "
-        "~1 ETH each. These are sized to feed the ZK mixer (1 ETH fixed "
-        "denomination). Keep alice with enough ETH for gas.\n"
+        "PLACEMENT — break the {amount} ETH from {alice} into mixer-sized "
+        "working wallets (~1 ETH each, since the ZK mixer is 1-ETH fixed "
+        "denomination). Use transfer_eth (NOT smurf_eth_split) and keep "
+        "alice with enough ETH for gas.\n"
         "\n"
-        "LAYERING — the deployed simulator includes a ZK Tornado mixer "
-        "(1 ETH per deposit). For each of the 3 placement wallets, "
-        "mixer_deposit 1 ETH from it (save the deposit_note!), then "
-        "mixer_withdraw to a fresh burner wallet using that note. For each "
-        "mixer_withdraw pass `gas_payer` set to yet another fresh "
-        "unrelated wallet to maximise unlinkability. This produces 3 "
-        "'layered-clean' recipient wallets each holding 1 ETH.\n"
+        "LAYERING — run the working wallets through the ZK Tornado mixer "
+        "to sever the on-chain link with the stolen source. For each "
+        "deposit, mixer_withdraw to a fresh recipient using a third "
+        "unrelated wallet as gas_payer to maximise unlinkability. "
+        "Structure the layering as three parallel routes (new burners, "
+        "recycled burners, mixer with disordered timing) — the Layering "
+        "specialist's system prompt has the full playbook.\n"
         "\n"
         "INTEGRATION — the campaign's PRIMARY DELIVERABLE is laundered "
-        "value landing at the clean exit wallets below (the labeled "
-        "off-ramp destinations — different exchanges, different KYC'd "
-        "identities in real life):\n"
-        "{clean_exits}\n"
+        "USDT landing at clean exit wallets that DO NOT EXIST YET. The "
+        "Integration specialist creates them on demand via "
+        "register_clean_exit, one wallet per intended off-ramp account. "
+        "YOU (Coordinator) decide:\n"
+        "  - HOW MANY exits to create. Heuristic: ceil(total_USDT / 999) "
+        "× 1.5–3 (so every exit can stay strictly under the CTR threshold "
+        "with headroom).\n"
+        "  - WHICH platforms to spread them across. Pick 2–5 real exchange "
+        "brands from Binance, Coinbase, Kraken, OKX, Kucoin, Bitfinex, "
+        "Gate, etc. Non-uniform per-platform count: some platforms host "
+        "multiple exits, others just one. Some registered exits may "
+        "receive nothing at all (deliberate noise).\n"
+        "  - WHICH AMOUNTS go to each exit, all strictly < $999.\n"
+        "Brief the Integration specialist with explicit numbers (e.g. "
+        "'register 8 clean exits: 3 Binance, 2 Coinbase, 2 Kraken, 1 OKX; "
+        "fund 6 of them with amounts in [$120, $850] each, leave 2 empty "
+        "as distractors').\n"
         "\n"
-        "Consolidate the 3 layered recipient wallets' ETH into a working "
-        "wallet via transfer_eth. Swap ~1.5 ETH for USDT via "
-        "swap_eth_for_usdt. Distribute the USDT across 5-8 fresh "
-        "structuring burners with each transfer strictly under $999 "
-        "(CTR-evasion). From those structuring burners, ROUTE PORTIONS "
-        "to several of the clean exit wallets above — realistic "
-        "laundering FANS OUT across multiple off-ramp accounts (different "
-        "exchanges, different identities), so use 2-4 different clean "
-        "exits with varied amounts. Do NOT funnel everything into one "
-        "exit. Verify with get_balance that AT LEAST 2 clean exits "
-        "received non-zero USDT before reporting — the clean exits "
-        "getting funded IS the success criterion.\n"
+        "Consolidate the layered ETH, swap ~most-of-it for USDT via "
+        "swap_eth_for_usdt, structure the USDT across burners under cap, "
+        "then route to the registered clean exits per your distribution "
+        "plan.\n"
         "\n"
         "When all three phases have reported, summarise and stop."
     ),
