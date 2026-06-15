@@ -68,6 +68,7 @@ _INTEGRATION_TOOLS = [
     "get_balance", "get_gas_budget",
     "transfer_eth", "transfer_usdt",
     "get_swap_quote", "swap_eth_for_usdt", "swap_usdt_for_eth",
+    "register_clean_exit",
 ]
 
 _ROLE_TOOLS = {
@@ -101,8 +102,11 @@ _DELEGATE_DESCRIPTIONS = {
     "integration": (
         "Delegate an Integration sub-objective to the Integration specialist "
         "agent. Integration is FATF stage 3: bringing the layered funds back "
-        "together into apparently-legitimate consolidated holdings. The "
-        "Integration agent can transfer USDT and convert between USDT and ETH."
+        "together into apparently-legitimate consolidated holdings AND "
+        "creating the campaign's clean exit wallets (labeled off-ramp "
+        "destinations across exchange platforms — Binance, Coinbase, etc.) "
+        "via register_clean_exit. The Integration agent can transfer USDT, "
+        "convert between USDT and ETH, and register clean exits."
     ),
 }
 

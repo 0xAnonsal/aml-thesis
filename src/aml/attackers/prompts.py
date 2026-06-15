@@ -136,6 +136,28 @@ randomise amounts, mix transaction kinds, prefer the mixer for ETH ≥1. \
 Each sub-agent only sees what you put in their delegation; if you don't \
 tell them to vary, they may produce uniform patterns that get flagged.
 
+CLEAN EXIT PLANNING — the campaign's clean exit wallets (the labeled \
+off-ramp destinations where laundered USDT lands) are NOT pre-allocated. \
+The Integration specialist creates them on demand via `register_clean_exit`. \
+You are responsible for telling Integration HOW MANY exits to create and \
+across WHICH platforms in its `objective`/`context` strings. Pick numbers \
+that fit the realistic scale of the campaign:
+
+  - Minimum exits = ceil(total_USDT_to_launder / 999), so every exit can \
+stay strictly under the $999 CTR threshold.
+  - Realistic exit count = ~1.5–3× the minimum, so there's headroom and \
+the structuring doesn't look forced.
+  - Platform spread = 2–5 real exchange brands (Binance, Coinbase, Kraken, \
+OKX, Kucoin, Bitfinex, Gate, etc. — pick a varied subset per campaign). \
+SOME platforms should host multiple exits (a real mule operates many \
+accounts at one exchange), OTHERS just one. Some platforms in your chosen \
+subset may receive nothing — drop a couple deliberately so the off-ramp \
+isn't a uniform 1-account-per-platform fan-out.
+
+Tell Integration this plan numerically (e.g. "register 12 clean exits: 4 \
+on Binance, 3 on Coinbase, 2 on Kraken, 2 on OKX, 1 on Kucoin"). Integration \
+will call register_clean_exit for each, then route USDT to them under cap.
+
 When the campaign is complete, stop and give a final summary of what was \
 accomplished across the phases. Do not call any tool in that final turn."""
 
@@ -269,6 +291,14 @@ wallets.
   - get_swap_quote / swap_eth_for_usdt / swap_usdt_for_eth — Uniswap-style \
 swaps for converting the consolidated holdings to the final off-ramp asset \
 (usually USDT, since stable off-ramps are easier).
+  - register_clean_exit — create a fresh wallet AND label it as an intended \
+clean exit on a named exchange platform (Binance, Coinbase, Kraken, OKX, \
+Kucoin, Bitfinex, Gate, etc.). Use this for EVERY clean exit wallet the \
+campaign will land funds on — these are the labeled off-ramp destinations \
+that the detector training pipeline scores against. The Coordinator's \
+objective will tell you how many to create and across which platforms; if \
+the objective is vague, use the heuristic: ceil(total_USDT / 999) × 1.5–3, \
+spread across 2–5 real platforms with non-uniform per-platform counts.
 
 {_GAS_DISCIPLINE}
 
@@ -276,19 +306,27 @@ swaps for converting the consolidated holdings to the final off-ramp asset \
 
 Integration-specific evasion + HARD CONSTRAINTS:
 
+  HARD CONSTRAINT — create the exits first. The clean exit wallets are \
+NOT given to you in advance. Before you can route to them, you must \
+register them via register_clean_exit. The Coordinator's objective tells \
+you how many to create and on which platforms — read it carefully. If the \
+objective says "register 12 clean exits: 4 Binance, 3 Coinbase, 2 Kraken, \
+2 OKX, 1 Kucoin", make exactly 12 register_clean_exit calls with the \
+matching platform names. If the objective is silent, default to \
+ceil(total_USDT / 999) × ~2 exits spread across 3–5 platforms.
+
   HARD CONSTRAINT — sub-threshold ceiling. Every clean exit wallet MUST \
 end the campaign with STRICTLY LESS than $999 USD-equivalent in USDT. \
 This is the US CTR threshold. If a single transfer would push an exit \
 over, split it into multiple smaller transfers across different blocks. \
 Check get_balance on each exit BEFORE sending more to it.
 
-  HARD CONSTRAINT — randomised distribution across platforms. The clean \
-exits in your context are labeled with their exchange/platform. \
-Distribute the funds so that SOME platforms receive funds at multiple \
-exit wallets (multi-exit on the same exchange) and OTHERS receive funds \
-at only one exit, AND some labeled exits may receive nothing at all. \
-The choice of which platforms get clustered vs. single-exit should be \
-RANDOMISED per campaign — do NOT use a fixed pattern.
+  HARD CONSTRAINT — randomised distribution across platforms. After \
+registering, distribute the funds so that SOME platforms receive funds \
+at multiple exit wallets (multi-exit on the same exchange) and OTHERS \
+receive funds at only one exit, AND some registered exits may receive \
+nothing at all. The choice of which platforms get clustered vs. single-\
+exit should be RANDOMISED per campaign — do NOT use a fixed pattern.
 
   SOFT TACTICS — vary per-exit USDT amounts (don't send identical \
 chunks), vary the number of hops between consolidation and each exit \

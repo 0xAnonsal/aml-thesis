@@ -33,41 +33,34 @@ def test_every_scenario_has_required_fields():
         assert len(s.description) > 20
         assert isinstance(s.needs_pool, bool)
         assert isinstance(s.needs_tornado, bool)
-        assert s.default_num_clean_exits >= 1
+        # Exits are dynamic now (created by the Integration sub-agent via
+        # register_clean_exit), so the scenario only needs alice + amount
+        # placeholders. No more {clean_exits} block.
         assert "{alice}" in s.user_prompt_template
-        assert "{clean_exits}" in s.user_prompt_template
         assert "{amount}" in s.user_prompt_template
+        assert "{clean_exits}" not in s.user_prompt_template
 
 
-def test_defi_exploit_prompt_formats_with_multiple_exits():
-    """Format with a list of exits — each address should appear in the prompt."""
-    exits = [
-        "0x" + "2" * 40,
-        "0x" + "3" * 40,
-        "0x" + "4" * 40,
-        "0x" + "5" * 40,
-    ]
-    formatted = DEFI_EXPLOIT.format_prompt(
-        alice="0x" + "1" * 40, clean_exits=exits, amount=3.0,
-    )
+def test_defi_exploit_prompt_formats_with_alice_and_amount():
+    """Format produces a clean prompt with no leftover placeholders."""
+    formatted = DEFI_EXPLOIT.format_prompt(alice="0x" + "1" * 40, amount=3.0)
     assert "0x1111111111111111111111111111111111111111" in formatted
-    for exit_addr in exits:
-        assert exit_addr in formatted, f"exit {exit_addr} missing from prompt"
     assert "3.0 ETH" in formatted
     # No unfilled placeholders left over
     assert "{alice}" not in formatted
     assert "{clean_exits}" not in formatted
     assert "{amount}" not in formatted
-    # Prompt explicitly tells the agent to FAN OUT, not funnel
-    assert "fan" in formatted.lower() or "spread" in formatted.lower()
+    # Prompt instructs the Coordinator to decide exit count + platforms
+    assert "register_clean_exit" in formatted
+    assert "Binance" in formatted or "Coinbase" in formatted
 
 
-def test_defi_exploit_prompt_rejects_empty_exit_list():
-    """An empty clean_exits list is a programming error — fail loudly."""
-    with pytest.raises(ValueError, match="clean_exits"):
-        DEFI_EXPLOIT.format_prompt(
-            alice="0x" + "1" * 40, clean_exits=[], amount=3.0,
-        )
+def test_defi_exploit_prompt_tells_coordinator_to_decide_exit_count():
+    """The dynamic-exits change requires the prompt to explain the heuristic."""
+    formatted = DEFI_EXPLOIT.format_prompt(alice="0x" + "1" * 40, amount=3.0)
+    # Heuristic mentions the CTR-cap-driven minimum AND platform spread
+    assert "999" in formatted
+    assert "platform" in formatted.lower()
 
 
 def test_defi_exploit_scenario_needs_mixer_and_pool():
@@ -117,7 +110,9 @@ def test_arg_parser_defaults_make_sense():
     assert args.max_tokens == 2048
     assert args.amount is None   # falls back to scenario.default_amount
     assert args.seed is None     # falls back to random
-    assert args.num_clean_exits is None   # falls back to scenario default
+    # --num-clean-exits removed: exits are now dynamic, created by the
+    # Integration sub-agent via register_clean_exit at runtime.
+    assert not hasattr(args, "num_clean_exits")
     assert args.list_scenarios is False
 
 
