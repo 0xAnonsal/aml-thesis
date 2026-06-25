@@ -174,9 +174,47 @@ class MultiAgentDetector(Detector):
                 else:
                     all_features[addr] = X[i].astype(np.float64)
 
-        self.actor_clusters = cluster_by_similarity(
-            all_features, threshold=self.similarity_threshold,
+        # Restrict clustering to addresses the binary classifier
+        # predicts as POSITIVE. Rationale: benign users share generic
+        # transaction-shape features (transfers + swaps + low degree)
+        # which, under cosine-similarity + connected-components
+        # clustering, collapse all of them into a single giant
+        # component. That over-clustering wrecks ARI on the actor
+        # task because the truth is "N benign singletons + a small
+        # number of attacker actors each with several wallets". By
+        # only clustering predicted-positives, the similarity graph
+        # is restricted to the wallets we actually want to group into
+        # actor identities. Benigns (and false-negative attackers)
+        # get singleton actor ids — which is the correct structure
+        # for benigns and a downstream cost of the binary classifier
+        # missing a positive for false negatives.
+        all_addrs = sorted(all_features.keys())
+        binary_preds = self._binary.predict(all_addrs) if all_addrs else []
+        positive_features = {
+            addr: all_features[addr]
+            for addr, pred in zip(all_addrs, binary_preds)
+            if pred == 1
+        }
+
+        clusters_on_positives = cluster_by_similarity(
+            positive_features, threshold=self.similarity_threshold,
         )
+
+        # Compose final actor_clusters: positives get their cluster id
+        # from cosine-similarity grouping; negatives get a fresh
+        # singleton id each. Preserves the truth-compatible
+        # "one-actor-per-benign-user" structure.
+        next_singleton_id = (
+            max(clusters_on_positives.values()) + 1
+            if clusters_on_positives else 0
+        )
+        final_clusters: dict[str, int] = dict(clusters_on_positives)
+        for addr in all_addrs:
+            if addr not in final_clusters:
+                final_clusters[addr] = next_singleton_id
+                next_singleton_id += 1
+
+        self.actor_clusters = final_clusters
         return self
 
     # Detector ABC interface — same behaviour as PerExchangeDetector.
