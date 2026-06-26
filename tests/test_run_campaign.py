@@ -15,7 +15,9 @@ import pytest
 
 from aml.attackers import scenarios as scen_mod
 from aml.attackers.run_campaign import build_arg_parser, main
-from aml.attackers.scenarios import DEFI_EXPLOIT, SCENARIOS, Scenario
+from aml.attackers.scenarios import (
+    DEFI_EXPLOIT, RANSOMWARE_CASHOUT, SCENARIOS, STABLECOIN_SCAM, Scenario,
+)
 from aml.chains.trace import decode_event, jsonable
 
 
@@ -68,6 +70,53 @@ def test_defi_exploit_scenario_needs_mixer_and_pool():
     assert DEFI_EXPLOIT.needs_tornado is True
     assert DEFI_EXPLOIT.needs_pool is True
     assert DEFI_EXPLOIT.asset == "eth"
+
+
+def test_stablecoin_scam_scenario_has_no_mixer():
+    """Stablecoin-scam is USDT-only — no Tornado deployed."""
+    assert STABLECOIN_SCAM.asset == "usdt"
+    assert STABLECOIN_SCAM.needs_tornado is False
+    # Pool stays available so the agent can asset-cycle if it chooses
+    assert STABLECOIN_SCAM.needs_pool is True
+    assert STABLECOIN_SCAM.default_amount > 999  # must exceed CTR cap
+
+
+def test_stablecoin_scam_prompt_mentions_no_mixer():
+    """Prompt must instruct the agent to fall back without mixer."""
+    formatted = STABLECOIN_SCAM.format_prompt(
+        alice="0x" + "1" * 40, amount=8000.0,
+    )
+    assert "no" in formatted.lower() and "mixer" in formatted.lower()
+    assert "register_clean_exit" in formatted
+    assert "999" in formatted
+    assert "smurf" in formatted.lower() or "structur" in formatted.lower()
+
+
+def test_ransomware_cashout_scenario_is_eth_heavy_mixer():
+    """Ransomware scenario uses the mixer heavily; larger amount than defi-exploit."""
+    assert RANSOMWARE_CASHOUT.asset == "eth"
+    assert RANSOMWARE_CASHOUT.needs_tornado is True
+    assert RANSOMWARE_CASHOUT.needs_pool is True
+    # Larger scale than defi-exploit drives more mixer cycles / exits
+    assert RANSOMWARE_CASHOUT.default_amount > DEFI_EXPLOIT.default_amount
+
+
+def test_ransomware_cashout_prompt_emphasises_mixer():
+    """Prompt must highlight heavy mixer use as the defining tactic."""
+    formatted = RANSOMWARE_CASHOUT.format_prompt(
+        alice="0x" + "1" * 40, amount=5.0,
+    )
+    assert "mixer" in formatted.lower()
+    assert "register_clean_exit" in formatted
+    assert "999" in formatted
+    assert "ransom" in formatted.lower()
+
+
+def test_three_scenarios_registered():
+    """SCENARIOS dict has all three FATF typologies."""
+    assert set(SCENARIOS.keys()) == {
+        "defi-exploit", "stablecoin-scam", "ransomware-cashout",
+    }
 
 
 # --- CLI args parsing ---
