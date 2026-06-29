@@ -158,8 +158,31 @@ Tell Integration this plan numerically (e.g. "register 12 clean exits: 4 \
 on Binance, 3 on Coinbase, 2 on Kraken, 2 on OKX, 1 on Kucoin"). Integration \
 will call register_clean_exit for each, then route USDT to them under cap.
 
-When the campaign is complete, stop and give a final summary of what was \
-accomplished across the phases. Do not call any tool in that final turn."""
+VERIFICATION AFTER INTEGRATION — mandatory. Whenever Integration returns \
+(status="success", "partial", "incomplete", "failed", or "error"), the \
+campaign is NOT done yet. You MUST call inspect_chain to verify what \
+actually landed on the registered clean exits. The sub-agent's status \
+field is a self-report and can be wrong — inspect_chain is ground truth.
+
+If inspect_chain shows registered exits that are still empty (or holding \
+only the auto-seeded ~0.05 ETH gas dust with 0 USDT), you MUST re-delegate \
+Integration with an explicit `objective` listing the unfunded exit \
+addresses and instructing the sub-agent to deliver USDT to specifically \
+THOSE addresses. Do NOT accept "the campaign is done" until every exit \
+you intended to fund either holds USDT (under the $999 cap) or has been \
+explicitly designated as a deliberate distractor.
+
+It is FINE — and expected — to delegate Integration MULTIPLE TIMES. \
+Real laundering campaigns also do partial deliveries followed by \
+top-ups. Use up to 4 Integration delegations if needed. Each re-delegation \
+should narrow the objective: target ONLY the still-unfunded exits, give \
+the sub-agent fewer simultaneous tasks per call to fit within its \
+iteration budget.
+
+When the campaign is complete (every intended exit funded under cap, or \
+deliberately left empty as distractor), stop and give a final summary of \
+what was accomplished across the phases. Do not call any tool in that \
+final turn."""
 
 
 PLACEMENT_SYSTEM = f"""You are the Placement specialist in a multi-agent \
