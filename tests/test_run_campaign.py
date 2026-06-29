@@ -154,9 +154,14 @@ def test_arg_parser_defaults_make_sense():
     assert args.scenario == "defi-exploit"
     assert args.model == "haiku"
     assert args.out == "runs"
-    assert args.max_iterations == 12
-    assert args.sub_agent_max_iterations == 20
-    assert args.max_tokens == 2048
+    # Defaults bumped in PR #49 to fit the new three-scenario workload.
+    # The earlier 12 / 20 / 2048 caps were tuned for the original 4-fixed-
+    # exits defi-exploit run and routinely produced stop=max_iterations
+    # or stop=max_tokens on the larger stablecoin-scam and ransomware-
+    # cashout scenarios. See PR #49 commit message for empirical data.
+    assert args.max_iterations == 15
+    assert args.sub_agent_max_iterations == 40
+    assert args.max_tokens == 4096
     assert args.amount is None   # falls back to scenario.default_amount
     assert args.seed is None     # falls back to random
     # --num-clean-exits removed: exits are now dynamic, created by the

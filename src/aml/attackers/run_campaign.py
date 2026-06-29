@@ -334,16 +334,37 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Output directory; each run gets a timestamped subdirectory (default: runs/).",
     )
     ap.add_argument(
-        "--max-iterations", type=int, default=12,
-        help="Coordinator delegate-loop cap (default: 12).",
+        "--max-iterations", type=int, default=15,
+        help=(
+            "Coordinator delegate-loop cap (default: 15). Bumped from "
+            "12 in PR #49: with dynamic clean exits and three FATF "
+            "scenarios at varying scale, the Coordinator legitimately "
+            "needs more delegations (especially when verifying with "
+            "inspect_chain and re-delegating Integration for unfunded "
+            "exits)."
+        ),
     )
     ap.add_argument(
-        "--sub-agent-max-iterations", type=int, default=20,
-        help="Per sub-agent tool-loop cap (default: 20).",
+        "--sub-agent-max-iterations", type=int, default=40,
+        help=(
+            "Per sub-agent tool-loop cap (default: 40). Bumped from "
+            "20 in PR #49: stablecoin-scam (8000 USDT) and ransomware-"
+            "cashout (5 ETH) need Integration to do "
+            "register_clean_exit + transfer_usdt + get_balance for "
+            "15-25 exits, which exceeds the old cap. 40 covers all "
+            "current scenarios with margin; bump further per --flag "
+            "for very large amounts."
+        ),
     )
     ap.add_argument(
-        "--max-tokens", type=int, default=2048,
-        help="Max tokens per LLM completion (default: 2048).",
+        "--max-tokens", type=int, default=4096,
+        help=(
+            "Max tokens per LLM completion (default: 4096). Bumped "
+            "from 2048 in PR #49: the Coordinator's per-turn response "
+            "with trifurcated Layering + dynamic exit planning + "
+            "inspect_chain audit reads regularly exceeded the old cap, "
+            "producing premature stop=max_tokens."
+        ),
     )
     ap.add_argument(
         "--list-scenarios", action="store_true",
