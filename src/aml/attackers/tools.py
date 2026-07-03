@@ -249,6 +249,100 @@ _TOOL_SCHEMAS: list[dict] = [
         },
     },
     {
+        "name": "peel_chain",
+        "description": (
+            "Execute a PEEL CHAIN — the most common crypto laundering "
+            "technique, appearing in ~70% of real cryptocurrency theft "
+            "cases (Merkle Science, TRM Labs). At each of N hops, a small "
+            "percentage of the funds is 'peeled off' to a fresh burner "
+            "wallet (which sits as a dormant sink) while the bulk continues "
+            "to the next hop in the chain. This produces a long linear "
+            "topology that is fundamentally different from mixer cycles or "
+            "trifurcated fan-outs, and is what real-world analysts see most "
+            "often in Bitcoin and Ethereum theft cases (e.g. Lazarus Group, "
+            "HTX Bridge exploit). Works for either ETH or USDT. Returns "
+            "the list of hop addresses, the list of peel-off addresses, and "
+            "the amount remaining at the tail of the chain."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "from_address": {
+                    "type": "string",
+                    "description": (
+                        "Starting wallet (must be in dispatcher registry). "
+                        "Holds the initial amount at the head of the chain."
+                    ),
+                },
+                "asset": {
+                    "type": "string",
+                    "enum": ["ETH", "USDT"],
+                    "description": "Asset flowing through the peel chain.",
+                },
+                "initial_amount": {
+                    "type": "number",
+                    "description": (
+                        "Amount of `asset` at the head of the chain, in "
+                        "human units (ETH or USDT). Sender must hold this "
+                        "amount. Real-case examples: 400 ETH (Lazarus/"
+                        "Bybit), ~$100M (HTX Bridge)."
+                    ),
+                },
+                "num_hops": {
+                    "type": "integer",
+                    "description": (
+                        "Number of hops in the chain (default 15, typical "
+                        "real-case range 10-30). Longer chains obscure "
+                        "the trail more but cost more gas."
+                    ),
+                    "default": 15,
+                },
+                "peel_pct": {
+                    "type": "number",
+                    "description": (
+                        "Percentage peeled off at each hop, in [0.01, 0.20]. "
+                        "Default 0.07 (7%). Lower percentages preserve more "
+                        "value at the tail but leak less traceable structure."
+                    ),
+                    "default": 0.07,
+                },
+            },
+            "required": ["from_address", "asset", "initial_amount"],
+        },
+    },
+    {
+        "name": "advance_blocks",
+        "description": (
+            "Advance the local blockchain by N blocks — used to simulate "
+            "TIMING DELAYS between laundering phases. Real-world crypto "
+            "laundering commonly involves waits of days to months between "
+            "operations (e.g. Lazarus/Bybit waited weeks before the first "
+            "Tornado Cash deposit; HTX/HECO Bridge attacker waited 4 "
+            "months). Delays are what differentiate a hit-and-run from "
+            "sophisticated APT operations. Anvil mines N empty blocks "
+            "instantly, so no real time passes but the on-chain distance "
+            "between events becomes distinctive in the transaction graph. "
+            "1 Ethereum block ≈ 12 seconds, so 5,000 blocks ≈ 16 hours, "
+            "50,400 blocks ≈ 7 days, 218,400 blocks ≈ 30 days."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "num_blocks": {
+                    "type": "integer",
+                    "description": (
+                        "How many blocks to advance. Typical values: "
+                        "5000-20000 (short delay, hours to a day), "
+                        "50000-100000 (medium delay, ~1-2 weeks), "
+                        "200000-500000 (long delay, 1-3 months). Range "
+                        "[100, 1000000] enforced."
+                    ),
+                },
+            },
+            "required": ["num_blocks"],
+        },
+    },
+    {
         "name": "mint_usdt",
         "description": (
             "Permissionlessly mint USDT to an address. MockUSDT has a "
@@ -823,6 +917,10 @@ class ToolDispatcher:
             return self._mixer_deposit(**tool_input)
         if tool_name == "mixer_withdraw":
             return self._mixer_withdraw(**tool_input)
+        if tool_name == "peel_chain":
+            return self._peel_chain(**tool_input)
+        if tool_name == "advance_blocks":
+            return self._advance_blocks(**tool_input)
         if tool_name == "inspect_chain":
             return self._inspect_chain(**tool_input)
         return ToolResult(error=f"Unknown tool: {tool_name}")
@@ -1004,6 +1102,161 @@ class ToolDispatcher:
         if receipt.status != 1:
             raise RuntimeError(f"gas seed tx reverted (tx_hash={tx_hash.hex()})")
         return tx_hash.hex()
+
+    def _peel_chain(
+        self, from_address: str, asset: str, initial_amount: float,
+        num_hops: int = 15, peel_pct: float = 0.07,
+    ) -> ToolResult:
+        """Execute a peel chain — canonical laundering technique.
+
+        At each of `num_hops` steps, generates two fresh burner wallets:
+        one 'sink' that receives `peel_pct` of current amount (dormant
+        peeled-off value), and one 'continuation' that receives the rest
+        and becomes the sender for the next hop.
+        """
+        # Validation
+        if asset not in ("ETH", "USDT"):
+            return ToolResult(error=f"asset must be 'ETH' or 'USDT', got {asset!r}")
+        if num_hops < 1 or num_hops > 100:
+            return ToolResult(error=f"num_hops must be in [1, 100], got {num_hops}")
+        if peel_pct < 0.01 or peel_pct > 0.20:
+            return ToolResult(error=f"peel_pct must be in [0.01, 0.20], got {peel_pct}")
+        try:
+            from_address = Web3.to_checksum_address(from_address)
+        except ValueError:
+            return ToolResult(error=f"Invalid from_address: {from_address}")
+        if from_address not in self.wallets:
+            return ToolResult(error=f"from_address {from_address} not in wallet registry")
+
+        # Verify sender has the initial amount
+        if asset == "ETH":
+            sender_balance = self.w3.eth.get_balance(from_address) / 10**18
+        else:  # USDT
+            if self.usdt is None:
+                return ToolResult(error="USDT contract not set on dispatcher")
+            sender_balance = self.usdt.functions.balanceOf(from_address).call() / 10**6
+        if sender_balance < initial_amount:
+            return ToolResult(error=(
+                f"insufficient {asset}: sender has {sender_balance:.6f}, "
+                f"needs {initial_amount:.6f}"
+            ))
+
+        # Execute the chain
+        hops: list[str] = []            # continuation wallets (main flow)
+        peels: list[dict] = []          # peel-off wallets + amounts
+        current_sender = from_address
+        current_amount = initial_amount
+
+        for hop_index in range(num_hops):
+            # Generate two fresh burners for this hop
+            cont_acct = Account.create()
+            cont_addr = cont_acct.address
+            self.wallets[cont_addr] = cont_acct.key.hex()
+            peel_acct = Account.create()
+            peel_addr = peel_acct.address
+            self.wallets[peel_addr] = peel_acct.key.hex()
+
+            # Seed both with gas dust (best-effort; a failure here just
+            # means the burner cannot pay gas onward — for peel-sinks
+            # that is acceptable since they are dormant by design).
+            try:
+                self._seed_gas(cont_addr, _DEFAULT_GAS_RESERVE_ETH)
+            except Exception:   # noqa: BLE001
+                pass
+            try:
+                self._seed_gas(peel_addr, _DEFAULT_GAS_RESERVE_ETH)
+            except Exception:   # noqa: BLE001
+                pass
+
+            peel_amount = current_amount * peel_pct
+            cont_amount = current_amount - peel_amount
+
+            # Send peel-off + continuation. Both fail-fast on error.
+            if asset == "ETH":
+                # Need sender to have enough ETH minus gas reserve.
+                # Simplified: skip gas-reserve check per-tx here; if the
+                # sender doesn't have enough for continuation the tx
+                # will just revert and we'll surface the error.
+                sender_key = self.wallets[current_sender]
+                for target_addr, amt in ((peel_addr, peel_amount), (cont_addr, cont_amount)):
+                    tx = {
+                        "from": current_sender,
+                        "to": target_addr,
+                        "value": int(amt * 10**18),
+                        "nonce": self.w3.eth.get_transaction_count(current_sender),
+                        "gas": _ETH_TRANSFER_GAS,
+                        "gasPrice": self.w3.eth.gas_price,
+                        "chainId": self.w3.eth.chain_id,
+                    }
+                    signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
+                    tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
+                    receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+                    if receipt.status != 1:
+                        return ToolResult(error=(
+                            f"peel chain hop {hop_index} reverted (tx {tx_hash.hex()})"
+                        ))
+            else:  # USDT
+                sender_key = self.wallets[current_sender]
+                for target_addr, amt in ((peel_addr, peel_amount), (cont_addr, cont_amount)):
+                    base = int(amt * 10**6)
+                    tx = self.usdt.functions.transfer(target_addr, base).build_transaction({
+                        "from": current_sender,
+                        "nonce": self.w3.eth.get_transaction_count(current_sender),
+                        "gas": 100_000,
+                        "gasPrice": self.w3.eth.gas_price,
+                        "chainId": self.w3.eth.chain_id,
+                    })
+                    signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
+                    tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
+                    receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+                    if receipt.status != 1:
+                        return ToolResult(error=(
+                            f"peel chain hop {hop_index} USDT transfer reverted "
+                            f"(tx {tx_hash.hex()})"
+                        ))
+
+            hops.append(cont_addr)
+            peels.append({"address": peel_addr, "amount": round(peel_amount, 6)})
+            current_sender = cont_addr
+            current_amount = cont_amount
+
+        return ToolResult(output={
+            "asset": asset,
+            "initial_amount": initial_amount,
+            "num_hops": num_hops,
+            "peel_pct": peel_pct,
+            "tail_wallet": current_sender,
+            "tail_amount": round(current_amount, 6),
+            "hop_wallets": hops,
+            "peel_wallets": peels,
+            "total_peeled": round(sum(p["amount"] for p in peels), 6),
+        })
+
+    def _advance_blocks(self, num_blocks: int) -> ToolResult:
+        """Advance the local chain by N blocks (anvil_mine RPC).
+
+        Simulates timing delays between laundering phases without
+        requiring real wall-clock time. On Ethereum mainnet 1 block ≈
+        12 seconds, so this becomes distinctive on-chain distance
+        between attacker events in the extracted graph.
+        """
+        if num_blocks < 100 or num_blocks > 1_000_000:
+            return ToolResult(error=(
+                f"num_blocks must be in [100, 1000000], got {num_blocks}"
+            ))
+        block_before = self.w3.eth.block_number
+        try:
+            self.w3.provider.make_request("anvil_mine", [hex(num_blocks)])
+        except Exception as e:   # noqa: BLE001
+            return ToolResult(error=f"anvil_mine RPC failed: {e}")
+        block_after = self.w3.eth.block_number
+        return ToolResult(output={
+            "block_before": block_before,
+            "block_after": block_after,
+            "blocks_advanced": block_after - block_before,
+            "approx_ethereum_seconds": (block_after - block_before) * 12,
+            "approx_ethereum_days": round((block_after - block_before) * 12 / 86400, 2),
+        })
 
     def _mint_usdt(self, to_address: str, amount_usdt: float) -> ToolResult:
         if self.usdt is None:

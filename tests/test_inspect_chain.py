@@ -59,7 +59,14 @@ def test_inspect_chain_schema_has_optional_args_only():
 
 
 def test_coordinator_full_tool_surface_includes_inspect_chain():
-    """The Coordinator's coordinator_tool_definitions = 3 delegate + inspect_chain."""
+    """Coordinator's tool surface = 3 delegate + read-only chain tools.
+
+    As of PR #52 the Coordinator has two chain tools it can call directly:
+    inspect_chain (verification of what actually landed on-chain) and
+    advance_blocks (simulate timing delays between phases, reproducing
+    real APT patterns like Lazarus's multi-week wait after the Bybit hack
+    or the HTX/HECO Bridge attacker's 4-month dormancy).
+    """
     dispatcher = ToolDispatcher(w3=Web3(), usdt_contract=None, wallets={})
     coordinator = Coordinator(LLMClient(api_key="dummy"), dispatcher)
     names = {t["name"] for t in coordinator.coordinator_tool_definitions}
@@ -68,6 +75,7 @@ def test_coordinator_full_tool_surface_includes_inspect_chain():
         "delegate_to_layering",
         "delegate_to_integration",
         "inspect_chain",
+        "advance_blocks",
     }
 
 

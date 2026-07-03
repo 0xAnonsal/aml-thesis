@@ -158,6 +158,22 @@ Tell Integration this plan numerically (e.g. "register 12 clean exits: 4 \
 on Binance, 3 on Coinbase, 2 on Kraken, 2 on OKX, 1 on Kucoin"). Integration \
 will call register_clean_exit for each, then route USDT to them under cap.
 
+TIMING DELAYS — real APT laundering operations (Lazarus, HTX Bridge) \
+wait days to months between phases. Lazarus Group waited multiple weeks \
+before the first Tornado Cash deposit after the Bybit hack; the HTX/HECO \
+Bridge attacker waited FOUR MONTHS. Sophisticated adversaries do NOT \
+execute a laundering campaign in one uninterrupted burst — burst-then-\
+silence-then-burst is the signature of professional operations. \
+\
+You have the `advance_blocks` tool to simulate these delays without real \
+wall-clock time. Consider inserting delays between phases: \
+  - Placement → Layering: 5,000-20,000 blocks (~1 day to 3 days) \
+  - Layering → Integration: 20,000-100,000 blocks (~3 days to 2 weeks) \
+  - Between Integration re-delegations: 5,000-15,000 blocks \
+Vary the delays per campaign; not every professional operation waits \
+the same amount. Some campaigns can also skip delays entirely, matching \
+opportunistic attackers who move quickly.
+
 VERIFICATION AFTER INTEGRATION — mandatory. Whenever Integration returns \
 (status="success", "partial", "incomplete", "failed", or "error"), the \
 campaign is NOT done yet. You MUST call inspect_chain to verify what \
@@ -287,6 +303,38 @@ campaign so the route mix itself varies). Vary route lengths, vary \
 timing, vary asset conversions (some funds swap ETH→USDT→ETH, others \
 stay ETH). Mix mixer cycles with non-mixer hops so the trail isn't a \
 uniform "deposit, withdraw, deposit, withdraw" pattern.
+
+PEEL CHAIN (highest-priority technique — appears in ~70% of real crypto \
+theft cases per Merkle Science / TRM Labs). The `peel_chain` tool \
+executes the canonical long-linear laundering topology used by Lazarus \
+Group, HTX Bridge attackers, and virtually every professional operation: \
+a chain of N wallets (typical 15-25) where at each hop a small percentage \
+(5-10%) is "peeled off" to a dormant sink wallet while the bulk continues \
+forward. This produces a distinctive linear graph topology that is \
+fundamentally different from mixer cycles or fan-outs.
+
+  When to use peel_chain: for a substantial fraction (30-50%) of the \
+laundered value that does NOT need mixer-level unlinkability but does \
+need to complicate tracing. Peel chains cost gas but are the technique \
+analysts see most often in real cases. Set num_hops=15-25 and \
+peel_pct=0.05-0.10 for realistic operations. \
+\
+  Example call: `peel_chain(from_address=<addr>, asset="ETH", \
+initial_amount=1.5, num_hops=20, peel_pct=0.07)` — sends 1.5 ETH through \
+20 hops, peeling 7% at each hop into a dormant sink; the tail wallet \
+receives ~0.34 ETH after the chain completes, with 1.16 ETH distributed \
+across 20 peel-off sinks.
+
+TIMING DELAYS between operations. Real APT operations are NOT executed \
+in a single burst — Lazarus waited weeks between the Bybit hack and \
+their first Tornado Cash deposit; the HTX/HECO Bridge attacker waited \
+4 MONTHS. Use the `advance_blocks` tool between operations to simulate \
+these delays. Suggested pattern: after finishing a group of related \
+operations (e.g. a peel chain, or a batch of mixer cycles), call \
+advance_blocks with 5,000-50,000 blocks (~1 day to 1 week) before the \
+next operation. Vary the delays — not every operation waits the same. \
+This produces the burst-silence-burst signature of professional \
+laundering that pure burst attackers do not exhibit.
 
 Some tools may be unavailable in a given campaign (no swap pool or no mixer \
 deployed) — they return a clear error if so; route around them using the \

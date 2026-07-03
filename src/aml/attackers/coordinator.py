@@ -63,6 +63,8 @@ _LAYERING_TOOLS = [
     "smurf_split", "smurf_eth_split",
     "get_swap_quote", "swap_eth_for_usdt", "swap_usdt_for_eth",
     "mixer_deposit", "mixer_withdraw",
+    "peel_chain",       # PR #52: canonical peel-chain laundering
+    "advance_blocks",   # PR #52: simulate timing delays between phases
 ]
 _INTEGRATION_TOOLS = [
     "get_balance", "get_gas_budget",
@@ -212,7 +214,10 @@ class Coordinator:
         # just inspect_chain (PR 42, reflection loop). The Coordinator
         # never gets write tools — write actions stay funneled through
         # sub-agent delegations to keep the role separation honest.
-        _COORDINATOR_CHAIN_TOOLS = {"inspect_chain"}
+        # Coordinator's direct chain tools: inspect_chain (verification)
+        # plus advance_blocks (PR #52 — insert timing delays between phases
+        # to reproduce real APT patterns like Lazarus's 4-month HTX wait).
+        _COORDINATOR_CHAIN_TOOLS = {"inspect_chain", "advance_blocks"}
         self._coordinator_chain_tools = [
             schema for schema in dispatcher.tool_definitions
             if schema["name"] in _COORDINATOR_CHAIN_TOOLS
