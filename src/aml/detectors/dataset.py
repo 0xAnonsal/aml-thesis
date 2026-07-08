@@ -332,17 +332,25 @@ def partial_visibility_split_by_platform(
         if lab == LABEL_CONTRACT
     }
 
-    # Build address → platform map from the attacker runs' clean_exit
-    # metadata. Only clean_exit wallets carry a natural platform label.
+    # Build address → platform map from BOTH:
+    #   (a) attacker runs' clean_exit metadata (wallets the attacker
+    #       registered under a specific exchange platform), and
+    #   (b) benign runs' exchange_wallets metadata (hot wallets that
+    #       the run_benign generator bootstrapped for each exchange
+    #       platform — added in PR #55 to model CEX interactions).
     address_to_platform: dict[str, str] = {}
     for run in dataset.runs:
-        if run.kind != "attacker":
-            continue
-        for exit_record in run.addresses.get("clean_exit_per_address") or []:
-            addr = exit_record.get("address")
-            platform = exit_record.get("exchange_platform")
-            if addr and platform:
-                address_to_platform[addr] = platform
+        if run.kind == "attacker":
+            for exit_record in run.addresses.get("clean_exit_per_address") or []:
+                addr = exit_record.get("address")
+                platform = exit_record.get("exchange_platform")
+                if addr and platform:
+                    address_to_platform[addr] = platform
+        elif run.kind == "benign":
+            for platform, wallets in (run.addresses.get("exchange_wallets") or {}).items():
+                for addr in wallets:
+                    if addr:
+                        address_to_platform[addr] = platform
 
     # Assign: clean_exit wallets by platform label (if in `platforms`);
     # everything else randomly.
