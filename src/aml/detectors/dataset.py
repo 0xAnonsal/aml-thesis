@@ -280,6 +280,101 @@ def partial_visibility_split(
     return views
 
 
+def partial_visibility_split_by_platform(
+    dataset: CombinedDataset, *,
+    platforms: list[str] | None = None,
+    seed: int = 0,
+    contracts_shared: bool = True,
+) -> list[ExchangeView]:
+    """Platform-aware partial-visibility split — one exchange per platform.
+
+    Unlike `partial_visibility_split` (which assigns EVERY non-contract
+    address at random), this version assigns attacker `clean_exit`
+    wallets to the exchange partition that matches their registered
+    `exchange_platform` label. All other addresses (attacker source,
+    burners, benign users) are randomly assigned across the platforms.
+
+    Rationale: in real Ethereum, an exchange (Binance, Coinbase, etc.)
+    has KYC visibility ONLY on its own users — it sees deposits from
+    and withdrawals to its own wallets, plus public on-chain contracts.
+    Random assignment of every address (as `partial_visibility_split`
+    does) breaks this semantic: a wallet the attacker registered as
+    'Binance' should be visible to the Binance-federated detector, not
+    to a random other partition.
+
+    Args:
+        platforms: list of exchange platform names to use as partitions.
+            Defaults to the full 7-platform universe used by the attacker
+            prompt: ["Binance", "Coinbase", "Kraken", "OKX", "Kucoin",
+            "Bitfinex", "Gate"]. Each becomes one partition; wallets
+            registered at that platform go to that partition. Any
+            attacker exit with a `exchange_platform` NOT in this list
+            is assigned randomly (models a platform outside the AML
+            federation, e.g. a small unregulated venue).
+        seed: RNG seed for assignment of unlabeled wallets.
+        contracts_shared: as in partial_visibility_split.
+
+    Returns list of ExchangeViews, one per platform in the order given.
+    """
+    DEFAULT_PLATFORMS = [
+        "Binance", "Coinbase", "Kraken", "OKX",
+        "Kucoin", "Bitfinex", "Gate",
+    ]
+    if platforms is None:
+        platforms = DEFAULT_PLATFORMS
+    if not platforms:
+        raise ValueError("platforms list cannot be empty")
+
+    rng = random.Random(seed)
+
+    contracts: set[str] = {
+        addr for addr, lab in dataset.node_labels.items()
+        if lab == LABEL_CONTRACT
+    }
+
+    # Build address → platform map from the attacker runs' clean_exit
+    # metadata. Only clean_exit wallets carry a natural platform label.
+    address_to_platform: dict[str, str] = {}
+    for run in dataset.runs:
+        if run.kind != "attacker":
+            continue
+        for exit_record in run.addresses.get("clean_exit_per_address") or []:
+            addr = exit_record.get("address")
+            platform = exit_record.get("exchange_platform")
+            if addr and platform:
+                address_to_platform[addr] = platform
+
+    # Assign: clean_exit wallets by platform label (if in `platforms`);
+    # everything else randomly.
+    assignments: dict[str, str] = {}
+    for addr in sorted(dataset.node_labels):
+        if addr in contracts and contracts_shared:
+            continue
+        labeled_platform = address_to_platform.get(addr)
+        if labeled_platform and labeled_platform in platforms:
+            assignments[addr] = labeled_platform
+        else:
+            # Attacker source, burners, benign users, and clean_exits
+            # at platforms outside the AML federation all get random
+            # assignment. This models that the AML federation of
+            # exchanges has no privileged view of these addresses'
+            # KYC identity.
+            assignments[addr] = rng.choice(platforms)
+
+    views: list[ExchangeView] = []
+    for platform in platforms:
+        visible = {addr for addr, ex in assignments.items() if ex == platform}
+        if contracts_shared:
+            visible |= contracts
+        subgraph = dataset.graph.subgraph(visible).copy()
+        views.append(ExchangeView(
+            name=platform,
+            visible_addresses=visible,
+            visible_subgraph=subgraph,
+        ))
+    return views
+
+
 # --- train/val/test split (campaign-level) ------------------------------
 
 
