@@ -1,0 +1,39 @@
+{
+  "dataset": "elliptic_pp_subset (Bellei 2024, 50k stratified sample)",
+  "n_train": 40000,
+  "n_test": 10000,
+  "test_illicit": 778,
+  "seed": 42,
+  "target_f1_bellei_2024": "~0.94-0.97 (illicit class)",
+  "models": {
+    "RandomForest": {
+      "f1_illicit": 0.874,
+      "precision_illicit": 0.9658,
+      "recall_illicit": 0.7982,
+      "roc_auc": 0.9896,
+      "avg_precision": 0.9431,
+      "confusion": {
+        "tp": 621,
+        "fp": 22,
+        "tn": 9200,
+        "fn": 157
+      },
+      "train_time_seconds": 5.54
+    },
+    "LogisticRegression": {
+      "f1_illicit": 0.4038,
+      "precision_illicit": 0.2768,
+      "recall_illicit": 0.7455,
+      "roc_auc": 0.8477,
+      "avg_precision": 0.3506,
+      "confusion": {
+        "tp": 580,
+        "fp": 1515,
+        "tn": 7707,
+        "fn": 198
+      },
+      "train_time_seconds": 74.59
+    }
+  },
+  "verdict": "CONCERN \u2014 RandomForest F1=0.874 is below the ~0.94 range reported by Bellei et al. 2024. Possible causes: dropped Time step feature (temporal leakage guard), subset vs full-set discrepancy, or hyperparameter mismatch."
+}

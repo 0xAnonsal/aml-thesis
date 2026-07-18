@@ -42,6 +42,9 @@ data/tron/*
 *.parquet
 *.h5
 *.npz
+# Combined dataset pickles (regenerable via scripts/load_ethereum_heist.py etc.)
+*.pkl
+*.pickle
 
 # Price cache is small + reproducibility-critical, keep it tracked
 !data/prices/

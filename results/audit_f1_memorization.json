@@ -1,0 +1,416 @@
+{
+  "check_1_address_overlap": {
+    "train_labeled_count": 334,
+    "test_labeled_count": 115,
+    "overlap_count": 0,
+    "overlap_addresses_sample": [],
+    "verdict": "PASS \u2014 no address overlap between splits"
+  },
+  "check_2_feature_leakage": {
+    "per_feature": [
+      {
+        "feature": "in_degree",
+        "mean_attacker": 2.1786,
+        "mean_benign": 5.8399,
+        "cohens_d": -1.424,
+        "attacker_nonzero_fraction": 1.0,
+        "benign_nonzero_fraction": 1.0,
+        "trivial_separator": false
+      },
+      {
+        "feature": "out_degree",
+        "mean_attacker": 1.0833,
+        "mean_benign": 3.7082,
+        "cohens_d": -0.74,
+        "attacker_nonzero_fraction": 0.423,
+        "benign_nonzero_fraction": 0.786,
+        "trivial_separator": false
+      },
+      {
+        "feature": "total_degree",
+        "mean_attacker": 3.2619,
+        "mean_benign": 9.548,
+        "cohens_d": -1.144,
+        "attacker_nonzero_fraction": 1.0,
+        "benign_nonzero_fraction": 1.0,
+        "trivial_separator": false
+      },
+      {
+        "feature": "log_eth_in",
+        "mean_attacker": 0.2046,
+        "mean_benign": 0.266,
+        "cohens_d": -0.18,
+        "attacker_nonzero_fraction": 0.327,
+        "benign_nonzero_fraction": 0.512,
+        "trivial_separator": false
+      },
+      {
+        "feature": "log_eth_out",
+        "mean_attacker": 0.1188,
+        "mean_benign": 0.2685,
+        "cohens_d": -0.444,
+        "attacker_nonzero_fraction": 0.19,
+        "benign_nonzero_fraction": 0.53,
+        "trivial_separator": false
+      },
+      {
+        "feature": "log_usdt_in",
+        "mean_attacker": 1.7621,
+        "mean_benign": 3.7808,
+        "cohens_d": -0.703,
+        "attacker_nonzero_fraction": 0.286,
+        "benign_nonzero_fraction": 0.641,
+        "trivial_separator": false
+      },
+      {
+        "feature": "log_usdt_out",
+        "mean_attacker": 0.4465,
+        "mean_benign": 3.8279,
+        "cohens_d": -1.405,
+        "attacker_nonzero_fraction": 0.065,
+        "benign_nonzero_fraction": 0.651,
+        "trivial_separator": false
+      },
+      {
+        "feature": "log_unique_in",
+        "mean_attacker": 0.4484,
+        "mean_benign": 0.935,
+        "cohens_d": -0.912,
+        "attacker_nonzero_fraction": 0.607,
+        "benign_nonzero_fraction": 0.733,
+        "trivial_separator": false
+      },
+      {
+        "feature": "log_unique_out",
+        "mean_attacker": 0.2287,
+        "mean_benign": 0.9458,
+        "cohens_d": -1.228,
+        "attacker_nonzero_fraction": 0.22,
+        "benign_nonzero_fraction": 0.758,
+        "trivial_separator": false
+      },
+      {
+        "feature": "transfer_eth_in",
+        "mean_attacker": 0.2593,
+        "mean_benign": 0.4791,
+        "cohens_d": -0.481,
+        "attacker_nonzero_fraction": 0.327,
+        "benign_nonzero_fraction": 0.512,
+        "trivial_separator": false
+      },
+      {
+        "feature": "transfer_usdt_in",
+        "mean_attacker": 0.2265,
+        "mean_benign": 0.6905,
+        "cohens_d": -0.935,
+        "attacker_nonzero_fraction": 0.286,
+        "benign_nonzero_fraction": 0.641,
+        "trivial_separator": false
+      },
+      {
+        "feature": "swap_in",
+        "mean_attacker": 0.0,
+        "mean_benign": 0.0,
+        "cohens_d": 0.0,
+        "attacker_nonzero_fraction": 0.0,
+        "benign_nonzero_fraction": 0.0,
+        "trivial_separator": false
+      },
+      {
+        "feature": "mixer_deposit_in",
+        "mean_attacker": 0.0,
+        "mean_benign": 0.0,
+        "cohens_d": 0.0,
+        "attacker_nonzero_fraction": 0.0,
+        "benign_nonzero_fraction": 0.0,
+        "trivial_separator": false
+      },
+      {
+        "feature": "mixer_withdraw_in",
+        "mean_attacker": 0.0,
+        "mean_benign": 0.0,
+        "cohens_d": 0.0,
+        "attacker_nonzero_fraction": 0.0,
+        "benign_nonzero_fraction": 0.0,
+        "trivial_separator": false
+      },
+      {
+        "feature": "transfer_eth_out",
+        "mean_attacker": 0.154,
+        "mean_benign": 0.4863,
+        "cohens_d": -0.742,
+        "attacker_nonzero_fraction": 0.19,
+        "benign_nonzero_fraction": 0.53,
+        "trivial_separator": false
+      },
+      {
+        "feature": "transfer_usdt_out",
+        "mean_attacker": 0.1034,
+        "mean_benign": 0.6966,
+        "cohens_d": -1.156,
+        "attacker_nonzero_fraction": 0.065,
+        "benign_nonzero_fraction": 0.651,
+        "trivial_separator": false
+      },
+      {
+        "feature": "swap_out",
+        "mean_attacker": 0.0,
+        "mean_benign": 0.0,
+        "cohens_d": 0.0,
+        "attacker_nonzero_fraction": 0.0,
+        "benign_nonzero_fraction": 0.0,
+        "trivial_separator": false
+      },
+      {
+        "feature": "mixer_deposit_out",
+        "mean_attacker": 0.0,
+        "mean_benign": 0.0,
+        "cohens_d": 0.0,
+        "attacker_nonzero_fraction": 0.0,
+        "benign_nonzero_fraction": 0.0,
+        "trivial_separator": false
+      },
+      {
+        "feature": "mixer_withdraw_out",
+        "mean_attacker": 0.0,
+        "mean_benign": 0.0,
+        "cohens_d": 0.0,
+        "attacker_nonzero_fraction": 0.0,
+        "benign_nonzero_fraction": 0.0,
+        "trivial_separator": false
+      }
+    ],
+    "n_trivial_separators": 0,
+    "trivial_features": [],
+    "verdict": "PASS \u2014 no trivially-separating features"
+  },
+  "check_3_loco_cv": {
+    "n_folds_total": 20,
+    "n_folds_valid": 20,
+    "n_folds_skipped": 0,
+    "loco_f1_mean": 0.4184,
+    "loco_f1_std": 0.4432,
+    "loco_f1_min": 0.0,
+    "loco_f1_max": 0.9545,
+    "headline_f1_seed42": 0.967,
+    "gap": 0.5486,
+    "per_fold": [
+      {
+        "fold": 0,
+        "held_out": "2026-06-26T13-46-01_defi-exploit_seed53",
+        "n_labeled_test": 20,
+        "n_positive_test": 18,
+        "f1": 0.9474,
+        "precision": 0.9,
+        "recall": 1.0,
+        "auc": 0.9722
+      },
+      {
+        "fold": 1,
+        "held_out": "2026-06-26T13-49-38_defi-exploit_seed59",
+        "n_labeled_test": 25,
+        "n_positive_test": 23,
+        "f1": 0.9545,
+        "precision": 1.0,
+        "recall": 0.913,
+        "auc": 0.9565
+      },
+      {
+        "fold": 2,
+        "held_out": "2026-06-26T13-53-54_defi-exploit_seed61",
+        "n_labeled_test": 18,
+        "n_positive_test": 17,
+        "f1": 0.9032,
+        "precision": 1.0,
+        "recall": 0.8235,
+        "auc": 0.9118
+      },
+      {
+        "fold": 3,
+        "held_out": "2026-06-26T13-57-32_defi-exploit_seed67",
+        "n_labeled_test": 22,
+        "n_positive_test": 22,
+        "f1": 0.9,
+        "precision": 1.0,
+        "recall": 0.8182,
+        "auc": null
+      },
+      {
+        "fold": 4,
+        "held_out": "2026-06-26T14-02-17_defi-exploit_seed71",
+        "n_labeled_test": 22,
+        "n_positive_test": 21,
+        "f1": 0.8947,
+        "precision": 1.0,
+        "recall": 0.8095,
+        "auc": 0.9048
+      },
+      {
+        "fold": 5,
+        "held_out": "2026-06-26T14-06-31_defi-exploit_seed73",
+        "n_labeled_test": 28,
+        "n_positive_test": 24,
+        "f1": 0.9231,
+        "precision": 0.8571,
+        "recall": 1.0,
+        "auc": 0.9375
+      },
+      {
+        "fold": 6,
+        "held_out": "2026-06-26T14-10-18_defi-exploit_seed79",
+        "n_labeled_test": 30,
+        "n_positive_test": 10,
+        "f1": 0.5,
+        "precision": 0.3333,
+        "recall": 1.0,
+        "auc": 1.0
+      },
+      {
+        "fold": 7,
+        "held_out": "2026-06-26T14-14-34_defi-exploit_seed83",
+        "n_labeled_test": 18,
+        "n_positive_test": 16,
+        "f1": 0.9412,
+        "precision": 0.8889,
+        "recall": 1.0,
+        "auc": 1.0
+      },
+      {
+        "fold": 8,
+        "held_out": "2026-06-26T14-18-54_defi-exploit_seed89",
+        "n_labeled_test": 16,
+        "n_positive_test": 16,
+        "f1": 0.8148,
+        "precision": 1.0,
+        "recall": 0.6875,
+        "auc": null
+      },
+      {
+        "fold": 9,
+        "held_out": "2026-06-26T14-21-15_defi-exploit_seed97",
+        "n_labeled_test": 24,
+        "n_positive_test": 10,
+        "f1": 0.5882,
+        "precision": 0.4167,
+        "recall": 1.0,
+        "auc": 0.9
+      },
+      {
+        "fold": 10,
+        "held_out": "2026-06-26T14-24-38_benign_seed53",
+        "n_labeled_test": 21,
+        "n_positive_test": 0,
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "auc": null
+      },
+      {
+        "fold": 11,
+        "held_out": "2026-06-26T14-24-42_benign_seed59",
+        "n_labeled_test": 23,
+        "n_positive_test": 0,
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "auc": null
+      },
+      {
+        "fold": 12,
+        "held_out": "2026-06-26T14-24-47_benign_seed61",
+        "n_labeled_test": 24,
+        "n_positive_test": 0,
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "auc": null
+      },
+      {
+        "fold": 13,
+        "held_out": "2026-06-26T14-24-51_benign_seed67",
+        "n_labeled_test": 21,
+        "n_positive_test": 0,
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "auc": null
+      },
+      {
+        "fold": 14,
+        "held_out": "2026-06-26T14-24-55_benign_seed71",
+        "n_labeled_test": 27,
+        "n_positive_test": 0,
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "auc": null
+      },
+      {
+        "fold": 15,
+        "held_out": "2026-06-26T14-25-00_benign_seed73",
+        "n_labeled_test": 23,
+        "n_positive_test": 0,
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "auc": null
+      },
+      {
+        "fold": 16,
+        "held_out": "2026-06-26T14-25-07_benign_seed79",
+        "n_labeled_test": 25,
+        "n_positive_test": 0,
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "auc": null
+      },
+      {
+        "fold": 17,
+        "held_out": "2026-06-26T14-25-12_benign_seed83",
+        "n_labeled_test": 24,
+        "n_positive_test": 0,
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "auc": null
+      },
+      {
+        "fold": 18,
+        "held_out": "2026-06-26T14-25-16_benign_seed89",
+        "n_labeled_test": 24,
+        "n_positive_test": 0,
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "auc": null
+      },
+      {
+        "fold": 19,
+        "held_out": "2026-06-26T14-25-21_benign_seed97",
+        "n_labeled_test": 23,
+        "n_positive_test": 0,
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "auc": null
+      }
+    ],
+    "verdict": "CONCERN \u2014 LOCO mean F1=0.418 much lower than headline F1=0.967 (gap 0.549) \u2192 seed=42 headline may be inflated by a lucky split"
+  },
+  "check_4_mixer_only": {
+    "features_used": [
+      "mixer_deposit_in",
+      "mixer_withdraw_in",
+      "mixer_deposit_out",
+      "mixer_withdraw_out"
+    ],
+    "rule": "predict attacker iff ANY mixer feature > 0",
+    "f1": 0.0,
+    "precision": 0.0,
+    "recall": 0.0,
+    "headline_gcn_f1": 0.967,
+    "gap": 0.967,
+    "verdict": "OK \u2014 mixer-only F1=0.000 is much lower than GCN F1=0.967. The GCN uses more than mixer features."
+  }
+}
