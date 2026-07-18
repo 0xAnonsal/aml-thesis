@@ -395,30 +395,41 @@ def actor_clustering_metrics(
 
 _LLM_COORDINATOR_SYSTEM_PROMPT = """You are an anti-money-laundering (AML) coordinator for a federation of cryptocurrency exchanges. Each exchange has independently flagged addresses as suspicious based on its local partial view of the on-chain graph.
 
-Your task: identify which of these flagged addresses across DIFFERENT exchanges likely belong to the same real-world actor (same criminal using multiple exchange KYC identities to obscure their laundering flow).
+Your task: **identify distinct CAMPAIGNS / real-world actors** — group addresses that were controlled and operated by the SAME criminal enterprise as part of ONE coordinated laundering operation.
 
 You DO NOT see raw transaction data. You only receive, per address:
   1. Which exchange flagged it
   2. A 19-dimensional feature fingerprint (degree, log-volume, unique counterparties, per-edge-kind counts including mixer_deposit/withdraw)
   3. The exchange's local confidence score
 
+CAMPAIGN STRUCTURE — CRITICAL:
+- Each attacker campaign typically produces **5 to 30 addresses** (source wallet, burners, clean exits)
+- A single flagged batch may contain **10 to 25 distinct campaigns** running in parallel
+- **Prefer many mid-sized clusters (5-15 addresses each) over few huge behavioral archetypes**
+- DO NOT lump all "mixer users" into one cluster — different campaigns use mixers independently
+- DO NOT lump all "swap-heavy" addresses together — that's a behavioral pattern, not an actor identity
+
 REASONING PRINCIPLES:
-- Similar fingerprints across exchanges → strong signal for same actor
-- Actors typically split funds across 2-5 exchanges to evade single-institution detection
-- Fingerprints capturing mixer_deposit_out > 0 AND mixer_withdraw_in > 0 patterns suggest common Tornado-style laundering behavior
-- Isolated singletons (fingerprints unlike any others) → likely independent actors
-- High local confidence AND cross-exchange similarity is the strongest signal
+- Similar fingerprints across exchanges → possible same actor (using multiple KYC identities)
+- IDENTICAL fingerprints on same exchange → same campaign's siblings (burners)
+- Group by *specific* volume magnitude + edge-count similarity, not just "both use mixer"
+- Cross-exchange grouping is valuable but SHOULD NOT be your only clustering signal
+- Aim for a cluster count in the range 10-25 to match typical batch structure
+- Singletons should be RARE — only for truly unique fingerprints; most addresses belong to some coordinated campaign
 
 OUTPUT (strict JSON, single valid JSON object, no other text):
 {
-  "actor_clusters": [
-    {"cluster_id": 0, "addresses": ["0x...", "0x..."], "reasoning": "brief why-they-belong-together"},
-    {"cluster_id": 1, "addresses": ["0x..."], "reasoning": "isolated singleton, unique fingerprint"}
-  ],
-  "overall_reasoning": "one paragraph on the clustering strategy applied to this batch"
+  "actor_clusters": {
+    "0": ["0x...", "0x..."],
+    "1": ["0x..."],
+    "2": ["0x...", "0x...", "0x..."]
+  },
+  "overall_reasoning": "one paragraph naming the main clusters and the archetype/signal that groups them"
 }
 
-Every input address MUST appear in exactly one cluster. Singletons are valid (cluster with one address). Cluster IDs must be integers starting from 0."""
+The compact `{cluster_id → [addresses]}` map format is REQUIRED — do not include per-cluster reasoning in the JSON (put everything in `overall_reasoning`). This keeps output tractable for large batches.
+
+Every input address MUST appear in exactly one cluster. Cluster IDs must be integer strings starting from "0". Aim for 10-25 total clusters — fewer means you're lumping distinct actors, more means you're over-splitting one campaign."""
 
 
 def _format_address_for_llm(
@@ -505,18 +516,35 @@ def _parse_llm_clusters(
     except json.JSONDecodeError:
         return {}, ""
 
-    clusters = parsed.get("actor_clusters", [])
+    raw_clusters = parsed.get("actor_clusters", [])
     reasoning = parsed.get("overall_reasoning", "")
 
     address_to_cluster: dict[str, int] = {}
-    for entry in clusters:
-        cid = entry.get("cluster_id")
-        addresses = entry.get("addresses", [])
-        if not isinstance(cid, int):
-            continue
-        for a in addresses:
-            if a in valid_addresses:
-                address_to_cluster[a] = cid
+
+    # Format A: compact dict {cluster_id: [addresses]} — preferred format
+    if isinstance(raw_clusters, dict):
+        for cid_key, addresses in raw_clusters.items():
+            try:
+                cid = int(cid_key)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(addresses, list):
+                continue
+            for a in addresses:
+                if a in valid_addresses:
+                    address_to_cluster[a] = cid
+    # Format B: verbose list [{cluster_id, addresses, reasoning}] — legacy
+    elif isinstance(raw_clusters, list):
+        for entry in raw_clusters:
+            if not isinstance(entry, dict):
+                continue
+            cid = entry.get("cluster_id")
+            addresses = entry.get("addresses", [])
+            if not isinstance(cid, int):
+                continue
+            for a in addresses:
+                if a in valid_addresses:
+                    address_to_cluster[a] = cid
 
     return address_to_cluster, reasoning
 
@@ -568,9 +596,12 @@ class LLMDefenderCoordinator(Detector):
     # ~650 attacker addresses across all exchanges would produce a ~78k-token
     # prompt AND a >16k-token output (way over max_tokens caps). Realistically,
     # a Coordinator would triage the TOP suspects, not review every flag.
-    # 30 per exchange × 3 exchanges = 90 addresses → prompt ~10k tokens,
-    # output fits in 8k. Set 0 or negative to disable filtering.
-    top_k_flagged_per_exchange: int = 30
+    # 60 per exchange × 3 exchanges = 180 addresses → prompt ~20k tokens,
+    # output ~8k tokens. Fits Sonnet 4.6's 200k context / 8192 max_tokens.
+    # Bumped from 30 (2026-07-19): 30-per-exchange only surfaced ~14% of the
+    # 649 attackers, forcing over-generalisation. 60 covers ~28% — better
+    # signal for campaign-level clustering.
+    top_k_flagged_per_exchange: int = 60
 
     # populated by fit_per_view
     _binary: Any = None
