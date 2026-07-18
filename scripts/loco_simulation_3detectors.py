@@ -160,9 +160,11 @@ def main():
         except Exception as e:   # noqa: BLE001
             fold_result["detectors"]["GCN"] = {"error": str(e)}
 
-        # MultiAgent
+        # MultiAgent — needs detector_factory, NOT seed. Fix from debug session.
         try:
-            ma_det = MultiAgentDetector(seed=SEED)
+            ma_det = MultiAgentDetector(
+                detector_factory=lambda: GCNDetector(seed=SEED, epochs=50),
+            )
             ma_m = fit_evaluate_one_detector("MultiAgent", ma_det, combined,
                                              train_runs, test_runs,
                                              views=views_train)
