@@ -552,10 +552,17 @@ class LLMDefenderCoordinator(Detector):
 
     detector_factory: Callable[[], Detector]
     llm_model: str = "sonnet"
-    llm_max_tokens: int = 4096
+    llm_max_tokens: int = 8192
     fallback_similarity_threshold: float = 0.95
     llm_client: Any = None                            # LLMClient, or mock for tests
     prior: float = 0.5
+    # Top-K flagged addresses per exchange sent to the LLM. Rationale:
+    # ~650 attacker addresses across all exchanges would produce a ~78k-token
+    # prompt AND a >16k-token output (way over max_tokens caps). Realistically,
+    # a Coordinator would triage the TOP suspects, not review every flag.
+    # 30 per exchange × 3 exchanges = 90 addresses → prompt ~10k tokens,
+    # output fits in 8k. Set 0 or negative to disable filtering.
+    top_k_flagged_per_exchange: int = 30
 
     # populated by fit_per_view
     _binary: Any = None
@@ -587,6 +594,12 @@ class LLMDefenderCoordinator(Detector):
             for i, addr in enumerate(node_order):
                 if local_probas[i] >= 0.5:   # locally flagged as suspicious
                     entries.append((addr, X[i], float(local_probas[i])))
+            # Keep only the TOP-K by local confidence so the LLM prompt stays
+            # tractable. LLM Coordinator receives the highest-suspicion cases
+            # from each exchange for cross-institution reasoning.
+            if self.top_k_flagged_per_exchange > 0:
+                entries.sort(key=lambda x: -x[2])   # descending confidence
+                entries = entries[:self.top_k_flagged_per_exchange]
             per_exchange_flagged[view.name] = entries
 
         total_flagged = sum(len(v) for v in per_exchange_flagged.values())

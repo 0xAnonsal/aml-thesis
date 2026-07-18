@@ -1,0 +1,40 @@
+{
+  "dataset": "/home/anon/aml-results/batch_2026-06-26/dataset.pkl",
+  "num_exchanges": 3,
+  "seed": 42,
+  "llm_model": "haiku",
+  "n_graph_nodes": 10311,
+  "n_graph_edges": 101880,
+  "n_runs": 420,
+  "n_true_actor_clusters": 9604,
+  "baseline_cosine": {
+    "fit_time_seconds": 5.36,
+    "n_addresses": 10233,
+    "n_clusters_true": 9604,
+    "n_clusters_pred": 9649,
+    "ari": 0.0813,
+    "homogeneity": 0.9993,
+    "completeness": 0.9979
+  },
+  "llm_defender": {
+    "model": "haiku",
+    "fit_time_seconds": 42.92,
+    "cost_usd": 0.0262,
+    "input_tokens": 10381,
+    "output_tokens": 3168,
+    "used_fallback": true,
+    "reasoning": "The 90 flagged addresses cluster around a clear hierarchical money laundering operation: (1) 0xa513e6e4...c853 is the dominant hub flagged on all 3 exchanges, showing extreme high-volume mixer_deposit_in/mixer_withdraw_out cycling consistent with a professional Tornado-cycle operator controlling a master KYC identity per exchange. (2) A secondary tier of 4 sophisticated accounts (cluster 1) handle DEX swaps, stablecoin conversions, and complex routing\u2014likely the same criminal group. (3) Multiple tiers of micro-accounts implement the canonical Tornado laundering pattern: mixer-withdraw receivers \u2192 small transfers \u2192 mixer-deposit dispersals, with many appearing as atomic or near-identical batches suggesting automated or script-driven account generation. (4) Clusters 4 and 10 represent large groups of minimal receive-only (mixer-withdraw-in) or minimal deposit-only (mixer-deposit-out) accounts, the classic Tornado node network. The federated nature (same addresses appearing on multiple exchanges with consistent fingerprints) strongly indicates a single criminal actor or tightly coordinated group using multiple KYC identities to obscure the flow across venue boundaries. The high local confidence (1.00 across all) and extreme fingerprint consistency within suspected clusters supports this unified-actor hypothesis.",
+    "n_addresses": 10233,
+    "n_clusters_true": 9604,
+    "n_clusters_pred": 10150,
+    "ari": 0.0158,
+    "homogeneity": 0.9996,
+    "completeness": 0.9979
+  },
+  "head_to_head": {
+    "baseline_ari": 0.0813,
+    "llm_ari": 0.0158,
+    "diff": -0.0655,
+    "verdict": "Cosine wins"
+  }
+}
