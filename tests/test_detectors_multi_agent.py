@@ -313,3 +313,151 @@ def test_actor_metrics_no_common_addresses_returns_zeros():
     assert m["n_addresses"] == 0
     assert m["ari"] is None
     assert m["homogeneity"] is None
+
+
+# --- LLMDefenderCoordinator tests (Task #15) ---------------------------
+# Chema-validated architecture: ML filter → LLM agent. Mocks the LLM
+# client so tests run offline / at zero API cost.
+
+from aml.detectors.multi_agent import (
+    LLMDefenderCoordinator,
+    _build_llm_user_prompt,
+    _parse_llm_clusters,
+)
+from aml.detectors.gnn import FEATURE_DIM
+
+
+class _MockLLMResult:
+    """Duck-types the CallResult returned by LLMClient.complete."""
+    def __init__(self, text, input_tokens=100, output_tokens=50, cost=0.001):
+        self.text = text
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+        self.cost_usd = cost
+
+
+class _MockLLMClient:
+    """Injectable client that returns a preset JSON payload."""
+    def __init__(self, response_text):
+        self.response_text = response_text
+        self.calls = []
+
+    def complete(self, prompt=None, system=None, model=None, max_tokens=None):
+        self.calls.append({
+            "prompt": prompt, "system": system,
+            "model": model, "max_tokens": max_tokens,
+        })
+        return _MockLLMResult(self.response_text)
+
+
+def test_parse_llm_clusters_basic():
+    """LLM returns clean JSON → parsed into {addr → cluster_id} + reasoning."""
+    text = (
+        '{"actor_clusters": ['
+        '{"cluster_id": 0, "addresses": ["0xabc", "0xdef"], "reasoning": "same fp"},'
+        '{"cluster_id": 1, "addresses": ["0xghi"], "reasoning": "singleton"}'
+        '], "overall_reasoning": "clustered by fingerprint similarity"}'
+    )
+    clusters, reason = _parse_llm_clusters(text, {"0xabc", "0xdef", "0xghi"})
+    assert clusters == {"0xabc": 0, "0xdef": 0, "0xghi": 1}
+    assert reason == "clustered by fingerprint similarity"
+
+
+def test_parse_llm_clusters_markdown_fence():
+    """LLM wraps JSON in ```json ... ``` fence → still parsed."""
+    text = (
+        "Here is my analysis:\n"
+        "```json\n"
+        '{"actor_clusters": [{"cluster_id": 0, "addresses": ["0xa"], "reasoning": "x"}],'
+        ' "overall_reasoning": "y"}\n'
+        "```"
+    )
+    clusters, _ = _parse_llm_clusters(text, {"0xa"})
+    assert clusters == {"0xa": 0}
+
+
+def test_parse_llm_clusters_malformed_returns_empty():
+    """Unparseable output → empty dict (caller triggers cosine fallback)."""
+    clusters, reason = _parse_llm_clusters("this is not json at all", {"0xa"})
+    assert clusters == {}
+    assert reason == ""
+
+
+def test_parse_llm_clusters_filters_hallucinated_addresses():
+    """LLM invents addresses NOT in valid_addresses → those get dropped."""
+    text = (
+        '{"actor_clusters": ['
+        '{"cluster_id": 0, "addresses": ["0xreal", "0xhallucinated"], "reasoning": "x"}'
+        '], "overall_reasoning": "y"}'
+    )
+    clusters, _ = _parse_llm_clusters(text, {"0xreal"})
+    assert clusters == {"0xreal": 0}
+
+
+def test_build_llm_user_prompt_includes_exchange_and_confidence():
+    """Prompt must contain exchange name + local_conf + fingerprint stats."""
+    import numpy as np
+    fp = np.zeros(FEATURE_DIM, dtype=np.float32)
+    fp[0] = 3.5   # in_degree
+    fp[3] = 2.1   # log_eth_in
+    prompt = _build_llm_user_prompt({
+        "exchange_A": [("0x1234567890abcdef1234", fp, 0.87)],
+    })
+    assert "exchange_A" in prompt
+    assert "local_conf=0.87" in prompt
+    assert "in_degree=3.50" in prompt
+    assert "log_eth_in=2.10" in prompt
+
+
+def test_build_llm_user_prompt_all_zero_fingerprint():
+    """Address with all-zero fingerprint → note about isolated node."""
+    import numpy as np
+    fp = np.zeros(FEATURE_DIM, dtype=np.float32)
+    prompt = _build_llm_user_prompt({
+        "exchange_A": [("0x1234567890abcdef1234", fp, 0.5)],
+    })
+    assert "isolated" in prompt
+
+
+def test_llm_defender_fit_raises_without_views():
+    """fit(graph, labels) must raise — force callers to use fit_per_view."""
+    import pytest
+    det = LLMDefenderCoordinator(
+        detector_factory=lambda: None,
+        llm_client=_MockLLMClient("{}"),
+    )
+    with pytest.raises(RuntimeError, match="fit_per_view"):
+        det.fit(graph=None, train_labels={})
+
+
+def test_llm_defender_predict_raises_before_fit():
+    """predict() before fit → RuntimeError with helpful message."""
+    import pytest
+    det = LLMDefenderCoordinator(
+        detector_factory=lambda: None,
+        llm_client=_MockLLMClient("{}"),
+    )
+    with pytest.raises(RuntimeError, match="not fitted"):
+        det.predict(["0xa"])
+
+
+def test_llm_defender_no_flagged_short_circuits_llm_call():
+    """If per-view classifiers flag nothing → LLM is NOT called, cost=$0."""
+    import networkx as nx
+    from aml.detectors.baselines import LouvainDetector
+    from aml.detectors.dataset import ExchangeView
+
+    view = ExchangeView(
+        name="exchange_A",
+        visible_addresses=set(),
+        visible_subgraph=nx.MultiDiGraph(),
+    )
+    mock = _MockLLMClient("SHOULD NOT BE CALLED")
+    det = LLMDefenderCoordinator(
+        detector_factory=lambda: LouvainDetector(),
+        llm_client=mock,
+    )
+    det.fit_per_view([view], train_labels={})
+    assert len(mock.calls) == 0, "LLM should NOT be called when nothing is flagged"
+    assert det.usage["cost_usd"] == 0.0
+    assert det.actor_clusters == {}
