@@ -1,0 +1,40 @@
+{
+  "dataset": "/home/anon/aml-results/batch_2026-06-26/dataset.pkl",
+  "num_exchanges": 3,
+  "seed": 42,
+  "llm_model": "sonnet",
+  "n_graph_nodes": 10311,
+  "n_graph_edges": 101880,
+  "n_runs": 420,
+  "n_true_actor_clusters": 9604,
+  "baseline_cosine": {
+    "fit_time_seconds": 3.56,
+    "n_addresses": 10233,
+    "n_clusters_true": 9604,
+    "n_clusters_pred": 9649,
+    "ari": 0.0813,
+    "homogeneity": 0.9993,
+    "completeness": 0.9979
+  },
+  "llm_defender": {
+    "model": "sonnet",
+    "fit_time_seconds": 140.19,
+    "cost_usd": 0.1118,
+    "input_tokens": 11880,
+    "output_tokens": 5080,
+    "used_fallback": false,
+    "reasoning": "The clustering strategy grouped addresses by matching their 19-dimensional feature fingerprints across exchanges, prioritizing cross-exchange similarity as the strongest signal of a shared real-world actor. The central hub address 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853 was trivially identified as appearing on all three exchanges. Large families of near-identical fingerprints were grouped together: (a) pure pass-through mixer relay wallets (withdraw_in + deposit_out, degree=2) across exchange_A and exchange_C; (b) pure mixer-withdraw terminal wallets (no outgoing) across exchange_A and exchange_C; (c) transfer_in then mixer_deposit_out feeder wallets across exchange_B and exchange_C; (d) a USDT-heavy swap+mixer pattern across all three exchanges suggesting a sophisticated multi-asset laundering actor. Addresses with unique fingerprints (unusual degree distributions, distinct asset mixes, or exchange-specific patterns) were left as singletons or small isolated clusters. The feeder wallet cluster (cluster 13) and relay cluster (cluster 1) are the strongest cross-exchange signals of coordinated multi-identity laundering operations.",
+    "n_addresses": 10233,
+    "n_clusters_true": 9604,
+    "n_clusters_pred": 10164,
+    "ari": 0.007,
+    "homogeneity": 0.9993,
+    "completeness": 0.9979
+  },
+  "head_to_head": {
+    "baseline_ari": 0.0813,
+    "llm_ari": 0.007,
+    "diff": -0.0743,
+    "verdict": "Cosine wins"
+  }
+}

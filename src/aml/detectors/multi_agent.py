@@ -429,6 +429,14 @@ def _format_address_for_llm(
     Trades exhaustive precision (all 19 features) for prompt brevity —
     we surface the top-signal features by name+value so the LLM can
     reason about them without wading through a raw float dump.
+
+    IMPORTANT: uses FULL address (not truncated). Earlier version used
+    `addr[:10]...addr[-4:]` for readability, but the LLM then returned
+    those abbreviated forms in its JSON output, which the parser could
+    not match against the full-address ground-truth set (→ 0 clusters
+    parsed, fallback triggered). Full addresses in the prompt cost ~30
+    extra tokens each vs the abbreviated form, but the LLM's output is
+    then directly usable without post-processing.
     """
     # Round to 2 decimals to keep the prompt short; the LLM doesn't
     # need 6-decimal precision to reason about relative magnitudes.
@@ -438,7 +446,7 @@ def _format_address_for_llm(
         if fingerprint[i] > 0.01   # skip zero-valued features to save tokens
     ) or "(all features near zero — likely isolated node)"
     return (
-        f"- {addr[:10]}...{addr[-4:]} "
+        f"- {addr} "
         f"[exchange={exchange}, local_conf={local_conf:.2f}]\n"
         f"    features: {features_str}"
     )

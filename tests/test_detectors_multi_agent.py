@@ -395,18 +395,25 @@ def test_parse_llm_clusters_filters_hallucinated_addresses():
 
 
 def test_build_llm_user_prompt_includes_exchange_and_confidence():
-    """Prompt must contain exchange name + local_conf + fingerprint stats."""
+    """Prompt must contain exchange name + local_conf + FULL address + features."""
     import numpy as np
     fp = np.zeros(FEATURE_DIM, dtype=np.float32)
     fp[0] = 3.5   # in_degree
     fp[3] = 2.1   # log_eth_in
+    full_addr = "0x1234567890abcdef1234567890abcdef12345678"
     prompt = _build_llm_user_prompt({
-        "exchange_A": [("0x1234567890abcdef1234", fp, 0.87)],
+        "exchange_A": [(full_addr, fp, 0.87)],
     })
     assert "exchange_A" in prompt
     assert "local_conf=0.87" in prompt
     assert "in_degree=3.50" in prompt
     assert "log_eth_in=2.10" in prompt
+    # FULL address must appear in prompt (not truncated) so LLM can echo it
+    # back in its JSON output and the parser can match against the full-address
+    # set. Truncation with `addr[:10]...addr[-4:]` caused a parse failure bug
+    # discovered 2026-07-19 — see multi_agent.py comment.
+    assert full_addr in prompt
+    assert "..." not in prompt   # no truncation
 
 
 def test_build_llm_user_prompt_all_zero_fingerprint():

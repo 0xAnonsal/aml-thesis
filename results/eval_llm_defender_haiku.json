@@ -8,7 +8,7 @@
   "n_runs": 420,
   "n_true_actor_clusters": 9604,
   "baseline_cosine": {
-    "fit_time_seconds": 5.36,
+    "fit_time_seconds": 3.16,
     "n_addresses": 10233,
     "n_clusters_true": 9604,
     "n_clusters_pred": 9649,
@@ -18,23 +18,23 @@
   },
   "llm_defender": {
     "model": "haiku",
-    "fit_time_seconds": 42.92,
-    "cost_usd": 0.0262,
-    "input_tokens": 10381,
-    "output_tokens": 3168,
-    "used_fallback": true,
-    "reasoning": "The 90 flagged addresses cluster around a clear hierarchical money laundering operation: (1) 0xa513e6e4...c853 is the dominant hub flagged on all 3 exchanges, showing extreme high-volume mixer_deposit_in/mixer_withdraw_out cycling consistent with a professional Tornado-cycle operator controlling a master KYC identity per exchange. (2) A secondary tier of 4 sophisticated accounts (cluster 1) handle DEX swaps, stablecoin conversions, and complex routing\u2014likely the same criminal group. (3) Multiple tiers of micro-accounts implement the canonical Tornado laundering pattern: mixer-withdraw receivers \u2192 small transfers \u2192 mixer-deposit dispersals, with many appearing as atomic or near-identical batches suggesting automated or script-driven account generation. (4) Clusters 4 and 10 represent large groups of minimal receive-only (mixer-withdraw-in) or minimal deposit-only (mixer-deposit-out) accounts, the classic Tornado node network. The federated nature (same addresses appearing on multiple exchanges with consistent fingerprints) strongly indicates a single criminal actor or tightly coordinated group using multiple KYC identities to obscure the flow across venue boundaries. The high local confidence (1.00 across all) and extreme fingerprint consistency within suspected clusters supports this unified-actor hypothesis.",
+    "fit_time_seconds": 77.66,
+    "cost_usd": 0.0391,
+    "input_tokens": 11879,
+    "output_tokens": 5438,
+    "used_fallback": false,
+    "reasoning": "Clustering strategy: Identified 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853 as the primary cross-exchange hub actor flagged on all three exchanges with consistent high-volume Tornado-style mixer behavior (deposit_in/withdraw_out pattern). Clustered 0x31A1EfAA1dBd6a6fE63bc0445467187C28EFC9BB and 0x2b0D8b4fe0D362A448baF5192Ea97393e929fa55 as secondary swap/USDT laundering actors across exchanges A and B with matching mid-tier complexity signatures. Identified two high-complexity actors (0x70997970C51812dc3A010C7d01b50e0d17dc79C8 and 0x207ABfFC04029AE074e069A005e4990e0B778E06) with exceptional USDT volumes and bilateral swap patterns. Grouped symmetric small-scale mixer pairs (clusters 3-4) with matching fingerprints across exchanges. Recognized batch-deployed addresses with identical or near-identical fingerprints (clusters 5, 7, 10, 14, 17) as coordinated infrastructure suggesting automated wallet generation by single actors for rapid cycling. Remaining addresses segregated into smaller matched pairs (clusters 6, 8-9, 15-16) based on cross-exchange similarity or marked as singletons (clusters 11-13) where insufficient corroboration exists. Total of 18 clusters capturing 90 addresses; high-confidence cross-exchange matches weighted heavily given AML detection principle that actors split deposits across 2-5 institutions.",
     "n_addresses": 10233,
     "n_clusters_true": 9604,
-    "n_clusters_pred": 10150,
-    "ari": 0.0158,
-    "homogeneity": 0.9996,
+    "n_clusters_pred": 10176,
+    "ari": 0.0046,
+    "homogeneity": 0.9989,
     "completeness": 0.9979
   },
   "head_to_head": {
     "baseline_ari": 0.0813,
-    "llm_ari": 0.0158,
-    "diff": -0.0655,
+    "llm_ari": 0.0046,
+    "diff": -0.0767,
     "verdict": "Cosine wins"
   }
 }

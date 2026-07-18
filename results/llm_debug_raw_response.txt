@@ -1,0 +1,137 @@
+```json
+{
+  "actor_clusters": [
+    {
+      "cluster_id": 0,
+      "addresses": [
+        "0xa513e6e4...c853"
+      ],
+      "reasoning": "Unique high-volume mixer hub appearing on all three exchanges with consistent large-scale mixer_deposit_in and mixer_withdraw_out patterns (degree 23-29, log volumes 3.0-3.5). Strong signal of single actor running a major Tornado-style laundering operation across multiple exchanges."
+    },
+    {
+      "cluster_id": 1,
+      "addresses": [
+        "0x31A1EfAA...C9BB",
+        "0x2b0D8b4f...fa55",
+        "0x70997970...79C8",
+        "0x207ABfFC...8E06"
+      ],
+      "reasoning": "Mid-to-high volume traders with complex multi-asset activity (ETH, USDT, swaps) and mixer integration. Fingerprints show in_degree 4-17, out_degree 3-47, log_usdt high (6.66-11.11), swap activity, and mixer_withdraw_in. Similar sophistication and asset laundering patterns suggest coordinated or same-actor multi-exchange splitting."
+    },
+    {
+      "cluster_id": 2,
+      "addresses": [
+        "0x0815054d...ef92",
+        "0x3F45Bf0a...1fD8",
+        "0x94ea8d8e...6959",
+        "0x3ce333AC...aeD2",
+        "0x501D1Ed0...f0E2",
+        "0x5B718131...1CdD",
+        "0x7fAd7671...3580",
+        "0x8B8bcd95...2270",
+        "0x8D76c9e4...f2a1",
+        "0x0961EDc9...e5Df",
+        "0x4666c30A...49ce",
+        "0xC768934d...4C7E",
+        "0xA6D3e7bc...5AE5"
+      ],
+      "reasoning": "Small-scale bidirectional mixer users with consistent in_degree 1-2, out_degree 1-3, total_degree 2-5, and mixer_withdraw_in + mixer_deposit_out pattern. Likely same actor running multiple small-value tumbling operations across all three exchanges to evade single-institution detection via account splitting."
+    },
+    {
+      "cluster_id": 3,
+      "addresses": [
+        "0x85D3A4E9...4583",
+        "0x9fecB279...87d7",
+        "0x8E0601F7...b432"
+      ],
+      "reasoning": "Small cluster with transfer_eth + mixer_withdraw_in + mixer_deposit_out or USDT handling. in_degree 2-3, out_degree 1-3. Similar light mixing patterns suggest possible coordination but lower confidence than cluster 2 due to smaller sample and some feature variation."
+    },
+    {
+      "cluster_id": 4,
+      "addresses": [
+        "0x2A7A2Ab4...678A",
+        "0xe6D5B2b5...940e",
+        "0x88CeD902...62f9",
+        "0x97bBf91f...71E9",
+        "0x1722D095...e498",
+        "0x4fc1604c...FD3b",
+        "0x6998594A...13ac",
+        "0xDa3A454d...b57b",
+        "0xEBffb641...7542",
+        "0xeeD8DeDb...5b7f",
+        "0x384fC7A3...152F",
+        "0x27436D2a...d0cb",
+        "0xDdef042D...A587",
+        "0xfD2b6b0E...E535"
+      ],
+      "reasoning": "Receive-and-forward pattern with transfer_eth_in + mixer_withdraw_in (in_degree 2-4, minimal out_degree or mixer_deposit_out). May represent intermediate collection addresses or a second-tier actor reusing similar evasion templates. Grouped due to shared receiving pattern and modest feature overlap."
+    },
+    {
+      "cluster_id": 5,
+      "addresses": [
+        "0x3Aca3b81...64e7",
+        "0x3aa73de9...C57E",
+        "0x6A8cdd69...3f18",
+        "0x82899352...217C",
+        "0x959e44b8...09B9",
+        "0x9a540e80...D5fB",
+        "0xA099f848...b2D7",
+        "0xA3EB1B0d...e957",
+        "0xE9f40C67...5536",
+        "0xFaAbdd7f...614C",
+        "0xd8Ac03a0...e5bC",
+        "0xe40Dd2E6...3f76",
+        "0x2fcbDeD2...8Fc4",
+        "0x3cFA6CAA...035F",
+        "0x4134b5aB...aE65",
+        "0x6F0963c0...cc1d",
+        "0x73ce90a7...4224",
+        "0x925aeB31...2B6B",
+        "0xB51544bf...4Af7",
+        "0xE9Dd7B16...80F0",
+        "0xb1f7f97B...acA8",
+        "0xc0749fa1...7277",
+        "0xd42c9084...Af89"
+      ],
+      "reasoning": "Pure mixer-withdrawal sinks: in_degree 1, no out_degree, mixer_withdraw_in only. Represent end-point collection addresses used to pool funds from Tornado cash. Likely operated by same actor or coordinated money laundering ring given high concentration and identical patterns across exchanges."
+    },
+    {
+      "cluster_id": 6,
+      "addresses": [
+        "0xFff6E8f6...E28a",
+        "0xa311415c...0A94",
+        "0xDfBc7c1f...5a18",
+        "0x474677F3...18D5",
+        "0x030C606c...51Bb",
+        "0x0A32C6DC...8578",
+        "0x19065FCB...87d8",
+        "0x192D88b6...70A2",
+        "0x32b12614...A7d6",
+        "0x32b85C29...b2fC",
+        "0x33496835...22DD",
+        "0x65a4aF30...92be",
+        "0x95754a04...8F9d",
+        "0x974B044b...E4eA",
+        "0x9A64a513...4319",
+        "0xA879E9d5...9ade",
+        "0xB2d39096...EDc3",
+        "0xBD381b2a...0800",
+        "0xC147267D...F2cD",
+        "0xC3dFaABa...80ee",
+        "0xE2c86CFb...665e",
+        "0x19dB6999...40FC",
+        "0xDB841B80...32B8",
+        "0x2Af3b96a...c2DD",
+        "0x2a9b1828...17bc",
+        "0x570CB863...697a",
+        "0x82016983...8C4f",
+        "0x8238a2Ac...B294",
+        "0x8e6Cf335...FB6d",
+        "0x92429e0B...6afE"
+      ],
+      "reasoning": "Mixer deposit output endpoints: in_degree 1 (or 1-2), out_degree 1 (or 1-2), mixer_deposit_out pattern with minimal/no mixer_withdraw_in. Represent the 'clean' exit side of Tornado tumbling, feeding laundered funds into exchanges. High concentration across all three exchanges indicates systematic use of same deployment strategy by one or tightly coordinated actors."
+    }
+  ],
+  "overall_reasoning": "This batch exhibits a classic multi-exchange money laundering architecture. The dominant signal is address 0xa513e6e4...c853, which appears across all three exchanges with high-volume mixer hub characteristics (consistent mixer_deposit_in/mixer_withdraw_out at scale 3.0-3.5 log-ETH). Cluster 2 represents small-scale bidirectional mixer tumbling (classic Tornado cycle) replicated many times—suggesting one actor running parallel accounts per exchange to fragment detection. Clusters 5 and 6 partition mixer input/output addresses: one-way sinks receiving from Tornado (cluster 5) and one-way sources feeding into Tornado (cluster 6), both showing extreme concentration and symmetry consistent with a single money laundering operation. Clusters 3 and 4 capture intermediate or secondary participants, either coordinated with the main actor or using similar operational templates. The strategy prioritizes cross-exchange distribution of accounts to defeat single-institution KYC while maintaining a recognizable behavioral fingerprint (mixer + transfer + swap combinations, consistent volume scales, and systematic use of USDT alongside ETH for obfuscation)."
+}
+```
