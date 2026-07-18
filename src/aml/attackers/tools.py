@@ -41,6 +41,11 @@ Tools shipped:
     mixer_withdraw           — withdraw 1 ETH from the mixer to any
                                recipient using a deposit note + a Groth16
                                proof generated internally via snarkjs
+    mixer_batch_deposit      — batch N deposits into the mixer in one call;
+                               returns N deposit notes. Collapses N
+                               Coordinator round-trips into one.
+    mixer_batch_withdraw     — batch N withdrawals from the mixer in one
+                               call; per-note success/failure preserved.
 """
 from __future__ import annotations
 
@@ -101,6 +106,13 @@ _MERKLE_DEPTH = 10
 
 # MockTornado.DENOMINATION — the fixed mixer deposit/withdraw size.
 _MIXER_DENOMINATION_WEI = 10**18
+
+# Hard cap on mixer_batch_{deposit,withdraw} to prevent runaway ZK proof
+# generation time. Each deposit re-hashes the full Merkle path (~3M gas,
+# a few seconds on-chain). Each withdraw generates a Groth16 proof
+# (~10-30s per note off-chain via snarkjs). A batch of 100 withdraws is
+# already ~15-50 min of proof generation — reasonable ceiling.
+_MAX_MIXER_BATCH = 100
 
 # Deposit-note wire format: "<prefix>:<nullifier_hex>:<secret_hex>", each
 # component zero-padded to 64 hex chars. The note is the *only* secret
@@ -713,6 +725,92 @@ _TOOL_SCHEMAS: list[dict] = [
         },
     },
     {
+        "name": "mixer_batch_deposit",
+        "description": (
+            "Batch deposit: make N mixer_deposit calls in a single tool call. "
+            "Deposits N × 1 ETH from `from_address` and returns the N "
+            "corresponding deposit notes. Each deposit is independent and "
+            "generates a fresh (nullifier, secret) pair, so each of the N "
+            "notes withdraws exactly 1 ETH separately. `from_address` must "
+            "hold at least N × 1 ETH plus gas. All N notes are returned in "
+            f"the response — save ALL of them. Cap: {_MAX_MIXER_BATCH} "
+            "deposits per call. Use instead of calling mixer_deposit in a "
+            "loop when planning mixer-heavy campaigns (ransomware-cashout, "
+            "DeFi-exploit) — collapses N Coordinator round-trips into one."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "from_address": {
+                    "type": "string",
+                    "description": (
+                        "Wallet making the deposits. Must be in the registry "
+                        "and hold >= num_deposits × 1 ETH plus gas."
+                    ),
+                },
+                "num_deposits": {
+                    "type": "integer",
+                    "description": (
+                        f"How many separate 1-ETH deposits to make. Capped "
+                        f"at {_MAX_MIXER_BATCH}."
+                    ),
+                },
+            },
+            "required": ["from_address", "num_deposits"],
+        },
+    },
+    {
+        "name": "mixer_batch_withdraw",
+        "description": (
+            "Batch withdraw: withdraw N notes from the mixer in a single "
+            "tool call. Pass `deposit_notes` (list, length N) and either "
+            "`recipients` as a list of length N (one recipient per note) OR "
+            "a single string (all N notes withdraw to the same address — "
+            "useful for consolidation). Optional `gas_payer` (registered "
+            "wallet) submits all N withdrawal txs and pays their gas. Each "
+            "withdrawal generates a fresh Groth16 proof (~10-30s per note), "
+            "so a batch of N takes roughly N × those seconds. Returns per-"
+            "note success/failure so partial success is preserved. Cap: "
+            f"{_MAX_MIXER_BATCH} notes per call. Use when consolidating a "
+            "mixer-heavy campaign into a single Coordinator round-trip."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "deposit_notes": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "List of deposit_note strings from prior mixer_deposit "
+                        "or mixer_batch_deposit calls."
+                    ),
+                },
+                "recipients": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "array", "items": {"type": "string"}},
+                    ],
+                    "description": (
+                        "Either a single recipient string (all withdrawals to "
+                        "the same address) or a list of length equal to "
+                        "deposit_notes (one recipient per note). Any address; "
+                        "recipients need not be in the wallet registry."
+                    ),
+                },
+                "gas_payer": {
+                    "type": "string",
+                    "description": (
+                        "Optional. Registered wallet that submits all "
+                        "withdrawal txs and pays their gas. Defaults to the "
+                        "first registered wallet. For unlinkability, use a "
+                        "wallet unrelated to the deposits and the recipients."
+                    ),
+                },
+            },
+            "required": ["deposit_notes", "recipients"],
+        },
+    },
+    {
         "name": "inspect_chain",
         "description": (
             "Read-only audit of the current chain state. Returns a "
@@ -952,6 +1050,10 @@ class ToolDispatcher:
             return self._mixer_deposit(**tool_input)
         if tool_name == "mixer_withdraw":
             return self._mixer_withdraw(**tool_input)
+        if tool_name == "mixer_batch_deposit":
+            return self._mixer_batch_deposit(**tool_input)
+        if tool_name == "mixer_batch_withdraw":
+            return self._mixer_batch_withdraw(**tool_input)
         if tool_name == "peel_chain":
             return self._peel_chain(**tool_input)
         if tool_name == "advance_blocks":
@@ -2316,6 +2418,188 @@ class ToolDispatcher:
             "nullifier_hash": "0x" + nullifier_hash_bytes.hex(),
             "anonymity_set_size": len(leaves),
             "gas_used": receipt.gasUsed,
+        })
+
+    # --- Batched ZK mixer tools (Chema-approved batched pattern) ------------
+    # Same tradeoff as smurf_split: the Coordinator picks the parameters, the
+    # dispatcher does the N sequential ops. Avoids N round-trips of tool_use
+    # / tool_result blocks (each ~2KB of context growth) that would burn
+    # tokens and hit max_iterations on any batch >20.
+
+    def _mixer_batch_deposit(
+        self, from_address: str, num_deposits: int,
+    ) -> ToolResult:
+        """Batch deposit: N × 1 ETH into the mixer, return N notes."""
+        if self.tornado is None:
+            return ToolResult(error="Tornado mixer contract not set on dispatcher")
+
+        try:
+            from_address = Web3.to_checksum_address(from_address)
+        except ValueError as e:
+            return ToolResult(error=f"Invalid sender: {e}")
+        if from_address not in self.wallets:
+            return ToolResult(error=f"No private key registered for {from_address}")
+        if num_deposits <= 0:
+            return ToolResult(
+                error=f"num_deposits must be positive, got {num_deposits}"
+            )
+        if num_deposits > _MAX_MIXER_BATCH:
+            return ToolResult(error=(
+                f"num_deposits={num_deposits} exceeds cap of "
+                f"{_MAX_MIXER_BATCH} (set to prevent runaway gas/runtime)"
+            ))
+
+        # Balance pre-check: N × 1 ETH plus generous gas margin. Each deposit
+        # uses ~3M gas (MiMC hashes the full Merkle path); with a headroom
+        # factor of 1.2× we don't strand the sender mid-batch.
+        balance = self.w3.eth.get_balance(from_address)
+        gas_price = self.w3.eth.gas_price
+        required_deposit_wei = num_deposits * _MIXER_DENOMINATION_WEI
+        estimated_gas_wei = int(num_deposits * 3_000_000 * gas_price * 1.2)
+        if balance < required_deposit_wei + estimated_gas_wei:
+            return ToolResult(error=(
+                f"Insufficient ETH: {from_address} holds "
+                f"{balance / 10**18:.4f} ETH, batch of {num_deposits} "
+                f"deposits requires {required_deposit_wei / 10**18} ETH "
+                f"plus ~{estimated_gas_wei / 10**18:.4f} ETH gas"
+            ))
+
+        notes: list[str] = []
+        tx_hashes: list[str] = []
+        leaf_indices: list[int | None] = []
+        commitments: list[str] = []
+        total_gas = 0
+        failures: list[dict] = []
+
+        # Reuse the single-deposit implementation for consistency. Stop on
+        # first failure — the mixer state is deterministic per-tx, so a
+        # failure typically means insufficient balance or contract issue
+        # that won't self-heal for the next tx in the batch.
+        for i in range(num_deposits):
+            result = self._mixer_deposit(from_address)
+            if result.error:
+                failures.append({"index": i, "error": result.error})
+                break
+            out = result.output
+            notes.append(out["deposit_note"])
+            tx_hashes.append(out["tx_hash"])
+            leaf_indices.append(out.get("leaf_index"))
+            commitments.append(out.get("commitment", ""))
+            total_gas += out.get("gas_used", 0)
+
+        return ToolResult(output={
+            "from_address": from_address,
+            "num_requested": num_deposits,
+            "num_successful": len(notes),
+            # ALL notes returned — agent NEEDS every one to withdraw. This
+            # is the payload the batch exists to produce.
+            "deposit_notes": notes,
+            "leaf_indices": leaf_indices,
+            # Sample tx_hashes + commitments to avoid context blowup on
+            # large batches — full receipts are on-chain if the agent needs
+            # them later (via inspect_chain).
+            "tx_hashes_sample": (
+                tx_hashes[:5] + (["..."] if len(tx_hashes) > 5 else [])
+            ),
+            "commitments_sample": (
+                commitments[:5] + (["..."] if len(commitments) > 5 else [])
+            ),
+            "total_gas_used": total_gas,
+            "total_eth_deposited": (
+                len(notes) * _MIXER_DENOMINATION_WEI / 10**18
+            ),
+            "failures": failures,
+            "warning": (
+                "SAVE ALL deposit_notes — each is the ONLY way to withdraw "
+                "its corresponding 1 ETH. Anyone holding a note controls "
+                "its ETH."
+            ),
+        })
+
+    def _mixer_batch_withdraw(
+        self,
+        deposit_notes: list[str],
+        recipients: list[str] | str,
+        gas_payer: str | None = None,
+    ) -> ToolResult:
+        """Batch withdraw: N notes from the mixer, per-note success/failure."""
+        if self.tornado is None:
+            return ToolResult(error="Tornado mixer contract not set on dispatcher")
+        if not isinstance(deposit_notes, list) or not deposit_notes:
+            return ToolResult(
+                error="deposit_notes must be a non-empty list"
+            )
+        if len(deposit_notes) > _MAX_MIXER_BATCH:
+            return ToolResult(error=(
+                f"len(deposit_notes)={len(deposit_notes)} exceeds cap of "
+                f"{_MAX_MIXER_BATCH}"
+            ))
+
+        # Normalize recipients: str → broadcast to all notes; list → 1:1.
+        if isinstance(recipients, str):
+            recipients_list = [recipients] * len(deposit_notes)
+        elif isinstance(recipients, list):
+            if len(recipients) != len(deposit_notes):
+                return ToolResult(error=(
+                    f"len(recipients)={len(recipients)} must equal "
+                    f"len(deposit_notes)={len(deposit_notes)}, or pass a "
+                    "single string to broadcast one recipient across notes"
+                ))
+            recipients_list = recipients
+        else:
+            return ToolResult(
+                error="recipients must be str or list[str]"
+            )
+
+        successes: list[dict] = []
+        failures: list[dict] = []
+        total_gas = 0
+
+        # Reuse the single-withdraw path per note. Each call re-scans mixer
+        # events + generates a fresh Groth16 proof (~10-30s per note); this
+        # is the dominant cost and cannot be trivially batched because
+        # proofs are per-nullifier. Continue on failure — a single bad
+        # note (already-spent, malformed) shouldn't kill the whole batch.
+        for i, (note, recipient) in enumerate(
+            zip(deposit_notes, recipients_list)
+        ):
+            result = self._mixer_withdraw(note, recipient, gas_payer)
+            if result.error:
+                failures.append({
+                    "index": i,
+                    "recipient": recipient,
+                    "error": result.error,
+                })
+                continue
+            out = result.output
+            successes.append({
+                "index": i,
+                "tx_hash": out["tx_hash"],
+                "recipient": out["recipient"],
+            })
+            total_gas += out.get("gas_used", 0)
+
+        return ToolResult(output={
+            "num_requested": len(deposit_notes),
+            "num_successful": len(successes),
+            "num_failed": len(failures),
+            # Sample successes to bound context; full tx_hashes recoverable
+            # on-chain if needed.
+            "successes_sample": (
+                successes[:5] + (["..."] if len(successes) > 5 else [])
+            ),
+            # Failures kept in full — they're the actionable information
+            # the agent needs to decide what to do next (retry, skip, etc.)
+            "failures": failures,
+            "total_gas_used": total_gas,
+            "total_eth_withdrawn": (
+                len(successes) * _MIXER_DENOMINATION_WEI / 10**18
+            ),
+            "anonymity_note": (
+                "Each withdrawal used a fresh Groth16 proof — on-chain "
+                "observers cannot link individual withdrawals to specific "
+                "deposits beyond the mixer's anonymity set."
+            ),
         })
 
     # --- Coordinator reflection tool (PR 42: smarter attacker, A) -----------
