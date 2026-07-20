@@ -138,6 +138,9 @@ def main() -> None:
                         choices=["haiku", "sonnet", "opus"])
     parser.add_argument("--include-upbit", action="store_true",
                         help="Include UpbitHack (95%% of data, very slow)")
+    parser.add_argument("--exclude-big-hacks", action="store_true",
+                        help="Also exclude PlusTokenPonzi + AscendEXHacker + "
+                             "BitpointHacker (bring working set to ~5-10k nodes)")
     parser.add_argument("--num-exchanges", type=int, default=3)
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
@@ -161,8 +164,11 @@ def main() -> None:
           f"{graph.number_of_edges():,} edges / {len(hacks)} hacks")
 
     if not args.include_upbit:
-        print("Excluding UpbitHack (95% of data)...")
-        allowed = set(hacks) - {"UpbitHack"}
+        excluded = {"UpbitHack"}
+        if args.exclude_big_hacks:
+            excluded |= {"PlusTokenPonzi", "AscendEXHacker", "BitpointHacker"}
+        print(f"Excluding: {sorted(excluded)}")
+        allowed = set(hacks) - excluded
         graph, node_labels, hack_membership = filter_to_hacks(
             graph, node_labels, hack_membership, allowed,
         )
