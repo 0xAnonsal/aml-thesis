@@ -1,0 +1,45 @@
+Loading /home/anon/aml-thesis/data/ethereum_heist_combined.pkl...
+  Full: 633,057 nodes / 2,452,786 edges / 23 hacks
+Excluding: ['AscendEXHacker', 'BitpointHacker', 'PlusTokenPonzi', 'UpbitHack']
+  After exclude: 4,796 nodes / 48,408 edges
+  Labeled: 4,708 (heist: 300, benign: 4,408)
+  True actor clusters: 19 hacks + 4,408 benign singletons
+
+Building 3 exchange views (random partition)...
+  exchange_A: 1,562 addrs, 11,207 edges
+  exchange_B: 1,620 addrs, 4,191 edges
+  exchange_C: 1,614 addrs, 8,158 edges
+  Training labels passed: 4,708
+
+==============================================================================
+BASELINE: MultiAgentDetector (cosine)
+==============================================================================
+  Fit time: 258.1s
+  n_clusters_pred: 4203
+  ARI:          0.06601698250558224
+  Homogeneity:  0.9997620747085415
+  Completeness: 0.996611700926135
+
+==============================================================================
+NOVEL: LLMDefenderCoordinator (model=sonnet)
+==============================================================================
+  Fit time: 455.4s
+  n_clusters_pred: 4555
+  ARI:          0.04014842812336472
+  Homogeneity:  0.9958287596048299
+  Completeness: 0.9961599277162865
+  LLM cost:     $0.1443
+  LLM tokens:   in=15828, out=6456
+  Used fallback: False
+
+  LLM reasoning (first 500 chars):
+  Cluster 0 groups the three ultra-high-fanout pure-distributor addresses (out_degree 635, 1195, 701) across exchanges A and B that serve as top-level fund dispersal hubs. Cluster 1 captures large mixed in/out hubs (0x0e860f, 0x74de5d, 0x262feb, 0xc4af9d) with hundreds of edges suggesting layering intermediaries. Cluster 2 isolates extreme in-degree sink addresses (0xa9bf7 with 2541 in_degree, 0xc8a65 with 592, 0x6e121 with 91, 0xa2a17 with 146, 0x70faa with 45 in/1 out) that act as consolidation ...
+
+==============================================================================
+HEAD-TO-HEAD (ARI)
+==============================================================================
+  Cosine ARI: 0.0660
+  LLM ARI:    0.0401
+  Diff:       -0.0259  (Cosine wins)
+
+Wrote /home/anon/aml-thesis/results/eval_llm_defender_heist_sonnet_no_upbit.json
