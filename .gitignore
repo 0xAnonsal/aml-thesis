@@ -13,9 +13,17 @@ build/
 
 # Virtual envs / secrets
 .env
+.env.*
+!.env.example
+!.env.*.example
 .venv
 venv/
 ENV/
+
+# Sepolia deployment output (contains addresses, no secrets — but
+# regenerable by rerunning scripts/deploy_eth_mocks_sepolia.py)
+deployments/*.json
+!deployments/.gitkeep
 
 # Conda
 .conda/
