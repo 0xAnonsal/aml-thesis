@@ -74,24 +74,25 @@ def install_gas_floor_middleware(w3: Web3, min_gwei: int) -> None:
     Sepolia RPC providers routinely return gas price suggestions barely
     above base fee, producing txs that stall in mempool. Since tools.py
     uses legacy `gasPrice = w3.eth.gas_price` in ~40 sites, patching the
-    middleware layer is the least invasive fix.
+    middleware layer is the least invasive fix. Web3.py v7 uses class-
+    based middleware (Web3Middleware); this installs a subclass that
+    overrides response_processor for the eth_gasPrice method.
     """
+    from web3.middleware import Web3Middleware
     min_wei = w3.to_wei(min_gwei, "gwei")
 
-    def middleware(make_request, w3_inner):
-        def call(method, params):
-            resp = make_request(method, params)
-            if method == "eth_gasPrice" and isinstance(resp, dict) and "result" in resp:
+    class GasFloorMiddleware(Web3Middleware):
+        def response_processor(self, method, response):
+            if method == "eth_gasPrice" and isinstance(response, dict) and "result" in response:
                 try:
-                    current = int(resp["result"], 16)
+                    current = int(response["result"], 16)
                     if current < min_wei:
-                        resp["result"] = hex(min_wei)
+                        response["result"] = hex(min_wei)
                 except (ValueError, TypeError):
                     pass
-            return resp
-        return call
+            return response
 
-    w3.middleware_onion.add(middleware, name="gas_floor")
+    w3.middleware_onion.add(GasFloorMiddleware, name="gas_floor")
 
 
 def _redact_rpc(rpc: str) -> str:
