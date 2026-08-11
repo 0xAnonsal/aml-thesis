@@ -105,7 +105,10 @@ def _redact_rpc(rpc: str) -> str:
 
 
 def load_sepolia_env() -> tuple[str, str]:
-    load_dotenv(REPO_ROOT / ".env.sepolia")
+    # Load .env first (ANTHROPIC_API_KEY + shared secrets), then .env.sepolia
+    # (chain-specific overrides). Chain-specific keys take precedence.
+    load_dotenv(REPO_ROOT / ".env")
+    load_dotenv(REPO_ROOT / ".env.sepolia", override=True)
     rpc = os.environ.get("SEPOLIA_RPC_URL")
     key = os.environ.get("SEPOLIA_DEPLOYER_PRIVATE_KEY")
     if not rpc:
