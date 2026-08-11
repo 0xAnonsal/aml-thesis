@@ -20,10 +20,12 @@ build/
 venv/
 ENV/
 
-# Sepolia deployment output (contains addresses, no secrets — but
-# regenerable by rerunning scripts/deploy_eth_mocks_sepolia.py)
-deployments/*.json
-!deployments/.gitkeep
+# Sepolia deployment output (public addresses, no secrets). Tracked in Git
+# so the TFM can reference the specific deployed contracts and any reader
+# can verify them on sepolia.etherscan.io. A re-deploy would produce NEW
+# addresses (non-deterministic), so tracking is the only way to preserve
+# provenance for the writeup.
+!deployments/*.json
 
 # Conda
 .conda/

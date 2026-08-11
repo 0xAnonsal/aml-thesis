@@ -1,0 +1,38 @@
+RPC:      https://eth-sepolia.g.alchemy.com/v2/<redacted>
+Deployer: 0x54539B5ef33cfC3C57b9b572fc77d1e5F1CFf4c4
+Balance:  11.3480 ETH
+Nonce:    7
+
+Cancelling stuck tx at nonce 7 (0 ETH self-transfer with 5 gwei priority)...
+  tx sent: e86e429ff345e697684ae64359fa80b5d6dbf1f04665260a2c04007186529686  (nonce=7, priority=5 gwei)
+  cancel confirmed at block 11467321 (gas used 21000)
+
+=== Deploying MiMCSponge (EIP-1559, priority 5 gwei) ===
+  tx sent: 34a5f44d6d855ce30bc59ed563c1730b5a344860cb272cd72382eb0d8be8a2a9  (nonce=8, priority=5 gwei)
+  MiMCSponge: 0x615FD17d605325eb05d784Aa8189518FeE5f0Ce6 (gas used 2,582,302)
+
+=== Deploying Groth16 Verifier ===
+  tx sent: 0eb7342c792bbeb51cd497972b4ae7e91083eac2f6007e313dde798ea5282859  (nonce=9, priority=5 gwei)
+  Verifier: 0x2FDceD2D3C9c3A9322d04afc1e6A243a98a68f46  (gas used 425,004)
+
+=== Deploying MockTornado ===
+  tx sent: 094c6f0bc13c75c70bc88462e7e35ed1d99bca84e9cb4750b5a722f8b277f3dd  (nonce=10, priority=5 gwei)
+  MockTornado: 0x199181F8a480A61520Ca3Eb2Ae6BF5dbBc6550C5  (gas used 1,992,003)
+  denomination: 1.0 ETH
+
+=== Deploying MockBridge ===
+  tx sent: 45da12de8b668eefb5bad4dea4c3cb0048f72edf244ab422f3c3be204d7e980f  (nonce=11, priority=5 gwei)
+  MockBridge: 0x99DFe4eEAbbA728CE1271d0Ba6a0959883986600  (gas used 464,588)
+
+All 6 addresses saved to deployments/sepolia.json
+
+=== Deployment summary ===
+  MockUSDT             https://sepolia.etherscan.io/address/0x665A2176d7beF3bccE52F37F1e64c99D993Aa7Ba
+  MockUniswapV2Pool    https://sepolia.etherscan.io/address/0x229cC888FE17c81CD474Ea8eb6F5387f1739a4c4
+  MiMCSponge           https://sepolia.etherscan.io/address/0x615FD17d605325eb05d784Aa8189518FeE5f0Ce6
+  Verifier             https://sepolia.etherscan.io/address/0x2FDceD2D3C9c3A9322d04afc1e6A243a98a68f46
+  MockTornado          https://sepolia.etherscan.io/address/0x199181F8a480A61520Ca3Eb2Ae6BF5dbBc6550C5
+  MockBridge           https://sepolia.etherscan.io/address/0x99DFe4eEAbbA728CE1271d0Ba6a0959883986600
+
+Remaining balance: 11.3148 ETH
+Next: python scripts/verify_sepolia_deployment.py

@@ -109,6 +109,26 @@ def load_artifact(path: Path) -> tuple[list, str]:
     return a["abi"], a["bytecode"]["object"]
 
 
+def _redact_rpc(rpc: str) -> str:
+    """Redact API key from RPC URL for safe printing.
+
+    Handles both query-param style (https://host?key=X) and Alchemy/Infura
+    path style (https://host/v2/KEY, https://host/v3/PROJECT_ID). The full
+    URL contains a secret that must never be printed to stdout/log files.
+    """
+    from urllib.parse import urlparse
+    parsed = urlparse(rpc)
+    host = f"{parsed.scheme}://{parsed.netloc}"
+    # Alchemy/Infura embed the key in the last path segment.
+    # Keep the version prefix but redact the segment after it.
+    path_parts = [p for p in parsed.path.split("/") if p]
+    if path_parts:
+        # /v2/<key> -> /v2/<redacted>, /v3/<project> -> /v3/<redacted>
+        path_parts[-1] = "<redacted>"
+        host += "/" + "/".join(path_parts)
+    return host
+
+
 def load_env() -> tuple[str, str]:
     """Load Sepolia RPC + deployer key from .env.sepolia. Exits if either missing."""
     env_path = REPO_ROOT / ".env.sepolia"
@@ -177,7 +197,7 @@ def main() -> None:
     rpc, key = load_env()
     w3 = Web3(Web3.HTTPProvider(rpc))
     if not w3.is_connected():
-        raise SystemExit(f"Cannot connect to Sepolia RPC: {rpc}")
+        raise SystemExit(f"Cannot connect to Sepolia RPC: {_redact_rpc(rpc)}")
     if w3.eth.chain_id != 11155111:
         raise SystemExit(
             f"Wrong chain: expected Sepolia (11155111), got {w3.eth.chain_id}. "
@@ -185,7 +205,7 @@ def main() -> None:
         )
 
     deployer = w3.eth.account.from_key(key).address
-    print(f"Sepolia RPC:        {rpc.split('?')[0]}  (chain_id={w3.eth.chain_id})")
+    print(f"Sepolia RPC:        {_redact_rpc(rpc)}  (chain_id={w3.eth.chain_id})")
     check_balance(w3, deployer)
 
     if args.dry_run:
