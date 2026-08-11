@@ -367,6 +367,30 @@ def main():
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=2, default=str))
     (out_dir / "addresses.json").write_text(json.dumps(addresses, indent=2))
 
+    # SECRETS — save private keys of every wallet the dispatcher generated,
+    # so scripts/sweep_sepolia.py can later reclaim any residual ETH/USDT
+    # stranded on those wallets. This file MUST NOT be committed —
+    # gitignored via .gitignore (`wallets_keys.json`).
+    wallets_keys = {
+        "run_name": run_name,
+        "chain_id": w3.eth.chain_id,
+        "deployer": deployer,
+        "wallets": dict(dispatcher.wallets),
+        "warning": (
+            "This file contains private keys. Even though these are Sepolia "
+            "testnet wallets with no real-money value, NEVER commit this file "
+            "to Git and NEVER paste its contents into chat, logs, or "
+            "screenshots. Use scripts/sweep_sepolia.py to reclaim residual "
+            "funds back to the deployer, then delete this file."
+        ),
+    }
+    (out_dir / "wallets_keys.json").write_text(
+        json.dumps(wallets_keys, indent=2, default=str)
+    )
+    print(f"[runner] wallets_keys.json saved ({len(dispatcher.wallets)} keys) "
+          f"— gitignored; use scripts/sweep_sepolia.py to reclaim funds",
+          file=sys.stderr)
+
     campaign_dict = {
         "successful": result.successful,
         "stopped_reason": result.stopped_reason,
