@@ -888,7 +888,28 @@ class ToolDispatcher:
         self.wallets[Web3.to_checksum_address(address)] = private_key
 
     def dispatch(self, tool_name: str, tool_input: dict) -> ToolResult:
-        """Execute the named tool with the given input dict."""
+        """Execute the named tool with the given input dict.
+
+        Defensively filters tool_input to only the kwargs the target method
+        accepts. LLMs occasionally hallucinate extra parameters (e.g.
+        Sonnet 4.6 was observed passing `note` to `transfer_eth` on Sepolia
+        2026-08-11); a hard TypeError would crash the whole campaign. The
+        filter silently drops unknown kwargs so the tool proceeds with the
+        LLM's other (valid) inputs.
+        """
+        import inspect
+        method = getattr(self, f"_{tool_name}", None)
+        if method is not None:
+            sig = inspect.signature(method)
+            if not any(
+                p.kind == inspect.Parameter.VAR_KEYWORD
+                for p in sig.parameters.values()
+            ):
+                declared = set(sig.parameters.keys())
+                tool_input = {
+                    k: v for k, v in tool_input.items() if k in declared
+                }
+
         if tool_name == "get_balance":
             return self._get_balance(**tool_input)
         if tool_name == "transfer_usdt":
