@@ -861,11 +861,19 @@ class ToolDispatcher:
         wallets: dict[str, str],
         pool_contract: Any = None,
         tornado_contract: Any = None,
+        mixer_events_from_block: int = 0,
     ):
         self.w3 = w3
         self.usdt = usdt_contract
         self.pool = pool_contract
         self.tornado = tornado_contract
+        # Block from which _mixer_collect_leaves starts scanning Deposit
+        # events. 0 works on Anvil (fresh chain, <100 blocks); on Sepolia
+        # scanning from 0 hits RPC providers' block-range limits (Alchemy
+        # rejects queries > 2000-10000 blocks). Callers running against
+        # a live testnet MUST pass a start block near the tornado
+        # deployment (e.g. campaign start_block - 100).
+        self.mixer_events_from_block = int(mixer_events_from_block)
         self.wallets: dict[str, str] = {
             Web3.to_checksum_address(addr): key for addr, key in wallets.items()
         }
@@ -2081,9 +2089,9 @@ class ToolDispatcher:
         deposit_event = self.tornado.events.Deposit()
         try:
             try:
-                logs = deposit_event.get_logs(from_block=0)
+                logs = deposit_event.get_logs(from_block=self.mixer_events_from_block)
             except TypeError:   # web3.py v6 uses fromBlock
-                logs = deposit_event.get_logs(fromBlock=0)
+                logs = deposit_event.get_logs(fromBlock=self.mixer_events_from_block)
         except Exception as e:   # noqa: BLE001 — surfaced as a tool error
             raise RuntimeError(f"failed to scan mixer deposit events: {e}") from e
 

@@ -256,13 +256,18 @@ def main():
     alice, alice_key = fund_alice_from_deployer(w3, deployer, deployer_key, alice_funding)
     print(f"[runner] alice funded, starting Coordinator...", file=sys.stderr)
 
-    # Build dispatcher with pre-deployed contracts
+    # Build dispatcher with pre-deployed contracts. mixer_events_from_block
+    # must be set to a block near the campaign start — scanning from block 0
+    # on Sepolia would hit Alchemy's block-range limit (root cause of the
+    # 2026-08-11 mixer_withdraw failure). 100-block buffer gives ~20 min
+    # of history, more than enough for any single campaign.
     dispatcher = ToolDispatcher(
         w3=w3,
         usdt_contract=contracts["usdt"],
         wallets={deployer: deployer_key, alice: alice_key},
         pool_contract=contracts["pool"],
         tornado_contract=contracts["tornado"] if scenario.needs_tornado else None,
+        mixer_events_from_block=max(0, start_block - 100),
     )
     bootstrap_attacker_addrs = sorted(dispatcher.wallets.keys())
 
