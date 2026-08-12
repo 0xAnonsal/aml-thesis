@@ -313,17 +313,17 @@ _TOOL_SCHEMAS: list[dict] = [
     {
         "name": "advance_blocks",
         "description": (
-            "Advance the local blockchain by N blocks — used to simulate "
+            "Advance the blockchain by N blocks — used to simulate "
             "TIMING DELAYS between laundering phases. Real-world crypto "
-            "laundering commonly involves waits of days to months between "
-            "operations (e.g. Lazarus/Bybit waited weeks before the first "
-            "Tornado Cash deposit; HTX/HECO Bridge attacker waited 4 "
-            "months). Delays are what differentiate a hit-and-run from "
-            "sophisticated APT operations. Anvil mines N empty blocks "
-            "instantly, so no real time passes but the on-chain distance "
-            "between events becomes distinctive in the transaction graph. "
-            "1 Ethereum block ≈ 12 seconds, so 5,000 blocks ≈ 16 hours, "
-            "50,400 blocks ≈ 7 days, 218,400 blocks ≈ 30 days."
+            "laundering commonly involves waits of days to months "
+            "between operations (Lazarus/Bybit waited weeks before the "
+            "first Tornado Cash deposit; HTX/HECO Bridge attacker "
+            "waited 4 months). Delays differentiate a hit-and-run from "
+            "sophisticated APT operations. On Anvil this is instant "
+            "(anvil_mine RPC). On live testnets like Sepolia this is a "
+            "REAL time.sleep, capped at 30 blocks (~6 min wall-clock) "
+            "to keep campaign runtime bounded — use sparingly. 1 "
+            "Ethereum block ≈ 12 seconds."
         ),
         "input_schema": {
             "type": "object",
@@ -331,11 +331,10 @@ _TOOL_SCHEMAS: list[dict] = [
                 "num_blocks": {
                     "type": "integer",
                     "description": (
-                        "How many blocks to advance. Typical values: "
-                        "5000-20000 (short delay, hours to a day), "
-                        "50000-100000 (medium delay, ~1-2 weeks), "
-                        "200000-500000 (long delay, 1-3 months). Range "
-                        "[100, 1000000] enforced."
+                        "How many blocks to advance. On Anvil [100, "
+                        "1000000] (typical 5000-500000 for hours to "
+                        "months). On live chains [5, 30] (typical 5-15 "
+                        "= 1-3 min real wait between phases)."
                     ),
                 },
             },
@@ -1262,22 +1261,35 @@ class ToolDispatcher:
         })
 
     def _advance_blocks(self, num_blocks: int) -> ToolResult:
-        """Advance the local chain by N blocks (anvil_mine RPC).
+        """Advance the local chain by N blocks (anvil_mine RPC on Anvil,
+        real time.sleep on live testnets like Sepolia).
 
-        Simulates timing delays between laundering phases without
-        requiring real wall-clock time. On Ethereum mainnet 1 block ≈
-        12 seconds, so this becomes distinctive on-chain distance
-        between attacker events in the extracted graph.
+        Simulates timing delays between laundering phases. On Anvil this
+        is instant via anvil_mine RPC. On live chains (chain_id != 31337)
+        it becomes a real time.sleep of num_blocks × 12 seconds, capped
+        at 30 blocks (~6 min) to avoid excessive wall-clock cost during
+        a research campaign.
         """
-        if num_blocks < 100 or num_blocks > 1_000_000:
+        # Detect chain: Anvil default chain_id is 31337. Anything else
+        # is treated as a live chain (Sepolia, mainnet, etc.).
+        is_anvil = self.w3.eth.chain_id == 31337
+        max_blocks = 1_000_000 if is_anvil else 30
+        min_blocks = 100 if is_anvil else 5
+        if num_blocks < min_blocks or num_blocks > max_blocks:
             return ToolResult(error=(
-                f"num_blocks must be in [100, 1000000], got {num_blocks}"
+                f"num_blocks must be in [{min_blocks}, {max_blocks}] "
+                f"on this chain (chain_id={self.w3.eth.chain_id}), got {num_blocks}"
             ))
         block_before = self.w3.eth.block_number
         try:
-            self.w3.provider.make_request("anvil_mine", [hex(num_blocks)])
+            if is_anvil:
+                self.w3.provider.make_request("anvil_mine", [hex(num_blocks)])
+            else:
+                # Real sleep for live chains — 12s per Ethereum block
+                import time as _time
+                _time.sleep(num_blocks * 12)
         except Exception as e:   # noqa: BLE001
-            return ToolResult(error=f"anvil_mine RPC failed: {e}")
+            return ToolResult(error=f"advance_blocks failed: {e}")
         block_after = self.w3.eth.block_number
         return ToolResult(output={
             "block_before": block_before,

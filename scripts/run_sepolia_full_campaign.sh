@@ -20,9 +20,11 @@
 #
 # MODEL defaults to "haiku". Use "sonnet" for headline quality (~5x cost).
 
-set -euo pipefail
+set -uo pipefail   # NO -e — we WANT to keep going if a scenario refuses
+                   # (Sonnet observed to refuse mid-run 2026-08-11, this
+                   # is a valid data point for §5.6.4 not a failure)
 
-MODEL="${1:-haiku}"
+MODEL="${1:-sonnet}"
 OUT_DIR="results/sepolia_campaign"
 
 echo "=========================================================="
@@ -33,7 +35,9 @@ echo "=========================================================="
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate aml-thesis
 
-# Scenario 1: defi-exploit — smallest, safest, run first as smoke test
+INTER_SCENARIO_DELAY=60   # seconds — let mempool clear + avoid RPC rate-limit
+
+# Scenario 1: defi-exploit (mixer fixed post-2026-08-11)
 echo ""
 echo "[1/3] defi-exploit (3 ETH)..."
 python scripts/run_sepolia_campaign.py \
@@ -41,9 +45,14 @@ python scripts/run_sepolia_campaign.py \
     --amount 3.0 \
     --model "$MODEL" \
     --seed 42 \
-    --out "$OUT_DIR"
+    --out "$OUT_DIR" \
+    || echo "[!] Scenario 1 exited with error (may be refusal — see log)"
 
-# Scenario 2: stablecoin-scam — USDT only, minimal ETH cost
+echo ""
+echo "[wait] sleeping ${INTER_SCENARIO_DELAY}s before next scenario..."
+sleep "$INTER_SCENARIO_DELAY"
+
+# Scenario 2: stablecoin-scam — USDT only, no mixer
 echo ""
 echo "[2/3] stablecoin-scam (8000 USDT)..."
 python scripts/run_sepolia_campaign.py \
@@ -51,10 +60,15 @@ python scripts/run_sepolia_campaign.py \
     --amount 8000.0 \
     --model "$MODEL" \
     --seed 43 \
-    --alice-funding-eth 0.3 \
-    --out "$OUT_DIR"
+    --alice-funding-eth 0.5 \
+    --out "$OUT_DIR" \
+    || echo "[!] Scenario 2 exited with error (may be refusal — see log)"
 
-# Scenario 3: ransomware-cashout — largest, run last
+echo ""
+echo "[wait] sleeping ${INTER_SCENARIO_DELAY}s before next scenario..."
+sleep "$INTER_SCENARIO_DELAY"
+
+# Scenario 3: ransomware-cashout — heavy mixer use (tests the mixer fix)
 echo ""
 echo "[3/3] ransomware-cashout (5 ETH)..."
 python scripts/run_sepolia_campaign.py \
@@ -62,7 +76,8 @@ python scripts/run_sepolia_campaign.py \
     --amount 5.0 \
     --model "$MODEL" \
     --seed 44 \
-    --out "$OUT_DIR"
+    --out "$OUT_DIR" \
+    || echo "[!] Scenario 3 exited with error (may be refusal — see log)"
 
 echo ""
 echo "=========================================================="
