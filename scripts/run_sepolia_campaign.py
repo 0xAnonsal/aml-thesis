@@ -343,6 +343,19 @@ def main():
           f"cost=${result.cost_usd:.4f}, end block={end_block}",
           file=sys.stderr)
 
+    # Post-campaign anti-strand rescue: any wallet stuck holding USDT
+    # without gas gets topped up from the funder pool. Result goes into
+    # campaign metadata so the thesis can cite empirical evidence.
+    print("[runner] scanning for stranded wallets...", file=sys.stderr)
+    strand_report = dispatcher.rescue_stranded_wallets()
+    print(f"[runner] anti-strand: {strand_report['stranded_before']} found, "
+          f"{strand_report['rescued']} rescued, "
+          f"{strand_report['stranded_after']} still stranded", file=sys.stderr)
+    if strand_report["stranded_after"] > 0:
+        print(f"[runner] WARNING — {strand_report['stranded_after']} wallet(s) "
+              f"could not be rescued: {strand_report['stranded_addresses']}",
+              file=sys.stderr)
+
     # Post-run analysis
     all_attacker_addrs = sorted(dispatcher.wallets.keys())
     clean_exit_entries = list(dispatcher.registered_clean_exits)
@@ -417,6 +430,7 @@ def main():
         "start_block": start_block,
         "end_block": end_block,
         "alice_funding_eth": alice_funding,
+        "anti_strand": strand_report,
         "gas_floor_gwei": MIN_GAS_PRICE_GWEI,
         "args": vars(args),
     }

@@ -1363,6 +1363,89 @@ class ToolDispatcher:
         except Exception:   # noqa: BLE001 — best-effort
             pass
 
+    def rescue_stranded_wallets(
+        self, min_eth: float = _DEFAULT_GAS_RESERVE_ETH,
+    ) -> dict:
+        """Post-campaign safety net: top-up any wallet stranded with USDT.
+
+        Called by the runner right before writing artifacts. Does two passes:
+
+          1. Scan every wallet we hold a key for. Any wallet with USDT > 0
+             but ETH below `usdt_gas_wei` (65k * gas_price × 1.2) is
+             stranded — it holds value it cannot move.
+          2. For each stranded wallet, top up from _pick_funder() (random
+             funder from the pool, or the deployer if the pool is empty).
+             Uses _ensure_gas_dust so it inherits the funder-obfuscation
+             behaviour.
+          3. Re-check the same set. Any wallet still stranded after top-up
+             is a hard failure signal (funder pool exhausted, RPC issues,
+             etc.) — surfaced in the return dict for the runner to log.
+
+        Returns a metrics dict suitable for embedding in campaign.json:
+          {
+            "stranded_before": int,   # wallets that had USDT but no gas
+            "rescued": int,            # of those, successfully topped up
+            "stranded_after": int,     # still stranded after our rescue
+            "stranded_addresses": list[str],   # the after-set
+          }
+        """
+        if self.usdt is None:
+            return {
+                "stranded_before": 0, "rescued": 0,
+                "stranded_after": 0, "stranded_addresses": [],
+            }
+
+        # Buffer: 1.2x current gas price × standard ERC20 transfer gas.
+        # Matches the threshold check_no_stranded uses in tests.
+        try:
+            gas_price = self.w3.eth.gas_price
+        except Exception:   # noqa: BLE001
+            gas_price = self.w3.to_wei(3, "gwei")
+        usdt_gas_wei = 65_000 * int(gas_price * 1.2)
+
+        # Pass 1: identify stranded set.
+        stranded_before: list[str] = []
+        for addr in list(self.wallets.keys()):
+            try:
+                eth = self.w3.eth.get_balance(addr)
+            except Exception:   # noqa: BLE001
+                continue
+            if eth >= usdt_gas_wei:
+                continue
+            try:
+                usdt = self.usdt.functions.balanceOf(addr).call()
+            except Exception:   # noqa: BLE001
+                continue
+            if usdt > 0:
+                stranded_before.append(addr)
+
+        # Pass 2: top up each stranded wallet.
+        for addr in stranded_before:
+            # min_eth deliberately larger than one tx worth of gas so the
+            # rescued wallet can move its USDT AND stay above floor if
+            # anything downstream needs a second tx.
+            self._ensure_gas_dust(addr, min_eth=min_eth)
+
+        # Pass 3: re-check to confirm the rescue worked.
+        stranded_after: list[str] = []
+        for addr in stranded_before:
+            try:
+                eth = self.w3.eth.get_balance(addr)
+                if eth >= usdt_gas_wei:
+                    continue
+                usdt = self.usdt.functions.balanceOf(addr).call()
+                if usdt > 0:
+                    stranded_after.append(addr)
+            except Exception:   # noqa: BLE001
+                stranded_after.append(addr)
+
+        return {
+            "stranded_before": len(stranded_before),
+            "rescued": len(stranded_before) - len(stranded_after),
+            "stranded_after": len(stranded_after),
+            "stranded_addresses": stranded_after,
+        }
+
     def _peel_chain(
         self, from_address: str, asset: str, initial_amount: float,
         num_hops: int = 15, peel_pct: float = 0.07,

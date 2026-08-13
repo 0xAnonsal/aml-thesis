@@ -207,3 +207,69 @@ def test_check_no_stranded_after_synthetic_flow():
             f"anti-stranding broke — {len(stranded)} wallet(s) hold USDT "
             f"without enough ETH for a transfer: {stranded}"
         )
+
+
+@needs_foundry
+def test_rescue_stranded_wallets_recovers_intentionally_broken_state():
+    """rescue_stranded_wallets() rescues a wallet we intentionally stranded.
+
+    Simulates the failure mode we care about: burner has USDT but 0 ETH
+    (initial seed failed OR wallet burnt through its dust). Runner calls
+    rescue_stranded_wallets() → wallet is topped up → invariant restored.
+    """
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt,
+            wallets={deployer: deployer_key},
+        )
+        dispatcher.bootstrap_funder_pool(num_funders=3, eth_per_funder=0.5)
+
+        # Give deployer some USDT.
+        mint_tx = usdt.functions.mint(deployer, 5_000 * 10**6).build_transaction({
+            "from": deployer,
+            "nonce": w3.eth.get_transaction_count(deployer),
+            "gas": 150_000,
+            "gasPrice": w3.eth.gas_price,
+        })
+        signed = w3.eth.account.sign_transaction(mint_tx, private_key=deployer_key)
+        tx_hash = w3.eth.send_raw_transaction(_raw_tx(signed))
+        w3.eth.wait_for_transaction_receipt(tx_hash)
+
+        # Create a wallet BYPASSING the auto-seed (simulate: initial seed
+        # failed silently, or wallet burnt through its dust in a long
+        # relay chain). Register the key so the dispatcher knows about it.
+        stranded_acct = Account.create()
+        dispatcher.wallets[stranded_acct.address] = stranded_acct.key.hex()
+        assert w3.eth.get_balance(stranded_acct.address) == 0
+
+        # Transfer USDT directly from deployer (bypassing _transfer_usdt so
+        # we don't trigger the recipient auto-topup). Use raw contract call.
+        raw_transfer = usdt.functions.transfer(
+            stranded_acct.address, 400 * 10**6,
+        ).build_transaction({
+            "from": deployer,
+            "nonce": w3.eth.get_transaction_count(deployer),
+            "gas": 150_000,
+            "gasPrice": w3.eth.gas_price,
+        })
+        signed = w3.eth.account.sign_transaction(raw_transfer, private_key=deployer_key)
+        tx_hash = w3.eth.send_raw_transaction(_raw_tx(signed))
+        w3.eth.wait_for_transaction_receipt(tx_hash)
+
+        # Confirm we broke it: USDT > 0 and ETH = 0.
+        assert usdt.functions.balanceOf(stranded_acct.address).call() == 400 * 10**6
+        assert w3.eth.get_balance(stranded_acct.address) == 0
+
+        # Now run the rescue.
+        report = dispatcher.rescue_stranded_wallets()
+
+        assert report["stranded_before"] == 1
+        assert report["rescued"] == 1
+        assert report["stranded_after"] == 0
+        assert report["stranded_addresses"] == []
+        # And the wallet is now above the gas floor.
+        assert w3.eth.get_balance(stranded_acct.address) >= int(0.049 * 10**18)

@@ -124,6 +124,26 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
             file=sys.stderr,
         )
 
+        # Post-campaign safety net: any wallet left holding USDT without
+        # enough ETH for a transfer gets rescued via the funder pool.
+        # Re-checks after rescue and surfaces any that remain — those are
+        # a hard failure signal (e.g. exhausted funder pool). Result goes
+        # into campaign.json as evidence the anti-strand infra worked.
+        print("[runner] scanning for stranded wallets...", file=sys.stderr)
+        strand_report = dispatcher.rescue_stranded_wallets()
+        print(
+            f"[runner] anti-strand: {strand_report['stranded_before']} found, "
+            f"{strand_report['rescued']} rescued, "
+            f"{strand_report['stranded_after']} still stranded",
+            file=sys.stderr,
+        )
+        if strand_report["stranded_after"] > 0:
+            print(
+                f"[runner] WARNING — {strand_report['stranded_after']} wallet(s) "
+                f"could not be rescued: {strand_report['stranded_addresses']}",
+                file=sys.stderr,
+            )
+
         # Every wallet in the dispatcher's registry at end-of-run is
         # attacker-controlled (each was either bootstrapped or generated
         # by a tool the attacker called — either generate_burner_wallet
@@ -208,6 +228,7 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
             "anvil_chain_id": w3.eth.chain_id,
             "deploy_end_block": deploy_end_block,
             "campaign_end_block": campaign_end_block,
+            "anti_strand": strand_report,
             "args": vars(args),
         }
         (out_dir / "meta.json").write_text(json.dumps(meta, indent=2, default=str))
