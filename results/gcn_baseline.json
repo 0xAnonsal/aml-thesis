@@ -1,0 +1,25 @@
+{
+  "model": "gcn",
+  "best": {
+    "f1": 0.47554671968190854,
+    "precision": 0.4175977653631285,
+    "recall": 0.5521698984302862,
+    "epoch": 510,
+    "loss": 0.18243688344955444
+  },
+  "hyperparameters": {
+    "epochs_max": 1000,
+    "epochs_run": 610,
+    "patience": 100,
+    "eval_every": 10,
+    "hidden": null,
+    "heads": null,
+    "dropout": 0.5,
+    "lr": 0.001,
+    "weight_decay": 0.0005,
+    "seed": 42
+  },
+  "wall_time_seconds": 26.9,
+  "device": "cuda",
+  "n_trainable_params": 16802
+}

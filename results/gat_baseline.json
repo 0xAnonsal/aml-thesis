@@ -1,0 +1,25 @@
+{
+  "model": "gat",
+  "best": {
+    "f1": 0.4796084828711256,
+    "precision": 0.3708375378405651,
+    "recall": 0.6786703601108033,
+    "epoch": 1000,
+    "loss": 0.22204019129276276
+  },
+  "hyperparameters": {
+    "epochs_max": 1000,
+    "epochs_run": 1000,
+    "patience": 100,
+    "eval_every": 10,
+    "hidden": null,
+    "heads": 4,
+    "dropout": 0.2,
+    "lr": 0.0005,
+    "weight_decay": 0.0005,
+    "seed": 42
+  },
+  "wall_time_seconds": 221.1,
+  "device": "cuda",
+  "n_trainable_params": 43526
+}
