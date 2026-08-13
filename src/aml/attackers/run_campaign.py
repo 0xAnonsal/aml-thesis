@@ -83,6 +83,14 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
             wallets={deployer: deployer_key, alice: alice_key},
             pool_contract=pool, tornado_contract=tornado,
         )
+        # Multi-funder pool: k intermediate funders (each seeded once from
+        # deployer) that then randomly fund every new burner/exit. Breaks
+        # the single-source co-funding heuristic — clustering a campaign's
+        # wallets now requires 2-hop analysis instead of 1-hop.
+        dispatcher.bootstrap_funder_pool(
+            num_funders=args.num_funders,
+            eth_per_funder=args.funder_eth,
+        )
 
         deploy_end_block = w3.eth.block_number
         bootstrap_attacker_addrs = sorted(dispatcher.wallets.keys())
@@ -364,6 +372,26 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "with trifurcated Layering + dynamic exit planning + "
             "inspect_chain audit reads regularly exceeded the old cap, "
             "producing premature stop=max_tokens."
+        ),
+    )
+    ap.add_argument(
+        "--num-funders", type=int, default=5,
+        help=(
+            "Size of the intermediate funder pool (default: 5). Each "
+            "funder is seeded once from the deployer with --funder-eth "
+            "and then randomly picked to fund every new burner/exit. "
+            "Set to 0 to disable and use the deployer directly (creates "
+            "single-source co-funding signal — matches pre-2026-08-13 "
+            "behaviour)."
+        ),
+    )
+    ap.add_argument(
+        "--funder-eth", type=float, default=1.0,
+        help=(
+            "ETH bootstrapped into each funder wallet (default: 1.0). "
+            "Must be enough to cover the total gas dust seeded across "
+            "all burners/exits/top-ups routed through that funder. On "
+            "Anvil the deployer starts with 10k ETH so 1.0 is plenty."
         ),
     )
     ap.add_argument(

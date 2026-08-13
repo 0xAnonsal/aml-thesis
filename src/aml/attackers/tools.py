@@ -978,6 +978,12 @@ class ToolDispatcher:
             self._logs_w3 = Web3(Web3.HTTPProvider(logs_rpc_url))
         else:
             self._logs_w3 = w3
+        # Pool of intermediate funder wallets for gas seeding — populated
+        # lazily via bootstrap_funder_pool(). When populated, gas top-ups
+        # pick a RANDOM funder instead of always coming from the deployer,
+        # breaking the single-source co-funding heuristic that trivially
+        # groups all campaign wallets in one graph hop.
+        self._funder_pool: list[str] = []
         self.wallets: dict[str, str] = {
             Web3.to_checksum_address(addr): key for addr, key in wallets.items()
         }
@@ -1161,7 +1167,8 @@ class ToolDispatcher:
         # registered — caller gets a warning and zero gas_seed_eth so they
         # can react.
         try:
-            self._seed_gas(address, _DEFAULT_GAS_RESERVE_ETH)
+            self._seed_gas(address, _DEFAULT_GAS_RESERVE_ETH,
+                           source=self._pick_funder())
             return ToolResult(output={
                 "address": address,
                 "gas_seed_eth": _DEFAULT_GAS_RESERVE_ETH,
@@ -1203,7 +1210,8 @@ class ToolDispatcher:
         # Auto-seed gas dust — same as burners. If seeding fails the exit
         # is still registered and the agent gets a warning.
         try:
-            self._seed_gas(address, _DEFAULT_GAS_RESERVE_ETH)
+            self._seed_gas(address, _DEFAULT_GAS_RESERVE_ETH,
+                           source=self._pick_funder())
             return ToolResult(output={
                 "address": address,
                 "exchange_platform": platform,
@@ -1217,13 +1225,56 @@ class ToolDispatcher:
                 "warning": f"Clean exit registered but gas seeding failed: {e}",
             })
 
-    def _seed_gas(self, recipient: str, amount_eth: float) -> str:
-        """Send `amount_eth` ETH from the faucet wallet to `recipient`.
+    def bootstrap_funder_pool(
+        self, num_funders: int, eth_per_funder: float = 1.0,
+    ) -> None:
+        """Create `num_funders` funder wallets, each funded from the deployer.
 
-        Faucet = first registered wallet (same convention `_mint_usdt` uses).
-        Raises RuntimeError if no faucet is registered or the seed tx fails
-        — caller is expected to wrap with try/except and return a clean
-        ToolResult.error. Returns the tx hash on success.
+        Once bootstrapped, all subsequent gas-seeding operations (initial
+        wallet dust, runtime top-ups) pick a RANDOM funder from the pool
+        instead of going straight to the deployer. Breaks the single-
+        source co-funding heuristic that would otherwise let a GNN
+        clustering detector group all campaign wallets in one hop.
+
+        Idempotent — a second call is a no-op. Bootstrap failures on any
+        individual funder are surfaced by falling back to fewer funders
+        (the pool is whatever succeeded).
+
+        Call this once at the top of a campaign, after the deployer has
+        been registered and before any burners are generated. Reproducible
+        with random.seed(seed) since _pick_funder uses the global random
+        state.
+        """
+        if self._funder_pool:
+            return
+        if not self.wallets:
+            raise RuntimeError("cannot bootstrap funder pool without deployer")
+        for _ in range(num_funders):
+            acct = Account.create()
+            self.wallets[acct.address] = acct.key.hex()
+            try:
+                self._seed_gas(acct.address, eth_per_funder)
+                self._funder_pool.append(acct.address)
+            except Exception:   # noqa: BLE001
+                # Partial pool is still better than none; skip this funder.
+                del self.wallets[acct.address]
+
+    def _pick_funder(self) -> str | None:
+        """Random funder from the pool. None if pool not bootstrapped."""
+        if not self._funder_pool:
+            return None
+        return random.choice(self._funder_pool)
+
+    def _seed_gas(
+        self, recipient: str, amount_eth: float, source: str | None = None,
+    ) -> str:
+        """Send `amount_eth` ETH from `source` (default: faucet) to `recipient`.
+
+        If `source` is None, uses the first registered wallet (canonical
+        deployer/faucet). Callers that want random-funder obfuscation pass
+        the result of `_pick_funder()` (may be None if pool not
+        bootstrapped — then falls through to deployer, preserving legacy
+        behaviour).
 
         Uses EIP-1559 gas fields (maxFeePerGas / maxPriorityFeePerGas) with
         a 2× base_fee headroom. The old legacy `gasPrice` field silently
@@ -1236,7 +1287,11 @@ class ToolDispatcher:
         if amount_eth <= 0:
             raise RuntimeError(f"seed amount must be positive, got {amount_eth}")
 
-        faucet = next(iter(self.wallets))
+        if source is None:
+            source = next(iter(self.wallets))
+        elif source not in self.wallets:
+            raise RuntimeError(f"source wallet {source} not registered")
+        faucet = source
         faucet_key = self.wallets[faucet]
         recipient = Web3.to_checksum_address(recipient)
 
@@ -1302,7 +1357,9 @@ class ToolDispatcher:
             return
         top_up_eth = (min_wei - current_wei) / 10**18
         try:
-            self._seed_gas(address, top_up_eth)
+            # Random funder from pool if bootstrapped; else fallback to
+            # deployer. `source=None` means _seed_gas uses the deployer.
+            self._seed_gas(address, top_up_eth, source=self._pick_funder())
         except Exception:   # noqa: BLE001 — best-effort
             pass
 
@@ -1363,11 +1420,13 @@ class ToolDispatcher:
             # means the burner cannot pay gas onward — for peel-sinks
             # that is acceptable since they are dormant by design).
             try:
-                self._seed_gas(cont_addr, _DEFAULT_GAS_RESERVE_ETH)
+                self._seed_gas(cont_addr, _DEFAULT_GAS_RESERVE_ETH,
+                               source=self._pick_funder())
             except Exception:   # noqa: BLE001
                 pass
             try:
-                self._seed_gas(peel_addr, _DEFAULT_GAS_RESERVE_ETH)
+                self._seed_gas(peel_addr, _DEFAULT_GAS_RESERVE_ETH,
+                               source=self._pick_funder())
             except Exception:   # noqa: BLE001
                 pass
 
@@ -1619,7 +1678,8 @@ class ToolDispatcher:
         seed_failures = 0
         for burner in burner_addresses:
             try:
-                self._seed_gas(burner, _DEFAULT_GAS_RESERVE_ETH)
+                self._seed_gas(burner, _DEFAULT_GAS_RESERVE_ETH,
+                               source=self._pick_funder())
             except Exception:   # noqa: BLE001 — count and continue
                 seed_failures += 1
 
@@ -1851,7 +1911,8 @@ class ToolDispatcher:
         seed_failures = 0
         for burner in burner_addresses:
             try:
-                self._seed_gas(burner, _DEFAULT_GAS_RESERVE_ETH)
+                self._seed_gas(burner, _DEFAULT_GAS_RESERVE_ETH,
+                               source=self._pick_funder())
             except Exception:   # noqa: BLE001 — count and continue
                 seed_failures += 1
 

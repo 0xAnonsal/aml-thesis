@@ -210,6 +210,14 @@ def main():
     parser.add_argument("--max-iterations", type=int, default=60)
     parser.add_argument("--sub-agent-max-iterations", type=int, default=40)
     parser.add_argument("--max-tokens", type=int, default=8192)
+    parser.add_argument(
+        "--num-funders", type=int, default=5,
+        help="Intermediate funder pool size. 0 disables (deployer fund directly).",
+    )
+    parser.add_argument(
+        "--funder-eth", type=float, default=0.2,
+        help="ETH per funder. 0.2 covers ~1000 top-ups at Sepolia gas prices.",
+    )
     args = parser.parse_args()
 
     scenario = SCENARIOS[args.scenario]
@@ -302,6 +310,16 @@ def main():
         mixer_events_from_block=tornado_deploy_block,
         logs_rpc_url=logs_rpc_url,
     )
+    # Multi-funder pool for gas obfuscation. On Sepolia we keep a smaller
+    # bootstrap amount per funder to avoid burning deployer ETH — 0.2 ETH
+    # is enough for hundreds of top-ups at Sepolia gas prices.
+    if args.num_funders > 0:
+        print(f"[runner] bootstrapping {args.num_funders} funder wallets "
+              f"({args.funder_eth} ETH each)...", file=sys.stderr)
+        dispatcher.bootstrap_funder_pool(
+            num_funders=args.num_funders,
+            eth_per_funder=args.funder_eth,
+        )
     bootstrap_attacker_addrs = sorted(dispatcher.wallets.keys())
 
     # Run Coordinator
