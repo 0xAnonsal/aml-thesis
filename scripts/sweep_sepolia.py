@@ -101,6 +101,10 @@ def main():
                         help="Path to a campaign run directory")
     parser.add_argument("--dry-run", action="store_true",
                         help="Report balances only, don't send txs")
+    parser.add_argument("--no-rescue", action="store_true",
+                        help="Do NOT top-up stranded wallets from deployer "
+                             "(default: rescue is on if SEPOLIA_DEPLOYER_"
+                             "PRIVATE_KEY is set)")
     args = parser.parse_args()
 
     keys_path = args.run_dir / "wallets_keys.json"
@@ -140,8 +144,10 @@ def main():
     total_eth_reclaimed = 0
     total_usdt_reclaimed = 0
     total_eth_stranded = 0
+    total_usdt_rescued = 0
     n_eth_swept = 0
     n_usdt_swept = 0
+    n_rescued = 0
 
     latest = w3.eth.get_block("latest")
     base_fee = latest.get("baseFeePerGas") or w3.eth.gas_price
@@ -149,6 +155,18 @@ def main():
     max_fee = base_fee * 2 + priority
     eth_gas_cost_wei = ETH_TRANSFER_GAS * max_fee
     usdt_gas_cost_wei = ERC20_TRANSFER_GAS * max_fee
+
+    # Optional: load deployer key so we can top-up stranded wallets
+    # (USDT balance > 0 but ETH < gas cost). Without this, USDT sits
+    # locked in exits that consumed all their initial 0.05 ETH seed
+    # relaying transfers during the campaign. With it, we send just
+    # enough ETH from deployer to unlock the sweep — costs ~0.0002 ETH
+    # per rescue, recovers 10-1000× that in USDT.
+    deployer_key = os.environ.get("SEPOLIA_DEPLOYER_PRIVATE_KEY")
+    rescue_enabled = deployer_key is not None and not args.no_rescue
+    if not rescue_enabled and not args.no_rescue:
+        print("[sweep] SEPOLIA_DEPLOYER_PRIVATE_KEY not set — stranded "
+              "USDT will not be rescued", flush=True)
 
     for addr, key in wallets.items():
         if addr.lower() == deployer.lower():
@@ -160,6 +178,27 @@ def main():
             usdt_balance = 0
 
         actions = []
+
+        # Rescue: if wallet has USDT but not enough ETH, top up from
+        # deployer so the USDT sweep can proceed.
+        needs_rescue = (
+            usdt_balance > 0
+            and eth_balance <= usdt_gas_cost_wei
+            and rescue_enabled
+        )
+        if needs_rescue:
+            topup = usdt_gas_cost_wei * 3 - eth_balance   # 3× margin
+            actions.append(f"RESCUE +{topup/1e18:.6f} ETH")
+            if not args.dry_run:
+                try:
+                    _send_eth(w3, deployer, deployer_key, addr,
+                              topup, w3.eth.chain_id)
+                    eth_balance = w3.eth.get_balance(addr)   # refresh
+                    n_rescued += 1
+                    total_usdt_rescued += usdt_balance
+                    time.sleep(INTER_WALLET_SLEEP_S)
+                except Exception as e:
+                    actions.append(f"RESCUE FAILED: {e}")
 
         # USDT first (needs ETH for gas — so sweep USDT while wallet still has ETH)
         if usdt_balance > 0 and eth_balance > usdt_gas_cost_wei:
@@ -175,9 +214,11 @@ def main():
                 except Exception as e:
                     actions.append(f"USDT FAILED: {e}")
 
-        # ETH — leave just enough for the transfer tx itself
-        if eth_balance > eth_gas_cost_wei * 2:
-            transfer_amount = eth_balance - eth_gas_cost_wei
+        # ETH — leave 3× gas cost as buffer for base_fee fluctuations
+        # (previously 1× caused "insufficient funds" failures when
+        # base_fee bumped between our calc and tx submission).
+        if eth_balance > eth_gas_cost_wei * 4:
+            transfer_amount = eth_balance - eth_gas_cost_wei * 3
             actions.append(f"ETH {transfer_amount/1e18:.6f}")
             if not args.dry_run:
                 try:
@@ -201,6 +242,7 @@ def main():
     print(f"=== Sweep summary ===")
     print(f"  ETH reclaimed:  {total_eth_reclaimed/1e18:.6f} from {n_eth_swept} wallets")
     print(f"  USDT reclaimed: {total_usdt_reclaimed/1e6:,.2f} from {n_usdt_swept} wallets")
+    print(f"  Stranded wallets rescued: {n_rescued} (unlocked {total_usdt_rescued/1e6:,.2f} USDT)")
     print(f"  ETH stranded (below gas threshold): {total_eth_stranded/1e18:.6f}")
 
     if not args.dry_run:
