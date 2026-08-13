@@ -1102,6 +1102,11 @@ class ToolDispatcher:
 
         amount_base = int(amount_usdt * 10**6)
 
+        # Pre-transfer: ensure sender has gas dust. Prevents "insufficient
+        # funds" reverts when a wallet has relayed many times and burned
+        # through its initial 0.05 ETH seed.
+        self._ensure_gas_dust(from_address)
+
         try:
             tx = self.usdt.functions.transfer(to_address, amount_base).build_transaction({
                 "from": from_address,
@@ -1121,6 +1126,11 @@ class ToolDispatcher:
             return ToolResult(
                 error=f"Transfer reverted on-chain (tx_hash={tx_hash.hex()})"
             )
+
+        # Post-transfer: ensure recipient has gas dust so any downstream
+        # move of this USDT (relay, exit off-ramp, etc.) can pay for
+        # itself. No-op if recipient is external / already funded.
+        self._ensure_gas_dust(to_address)
 
         return ToolResult(output={
             "tx_hash": tx_hash.hex(),
@@ -1214,6 +1224,12 @@ class ToolDispatcher:
         Raises RuntimeError if no faucet is registered or the seed tx fails
         — caller is expected to wrap with try/except and return a clean
         ToolResult.error. Returns the tx hash on success.
+
+        Uses EIP-1559 gas fields (maxFeePerGas / maxPriorityFeePerGas) with
+        a 2× base_fee headroom. The old legacy `gasPrice` field silently
+        failed on Sepolia when base_fee ticked up between fetch and submit,
+        leaving clean_exits with 0 ETH — the 2026-08-13 stranded-wallet
+        symptom that motivated the rescue feature in sweep_sepolia.py.
         """
         if not self.wallets:
             raise RuntimeError("no registered wallet to seed gas from")
@@ -1224,21 +1240,71 @@ class ToolDispatcher:
         faucet_key = self.wallets[faucet]
         recipient = Web3.to_checksum_address(recipient)
 
-        tx = {
-            "from": faucet,
-            "to": recipient,
-            "value": int(amount_eth * 10**18),
-            "nonce": self.w3.eth.get_transaction_count(faucet),
-            "gas": _ETH_TRANSFER_GAS,
-            "gasPrice": self.w3.eth.gas_price,
-            "chainId": self.w3.eth.chain_id,
-        }
+        latest = self.w3.eth.get_block("latest")
+        base_fee = latest.get("baseFeePerGas")
+        if base_fee is None:
+            # Non-EIP-1559 chain — fall back to legacy gasPrice.
+            tx = {
+                "from": faucet, "to": recipient,
+                "value": int(amount_eth * 10**18),
+                "nonce": self.w3.eth.get_transaction_count(faucet),
+                "gas": _ETH_TRANSFER_GAS,
+                "gasPrice": self.w3.eth.gas_price,
+                "chainId": self.w3.eth.chain_id,
+            }
+        else:
+            priority = self.w3.to_wei(1, "gwei")
+            max_fee = base_fee * 2 + priority
+            tx = {
+                "from": faucet, "to": recipient,
+                "value": int(amount_eth * 10**18),
+                "nonce": self.w3.eth.get_transaction_count(faucet),
+                "gas": _ETH_TRANSFER_GAS,
+                "maxFeePerGas": max_fee,
+                "maxPriorityFeePerGas": priority,
+                "chainId": self.w3.eth.chain_id,
+            }
         signed = self.w3.eth.account.sign_transaction(tx, private_key=faucet_key)
         tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
         if receipt.status != 1:
             raise RuntimeError(f"gas seed tx reverted (tx_hash={tx_hash.hex()})")
         return tx_hash.hex()
+
+    def _ensure_gas_dust(
+        self, address: str, min_eth: float = _DEFAULT_GAS_RESERVE_ETH,
+    ) -> None:
+        """Top up `address` to `min_eth` ETH from the faucet if below floor.
+
+        Called before/after tx-emitting operations to prevent wallets from
+        running out of gas mid-campaign. Silent no-op when:
+          - address not in our wallet registry (can't sign for it)
+          - address IS the faucet (would be recursive)
+          - balance already >= min_eth
+          - top-up tx fails (best-effort; sweep_sepolia rescue is the
+            second-line safety net)
+        """
+        try:
+            address = Web3.to_checksum_address(address)
+        except ValueError:
+            return
+        if address not in self.wallets or not self.wallets:
+            return
+        faucet = next(iter(self.wallets))
+        if address == faucet:
+            return
+        min_wei = int(min_eth * 10**18)
+        try:
+            current_wei = self.w3.eth.get_balance(address)
+        except Exception:   # noqa: BLE001
+            return
+        if current_wei >= min_wei:
+            return
+        top_up_eth = (min_wei - current_wei) / 10**18
+        try:
+            self._seed_gas(address, top_up_eth)
+        except Exception:   # noqa: BLE001 — best-effort
+            pass
 
     def _peel_chain(
         self, from_address: str, asset: str, initial_amount: float,
