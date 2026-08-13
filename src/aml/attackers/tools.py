@@ -1260,10 +1260,32 @@ class ToolDispatcher:
                 del self.wallets[acct.address]
 
     def _pick_funder(self) -> str | None:
-        """Random funder from the pool. None if pool not bootstrapped."""
+        """Random funder from the pool. None if pool not bootstrapped.
+
+        If the picked funder has fallen below a minimum liquidity floor
+        (0.1 ETH — enough for ~2 seed txs on Sepolia), refill it from the
+        deployer before returning. Prevents silent-fail cascades where a
+        bankrupt funder returns from _pick_funder, _seed_gas via that
+        funder throws (insufficient funds), and the caller's caught
+        exception silently strands the wallet. Refill amount is
+        deliberately small (0.5 ETH) so the co-funding signal stays
+        distributed across funders instead of concentrating on one.
+        """
         if not self._funder_pool:
             return None
-        return random.choice(self._funder_pool)
+        funder = random.choice(self._funder_pool)
+        min_liquidity_wei = int(0.1 * 10**18)
+        refill_eth = 0.5
+        try:
+            if self.w3.eth.get_balance(funder) < min_liquidity_wei:
+                # Refill directly from deployer (first wallet). Explicit
+                # source=deployer so we don't recurse into _pick_funder.
+                deployer = next(iter(self.wallets))
+                if funder != deployer:
+                    self._seed_gas(funder, refill_eth, source=deployer)
+        except Exception:   # noqa: BLE001 — best-effort refill
+            pass
+        return funder
 
     def _seed_gas(
         self, recipient: str, amount_eth: float, source: str | None = None,
@@ -1363,6 +1385,68 @@ class ToolDispatcher:
         except Exception:   # noqa: BLE001 — best-effort
             pass
 
+    def _forward_stranded_usdt(self, from_addr: str) -> dict:
+        """After rescuing gas, complete the laundering path for a stranded wallet.
+
+        Semantic: the whole point of moving USDT through a burner is to
+        route it further toward a clean_exit off-ramp. If Sonnet ran out
+        of iterations before finishing that route, the intermediate burner
+        is stuck holding USDT that never reached its final destination.
+
+        Fix: forward the balance to random registered clean_exits, in
+        sub-$999 chunks (CTR threshold). Skips wallets that ARE clean_exits
+        themselves (already at destination). No-op if no exits are
+        registered (nothing to forward to).
+
+        Returns: {"forwarded_usdt": float, "chunks": int, "destinations": list[str]}
+        """
+        empty = {"forwarded_usdt": 0.0, "chunks": 0, "destinations": []}
+        if self.usdt is None or not self.registered_clean_exits:
+            return empty
+        exit_addrs = [e["address"] for e in self.registered_clean_exits]
+        if from_addr in set(exit_addrs):
+            return empty   # already at destination — leave it
+        try:
+            usdt_wei = self.usdt.functions.balanceOf(from_addr).call()
+        except Exception:   # noqa: BLE001
+            return empty
+        if usdt_wei <= 0:
+            return empty
+
+        # $999 CTR cap in USDT base units (6 decimals). Use $980 as the
+        # per-chunk soft cap to leave headroom for rounding.
+        chunk_cap_wei = int(980 * 10**6)
+        total_forwarded = 0
+        destinations: list[str] = []
+        chunks = 0
+        remaining = usdt_wei
+
+        # Cap iterations at 20 to prevent runaway if something goes wrong.
+        for _ in range(20):
+            if remaining <= 0:
+                break
+            # Pick a random exit; multiple chunks may go to the same exit
+            # if the pool is small — that's fine, real launderers do too.
+            dest = random.choice(exit_addrs)
+            chunk_wei = min(remaining, chunk_cap_wei)
+            chunk_usdt = chunk_wei / 10**6
+            try:
+                result = self._transfer_usdt(from_addr, dest, chunk_usdt)
+            except Exception:   # noqa: BLE001
+                break
+            if result.error is not None:
+                break
+            total_forwarded += chunk_wei
+            destinations.append(dest)
+            chunks += 1
+            remaining -= chunk_wei
+
+        return {
+            "forwarded_usdt": total_forwarded / 10**6,
+            "chunks": chunks,
+            "destinations": destinations,
+        }
+
     def rescue_stranded_wallets(
         self, min_eth: float = _DEFAULT_GAS_RESERVE_ETH,
     ) -> dict:
@@ -1389,21 +1473,28 @@ class ToolDispatcher:
             "stranded_addresses": list[str],   # the after-set
           }
         """
+        empty = {
+            "stranded_before": 0, "rescued": 0, "stranded_after": 0,
+            "stranded_addresses": [], "forwarded": [],
+        }
         if self.usdt is None:
-            return {
-                "stranded_before": 0, "rescued": 0,
-                "stranded_after": 0, "stranded_addresses": [],
-            }
+            return empty
 
-        # Buffer: 1.2x current gas price × standard ERC20 transfer gas.
-        # Matches the threshold check_no_stranded uses in tests.
+        # Gas-cost threshold for the ETH balance check.
         try:
             gas_price = self.w3.eth.gas_price
         except Exception:   # noqa: BLE001
             gas_price = self.w3.to_wei(3, "gwei")
         usdt_gas_wei = 65_000 * int(gas_price * 1.2)
 
-        # Pass 1: identify stranded set.
+        # Skip DUST-stranded wallets: if the USDT is worth less than the
+        # gas it would take to rescue + forward it, rescue is negative-
+        # value work. Floor at $1 USDT (1e6 base units) — small enough
+        # that no real laundering amount is skipped, large enough that
+        # <$0.01 rounding residuals don't trigger pointless top-ups.
+        min_stranded_usdt_wei = 1_000_000
+
+        # Pass 1: identify stranded set (worth-rescuing only).
         stranded_before: list[str] = []
         for addr in list(self.wallets.keys()):
             try:
@@ -1416,26 +1507,36 @@ class ToolDispatcher:
                 usdt = self.usdt.functions.balanceOf(addr).call()
             except Exception:   # noqa: BLE001
                 continue
-            if usdt > 0:
+            if usdt >= min_stranded_usdt_wei:
                 stranded_before.append(addr)
 
-        # Pass 2: top up each stranded wallet.
+        # Pass 2: top up each stranded wallet from a random funder.
         for addr in stranded_before:
-            # min_eth deliberately larger than one tx worth of gas so the
-            # rescued wallet can move its USDT AND stay above floor if
-            # anything downstream needs a second tx.
             self._ensure_gas_dust(addr, min_eth=min_eth)
 
-        # Pass 3: re-check to confirm the rescue worked.
+        # Pass 2.5: forward stranded USDT to random clean_exits so the
+        # laundering path completes. Skips wallets that ARE clean_exits
+        # (already at destination). Splits into sub-$999 chunks.
+        forwarded_reports: list[dict] = []
+        for addr in stranded_before:
+            fw = self._forward_stranded_usdt(addr)
+            if fw["forwarded_usdt"] > 0:
+                forwarded_reports.append({"from": addr, **fw})
+
+        # Pass 3: re-check. A wallet is still stranded if it holds
+        # more than dust USDT and less than gas-worth of ETH. The
+        # forwarding pass may have emptied its USDT — that also counts
+        # as no longer stranded (nothing left to move).
         stranded_after: list[str] = []
         for addr in stranded_before:
             try:
+                usdt = self.usdt.functions.balanceOf(addr).call()
+                if usdt < min_stranded_usdt_wei:
+                    continue   # forwarding worked, nothing left
                 eth = self.w3.eth.get_balance(addr)
                 if eth >= usdt_gas_wei:
-                    continue
-                usdt = self.usdt.functions.balanceOf(addr).call()
-                if usdt > 0:
-                    stranded_after.append(addr)
+                    continue   # rescue put gas in place
+                stranded_after.append(addr)
             except Exception:   # noqa: BLE001
                 stranded_after.append(addr)
 
@@ -1444,6 +1545,7 @@ class ToolDispatcher:
             "rescued": len(stranded_before) - len(stranded_after),
             "stranded_after": len(stranded_after),
             "stranded_addresses": stranded_after,
+            "forwarded": forwarded_reports,
         }
 
     def _peel_chain(

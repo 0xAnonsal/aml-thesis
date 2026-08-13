@@ -273,3 +273,134 @@ def test_rescue_stranded_wallets_recovers_intentionally_broken_state():
         assert report["stranded_addresses"] == []
         # And the wallet is now above the gas floor.
         assert w3.eth.get_balance(stranded_acct.address) >= int(0.049 * 10**18)
+
+
+@needs_foundry
+def test_rescue_forwards_stranded_usdt_to_random_clean_exit():
+    """After rescuing gas, stranded USDT is forwarded to clean_exits.
+
+    Verifies the 'continue the cleaning path' behaviour: an intermediate
+    burner left holding USDT after the campaign ends should have that
+    USDT routed to a random registered clean_exit in sub-$999 chunks,
+    so the laundering flow completes instead of freezing mid-hop.
+    """
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt,
+            wallets={deployer: deployer_key},
+        )
+        dispatcher.bootstrap_funder_pool(num_funders=3, eth_per_funder=1.0)
+
+        # Register 3 clean_exits — these are the possible forwarding targets.
+        exit_addrs = []
+        for platform in ("Binance", "Coinbase", "Kraken"):
+            r = dispatcher._register_clean_exit(exchange_platform=platform)
+            assert r.output and "address" in r.output
+            exit_addrs.append(r.output["address"])
+
+        # Deployer needs USDT to seed the stranded wallet.
+        mint_tx = usdt.functions.mint(deployer, 5_000 * 10**6).build_transaction({
+            "from": deployer,
+            "nonce": w3.eth.get_transaction_count(deployer),
+            "gas": 150_000,
+            "gasPrice": w3.eth.gas_price,
+        })
+        signed = w3.eth.account.sign_transaction(mint_tx, private_key=deployer_key)
+        tx_hash = w3.eth.send_raw_transaction(_raw_tx(signed))
+        w3.eth.wait_for_transaction_receipt(tx_hash)
+
+        # Create a stranded intermediate: register the key, transfer USDT
+        # to it bypassing auto-topup. $2,400 USDT → forwarded in 3 chunks
+        # of sub-$999 each.
+        stranded_acct = Account.create()
+        dispatcher.wallets[stranded_acct.address] = stranded_acct.key.hex()
+        raw_transfer = usdt.functions.transfer(
+            stranded_acct.address, 2_400 * 10**6,
+        ).build_transaction({
+            "from": deployer,
+            "nonce": w3.eth.get_transaction_count(deployer),
+            "gas": 150_000,
+            "gasPrice": w3.eth.gas_price,
+        })
+        signed = w3.eth.account.sign_transaction(raw_transfer, private_key=deployer_key)
+        tx_hash = w3.eth.send_raw_transaction(_raw_tx(signed))
+        w3.eth.wait_for_transaction_receipt(tx_hash)
+
+        # Precondition: intermediate has USDT, no ETH, and is NOT a clean_exit.
+        assert usdt.functions.balanceOf(stranded_acct.address).call() == 2_400 * 10**6
+        assert w3.eth.get_balance(stranded_acct.address) == 0
+        assert stranded_acct.address not in set(exit_addrs)
+
+        report = dispatcher.rescue_stranded_wallets()
+
+        # Rescue metric: identified + top-upped.
+        assert report["stranded_before"] == 1
+        assert report["rescued"] == 1
+        assert report["stranded_after"] == 0
+
+        # Forwarding metric: USDT went to exits in sub-$999 chunks.
+        assert len(report["forwarded"]) == 1
+        fw = report["forwarded"][0]
+        assert fw["from"] == stranded_acct.address
+        # $2,400 in chunks capped at $980 each → 3 chunks.
+        assert fw["chunks"] == 3
+        assert fw["forwarded_usdt"] == pytest.approx(2400.0, abs=0.01)
+        assert all(dest in exit_addrs for dest in fw["destinations"])
+
+        # The intermediate is now empty; the sum of exit balances >= $2,400
+        # (existing exits may already have USDT; we assert the delta only).
+        assert usdt.functions.balanceOf(stranded_acct.address).call() < 1_000_000
+        total_at_exits = sum(
+            usdt.functions.balanceOf(ex).call() for ex in exit_addrs
+        )
+        assert total_at_exits >= 2_400 * 10**6
+
+
+@needs_foundry
+def test_rescue_skips_dust_stranded_wallets():
+    """A wallet with <$1 USDT stranded is NOT rescued (economically wasteful)."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        usdt = _deploy_usdt(w3, deployer, deployer_key)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=usdt,
+            wallets={deployer: deployer_key},
+        )
+        dispatcher.bootstrap_funder_pool(num_funders=3, eth_per_funder=0.5)
+
+        mint_tx = usdt.functions.mint(deployer, 100 * 10**6).build_transaction({
+            "from": deployer,
+            "nonce": w3.eth.get_transaction_count(deployer),
+            "gas": 150_000, "gasPrice": w3.eth.gas_price,
+        })
+        signed = w3.eth.account.sign_transaction(mint_tx, private_key=deployer_key)
+        tx_hash = w3.eth.send_raw_transaction(_raw_tx(signed))
+        w3.eth.wait_for_transaction_receipt(tx_hash)
+
+        # Create a wallet with $0.50 USDT (below the $1 threshold).
+        dust_acct = Account.create()
+        dispatcher.wallets[dust_acct.address] = dust_acct.key.hex()
+        raw_transfer = usdt.functions.transfer(
+            dust_acct.address, 500_000,   # 0.5 USDT
+        ).build_transaction({
+            "from": deployer,
+            "nonce": w3.eth.get_transaction_count(deployer),
+            "gas": 150_000, "gasPrice": w3.eth.gas_price,
+        })
+        signed = w3.eth.account.sign_transaction(raw_transfer, private_key=deployer_key)
+        tx_hash = w3.eth.send_raw_transaction(_raw_tx(signed))
+        w3.eth.wait_for_transaction_receipt(tx_hash)
+
+        report = dispatcher.rescue_stranded_wallets()
+
+        # Below-threshold dust is invisible to the rescue pass.
+        assert report["stranded_before"] == 0
+        assert report["rescued"] == 0
+        # And the wallet still has 0 ETH — we did not waste gas on it.
+        assert w3.eth.get_balance(dust_acct.address) == 0
