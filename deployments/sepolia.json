@@ -2,6 +2,7 @@
   "chain_id": 11155111,
   "chain_name": "sepolia",
   "deployed_at_utc": "2026-08-11T16:24:24Z",
+  "tornado_deploy_block": 11467324,
   "contracts": {
     "MockUSDT": "0x665A2176d7beF3bccE52F37F1e64c99D993Aa7Ba",
     "MockUniswapV2Pool": "0x229cC888FE17c81CD474Ea8eb6F5387f1739a4c4",

@@ -142,6 +142,21 @@ def load_deployed_contracts(w3: Web3):
     }
 
 
+def load_tornado_deploy_block() -> int | None:
+    """Read the recorded tornado deploy block from deployments/sepolia.json.
+
+    Needed to seed `mixer_events_from_block` so that the client-side
+    Merkle tree reconstruction sees every historical Deposit (not just
+    the ones in the current campaign window). Returns None if the field
+    is absent — callers should fall back to a safe pre-deployment floor.
+    """
+    if not DEPLOYMENTS_JSON.exists():
+        return None
+    deployment = json.loads(DEPLOYMENTS_JSON.read_text())
+    val = deployment.get("tornado_deploy_block")
+    return int(val) if val is not None else None
+
+
 def _raw_tx(signed):
     return getattr(signed, "raw_transaction", None) or signed.rawTransaction
 
@@ -257,17 +272,35 @@ def main():
     print(f"[runner] alice funded, starting Coordinator...", file=sys.stderr)
 
     # Build dispatcher with pre-deployed contracts. mixer_events_from_block
-    # must be set to a block near the campaign start — scanning from block 0
-    # on Sepolia would hit Alchemy's block-range limit (root cause of the
-    # 2026-08-11 mixer_withdraw failure). 100-block buffer gives ~20 min
-    # of history, more than enough for any single campaign.
+    # MUST cover the full history since tornado deploy — the mixer contract
+    # is shared across campaigns, so a fresh withdraw needs to see every
+    # historical Deposit to reconstruct the on-chain Merkle tree correctly.
+    # A window that misses past deposits produces a stale local root and
+    # `isKnownRoot()` rejects the proof (root cause of the 2026-08-12
+    # seed200 mixer_withdraw failure). `_mixer_collect_leaves` in tools.py
+    # paginates the scan in 500-block chunks so covering ~10k blocks of
+    # history is cheap and stays under Alchemy's per-request limit.
+    tornado_deploy_block = load_tornado_deploy_block()
+    if tornado_deploy_block is None:
+        # Fallback: safe floor before any of our Sepolia deploys.
+        tornado_deploy_block = max(0, start_block - 20000)
+    # Alchemy free tier caps eth_getLogs at 10 blocks/request — unusable
+    # for scanning ~12k blocks of mixer history. publicnode.com allows
+    # 10k-block ranges free, and we only use it for the paginated log
+    # scan (tx sending etc. still go via Alchemy). Override via
+    # SEPOLIA_LOGS_RPC_URL if you have a paid provider.
+    logs_rpc_url = os.environ.get(
+        "SEPOLIA_LOGS_RPC_URL",
+        "https://ethereum-sepolia-rpc.publicnode.com",
+    )
     dispatcher = ToolDispatcher(
         w3=w3,
         usdt_contract=contracts["usdt"],
         wallets={deployer: deployer_key, alice: alice_key},
         pool_contract=contracts["pool"],
         tornado_contract=contracts["tornado"] if scenario.needs_tornado else None,
-        mixer_events_from_block=max(0, start_block - 100),
+        mixer_events_from_block=tornado_deploy_block,
+        logs_rpc_url=logs_rpc_url,
     )
     bootstrap_attacker_addrs = sorted(dispatcher.wallets.keys())
 

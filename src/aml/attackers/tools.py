@@ -861,18 +861,25 @@ class ToolDispatcher:
         pool_contract: Any = None,
         tornado_contract: Any = None,
         mixer_events_from_block: int = 0,
+        logs_rpc_url: str | None = None,
     ):
         self.w3 = w3
         self.usdt = usdt_contract
         self.pool = pool_contract
         self.tornado = tornado_contract
         # Block from which _mixer_collect_leaves starts scanning Deposit
-        # events. 0 works on Anvil (fresh chain, <100 blocks); on Sepolia
-        # scanning from 0 hits RPC providers' block-range limits (Alchemy
-        # rejects queries > 2000-10000 blocks). Callers running against
-        # a live testnet MUST pass a start block near the tornado
-        # deployment (e.g. campaign start_block - 100).
+        # events. On live Sepolia this MUST be the tornado deploy block —
+        # missing history rebuilds a stale local Merkle tree and withdraw
+        # proofs fail on-chain `isKnownRoot()`.
         self.mixer_events_from_block = int(mixer_events_from_block)
+        # Separate RPC for eth_getLogs. Alchemy free tier caps range at
+        # 10 blocks — unusable for scanning ~10k blocks of mixer history.
+        # publicnode.com allows 10k-block ranges free. If not provided we
+        # fall back to `w3`; caller decides whether that's acceptable.
+        if logs_rpc_url:
+            self._logs_w3 = Web3(Web3.HTTPProvider(logs_rpc_url))
+        else:
+            self._logs_w3 = w3
         self.wallets: dict[str, str] = {
             Web3.to_checksum_address(addr): key for addr, key in wallets.items()
         }
@@ -2097,20 +2104,48 @@ class ToolDispatcher:
         Returns (leaves ordered by on-chain index, index of target_commitment
         within that list). The index is None if the commitment was never
         deposited. Raises RuntimeError if the event scan itself fails.
-        """
-        deposit_event = self.tornado.events.Deposit()
-        try:
-            try:
-                logs = deposit_event.get_logs(from_block=self.mixer_events_from_block)
-            except TypeError:   # web3.py v6 uses fromBlock
-                logs = deposit_event.get_logs(fromBlock=self.mixer_events_from_block)
-        except Exception as e:   # noqa: BLE001 — surfaced as a tool error
-            raise RuntimeError(f"failed to scan mixer deposit events: {e}") from e
 
+        Paginates get_logs via `self._logs_w3` (may point at a provider
+        with a wider range limit than the main w3 — Alchemy free tier caps
+        at 10 blocks/request whereas publicnode allows 10k). Missing
+        history would rebuild an incorrect Merkle tree — proofs computed
+        against it fail on-chain `isKnownRoot()`. Root cause of the
+        2026-08-12 seed200 withdraw failure.
+        """
+        # Rebind the tornado contract to the logs-specific provider so
+        # web3.py sends the eth_getLogs to publicnode (or whichever RPC
+        # the dispatcher was configured with) instead of the main Alchemy
+        # provider. ABI + address stay identical.
+        tornado_logs = self._logs_w3.eth.contract(
+            address=self.tornado.address, abi=self.tornado.abi,
+        )
+        deposit_event = tornado_logs.events.Deposit()
+        latest_block = self._logs_w3.eth.block_number
+        chunk_size = 9000   # publicnode limit is 10k; leave headroom
         by_index: dict[int, int] = {}
-        for log in logs:
-            idx = log["args"]["leafIndex"]
-            by_index[idx] = int.from_bytes(bytes(log["args"]["commitment"]), "big")
+        cursor = self.mixer_events_from_block
+        while cursor <= latest_block:
+            to_block = min(cursor + chunk_size - 1, latest_block)
+            try:
+                try:
+                    logs = deposit_event.get_logs(
+                        from_block=cursor, to_block=to_block,
+                    )
+                except TypeError:   # web3.py v6 uses fromBlock/toBlock
+                    logs = deposit_event.get_logs(
+                        fromBlock=cursor, toBlock=to_block,
+                    )
+            except Exception as e:   # noqa: BLE001 — surfaced as a tool error
+                raise RuntimeError(
+                    f"failed to scan mixer deposit events "
+                    f"(range {cursor}-{to_block}): {e}"
+                ) from e
+            for log in logs:
+                idx = log["args"]["leafIndex"]
+                by_index[idx] = int.from_bytes(
+                    bytes(log["args"]["commitment"]), "big",
+                )
+            cursor = to_block + 1
 
         if not by_index:
             return [], None
