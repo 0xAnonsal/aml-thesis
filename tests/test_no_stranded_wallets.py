@@ -362,7 +362,12 @@ def test_rescue_forwards_stranded_usdt_to_random_clean_exit():
 
 @needs_foundry
 def test_rescue_skips_dust_stranded_wallets():
-    """A wallet with <$1 USDT stranded is NOT rescued (economically wasteful)."""
+    """Wallets with <$5 USDT stranded are NOT rescued (economically wasteful).
+
+    Rescue costs ~86k gas across two txs. At 3 gwei / mock pool rate
+    (~6255 USDT/ETH) that's ~$1.60. The $5 threshold gives a 3x
+    margin so rescue always stays net-positive.
+    """
     with AnvilNode() as node:
         w3 = Web3(Web3.HTTPProvider(node.rpc_url))
         deployer, deployer_key = node.accounts[0], node.private_keys[0]
@@ -383,11 +388,11 @@ def test_rescue_skips_dust_stranded_wallets():
         tx_hash = w3.eth.send_raw_transaction(_raw_tx(signed))
         w3.eth.wait_for_transaction_receipt(tx_hash)
 
-        # Create a wallet with $0.50 USDT (below the $1 threshold).
+        # Create a wallet with $4.50 USDT (below the $5 threshold).
         dust_acct = Account.create()
         dispatcher.wallets[dust_acct.address] = dust_acct.key.hex()
         raw_transfer = usdt.functions.transfer(
-            dust_acct.address, 500_000,   # 0.5 USDT
+            dust_acct.address, 4_500_000,   # 4.50 USDT (below $5 floor)
         ).build_transaction({
             "from": deployer,
             "nonce": w3.eth.get_transaction_count(deployer),

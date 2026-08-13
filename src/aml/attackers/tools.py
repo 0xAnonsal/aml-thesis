@@ -1489,10 +1489,13 @@ class ToolDispatcher:
 
         # Skip DUST-stranded wallets: if the USDT is worth less than the
         # gas it would take to rescue + forward it, rescue is negative-
-        # value work. Floor at $1 USDT (1e6 base units) — small enough
-        # that no real laundering amount is skipped, large enough that
-        # <$0.01 rounding residuals don't trigger pointless top-ups.
-        min_stranded_usdt_wei = 1_000_000
+        # value work. Floor at $5 USDT (5e6 base units) — a rescue costs
+        # ~86k gas across two txs (top-up + forward). At 3 gwei on
+        # Sepolia and the mock pool rate of ~6,255 USDT/ETH that's about
+        # $1.60; the $5 floor gives a comfortable ~3x margin so we stay
+        # net-positive even under gas spikes, without missing any real
+        # laundering-scale amount.
+        min_stranded_usdt_wei = 5_000_000
 
         # Pass 1: identify stranded set (worth-rescuing only).
         stranded_before: list[str] = []
