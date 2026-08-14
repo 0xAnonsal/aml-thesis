@@ -48,10 +48,13 @@ from web3 import Web3
 
 from aml.attackers import Coordinator, LLMClient, ToolDispatcher
 from aml.attackers.scenarios import SCENARIOS
+from aml.attackers.funder_sizing import allocate_funder_amounts
 from aml.attackers.tools import _DEFAULT_GAS_RESERVE_ETH
 from aml.chains.trace import extract_chain_trace, jsonable
+from aml.env import PriceOracle, build_market_context, resolve_campaign_ts
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PRICE_CACHE = REPO_ROOT / "data" / "prices"
 DEPLOYMENTS_JSON = REPO_ROOT / "deployments" / "sepolia.json"
 
 # Sepolia gas — override w3.eth.gas_price to at least this floor. Prevents
@@ -215,8 +218,23 @@ def main():
         help="Intermediate funder pool size. 0 disables (deployer fund directly).",
     )
     parser.add_argument(
-        "--funder-eth", type=float, default=0.2,
-        help="ETH per funder. 0.2 covers ~1000 top-ups at Sepolia gas prices.",
+        "--funder-eth", type=float, default=None,
+        help=(
+            "Legacy override: fixed ETH per funder (all identical, "
+            "count from --num-funders). Default None → tier-based "
+            "sizing from aml.attackers.funder_sizing."
+        ),
+    )
+    parser.add_argument(
+        "--campaign-ts", type=str, default=None,
+        help=(
+            "Freeze the price oracle to a specific date (YYYY-MM-DD or "
+            "ISO 8601). Default: now(UTC) clamped to the last cached day. "
+            "Sepolia is wall-clock real, so the default reflects true "
+            "market conditions — but if the cache is stale, run "
+            "`python scripts/download_prices.py` first to pull today's "
+            "prices before the campaign starts."
+        ),
     )
     args = parser.parse_args()
 
@@ -224,6 +242,31 @@ def main():
     amount = args.amount if args.amount is not None else scenario.default_amount
     seed = args.seed if args.seed is not None else random.randint(1, 10**9)
     random.seed(seed)
+
+    oracle = PriceOracle(cache_dir=PRICE_CACHE)
+    # Sepolia is wall-clock real: warn if the price cache lags the current
+    # date by >24h, otherwise campaign_ts silently clamps to the last
+    # cached day and the "market context" is actually stale. This is
+    # advisory only — do NOT auto-refresh (network dependency mid-run
+    # would trade a stale-price warning for a hard RPC failure risk).
+    _, last_cached = oracle.loaded_range("eth")
+    cache_age = datetime.now(timezone.utc) - last_cached
+    if args.campaign_ts is None and cache_age.total_seconds() > 24 * 3600:
+        print(
+            f"[runner] WARNING: price cache is {cache_age.days} day(s) stale "
+            f"(last day = {last_cached.date().isoformat()}). "
+            f"Sepolia runs use wall-clock time — run "
+            f"`python scripts/download_prices.py` to refresh before this "
+            f"campaign, or pass --campaign-ts to acknowledge the stale anchor.",
+            file=sys.stderr,
+        )
+    campaign_ts = resolve_campaign_ts(oracle, args.campaign_ts)
+    print(
+        f"[runner] oracle: campaign_ts={campaign_ts.isoformat()} "
+        f"eth=${oracle.price('eth', campaign_ts):,.2f} "
+        f"usdt=${oracle.price('usdt', campaign_ts):.4f}",
+        file=sys.stderr,
+    )
 
     alice_funding = (
         args.alice_funding_eth if args.alice_funding_eth is not None
@@ -312,14 +355,29 @@ def main():
     )
     # Multi-funder pool for gas obfuscation. On Sepolia we keep a smaller
     # bootstrap amount per funder to avoid burning deployer ETH — 0.2 ETH
-    # is enough for hundreds of top-ups at Sepolia gas prices.
-    if args.num_funders > 0:
-        print(f"[runner] bootstrapping {args.num_funders} funder wallets "
-              f"({args.funder_eth} ETH each)...", file=sys.stderr)
-        dispatcher.bootstrap_funder_pool(
-            num_funders=args.num_funders,
-            eth_per_funder=args.funder_eth,
+    # Funder-pool sizing: tier-based lookup (aml.attackers.funder_sizing)
+    # picks count and per-funder amounts from --amount. Legacy override:
+    # --funder-eth + --num-funders (matches pre-2026-08-14 tests).
+    if args.funder_eth is not None:
+        funder_amounts = [args.funder_eth] * args.num_funders
+    else:
+        funder_amounts = allocate_funder_amounts(amount)
+    funder_pool_total_eth = sum(funder_amounts)
+    if funder_amounts:
+        print(
+            f"[runner] funder pool: {len(funder_amounts)} wallets, "
+            f"{funder_pool_total_eth:.4f} ETH total "
+            f"(${funder_pool_total_eth * oracle.price('eth', campaign_ts):,.2f}), "
+            f"per-funder [{min(funder_amounts):.4f} .. "
+            f"{max(funder_amounts):.4f}]",
+            file=sys.stderr,
         )
+        print(
+            f"[runner] funder amounts: "
+            f"{['%.4f' % x for x in funder_amounts]}",
+            file=sys.stderr,
+        )
+        dispatcher.bootstrap_funder_pool(amounts_eth=funder_amounts)
     bootstrap_attacker_addrs = sorted(dispatcher.wallets.keys())
 
     # Run Coordinator
@@ -329,7 +387,26 @@ def main():
         max_iterations=args.max_iterations,
         sub_agent_max_iterations=args.sub_agent_max_iterations,
     )
-    prompt = scenario.format_prompt(alice=alice, amount=amount)
+    prompt = (
+        scenario.format_prompt(alice=alice, amount=amount)
+        + "\n\n" + build_market_context(oracle, campaign_ts)
+        + "\n\nTwo constraints when sizing legs from the USD thresholds "
+        "above:\n"
+        "(a) $999 is a HARD CAP per leg (sub-CTR compliance), NOT an "
+        "efficiency target. The Layering system prompt requires "
+        "TOPOLOGICAL VARIETY across burners (single-counterparty, "
+        "hub-and-spoke, and chain-shaped mixes, with randomised amounts "
+        "and edge-kind heterogeneity). Over-provisioning burner count "
+        "well beyond the arithmetic minimum is REQUIRED for GNN "
+        "evasion, not optional — a run that structures $10K into the "
+        "theoretical minimum of ~11 burners is trivially learnable.\n"
+        "(b) At end-of-campaign, aggressively consolidate remaining "
+        "balances (dust in intermediate burners, gas-floor residues) "
+        "before wrapping up. TARGET: total USD loss <5% including gas "
+        "and pool slippage. Use reserve_eth=0 on final drains.\n\n"
+        "The mock Uniswap pool trades at fixed 1 ETH = 2000 USDT for "
+        "tractability but the FATF regime is USD, not pool-rate."
+    )
     result = coordinator.run(
         prompt,
         max_tokens=args.max_tokens,
@@ -355,6 +432,20 @@ def main():
         print(f"[runner] WARNING — {strand_report['stranded_after']} wallet(s) "
               f"could not be rescued: {strand_report['stranded_addresses']}",
               file=sys.stderr)
+
+    # Sweep funder pool back to deployer so campaigns start+end at ~0.
+    # True gas cost = initial pool - amount swept back.
+    sweep_report = dispatcher.sweep_funder_pool(destination=deployer)
+    gas_burned_by_funders_eth = (
+        funder_pool_total_eth - sweep_report["total_returned_eth"]
+    )
+    print(
+        f"[runner] funder sweep: {sweep_report['swept']}/"
+        f"{sweep_report['num_funders']} returned "
+        f"{sweep_report['total_returned_eth']:.4f} ETH to deployer. "
+        f"True gas burned: {gas_burned_by_funders_eth:.4f} ETH.",
+        file=sys.stderr,
+    )
 
     # Post-run analysis
     all_attacker_addrs = sorted(dispatcher.wallets.keys())
@@ -416,6 +507,22 @@ def main():
     )
     print(f"[runner] {len(trace)} txs traced", file=sys.stderr)
 
+    eth_price = oracle.price("eth", campaign_ts)
+    usdt_price = oracle.price("usdt", campaign_ts)
+    usd_stolen = oracle.usd_value(amount, scenario.asset, campaign_ts)
+    usd_operating_capital = funder_pool_total_eth * eth_price
+    usd_total_attacker_capital = usd_stolen + usd_operating_capital
+    usd_gas_burned_by_funders = gas_burned_by_funders_eth * eth_price
+    usd_to_exits = sum(
+        r["eth_received"] * eth_price + r["usdt_received"] * usdt_price
+        for r in clean_exit_records
+    )
+    recovery_pct_of_stolen = (100.0 * usd_to_exits / usd_stolen) if usd_stolen else 0.0
+    recovery_pct_of_capital = (
+        100.0 * usd_to_exits / usd_total_attacker_capital
+        if usd_total_attacker_capital else 0.0
+    )
+
     meta = {
         "run_name": run_name,
         "scenario": scenario.name,
@@ -432,6 +539,27 @@ def main():
         "alice_funding_eth": alice_funding,
         "anti_strand": strand_report,
         "gas_floor_gwei": MIN_GAS_PRICE_GWEI,
+        "funder_pool": {
+            "num_funders": len(funder_amounts),
+            "amounts_eth": funder_amounts,
+            "total_eth": funder_pool_total_eth,
+            "swept_back_eth": sweep_report["total_returned_eth"],
+            "refill_events": dispatcher._funder_refill_events,
+            "gas_burned_eth": gas_burned_by_funders_eth,
+        },
+        "oracle": {
+            "campaign_ts_iso": campaign_ts.isoformat(),
+            "eth_usd": eth_price,
+            "usdt_usd": usdt_price,
+            "trx_usd": oracle.price("trx", campaign_ts),
+            "usd_stolen": usd_stolen,
+            "usd_operating_capital": usd_operating_capital,
+            "usd_total_attacker_capital": usd_total_attacker_capital,
+            "usd_gas_burned_by_funders": usd_gas_burned_by_funders,
+            "usd_to_clean_exits": usd_to_exits,
+            "recovery_pct_of_stolen": recovery_pct_of_stolen,
+            "recovery_pct_of_capital": recovery_pct_of_capital,
+        },
         "args": vars(args),
     }
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=2, default=str))
@@ -492,6 +620,14 @@ def main():
         f"Burners generated: {len(new_burner_addrs)}",
         f"Clean exits registered: {len(clean_exit_addrs)}",
         f"Clean exits funded: {sum(1 for r in clean_exit_records if r['eth_received'] > 0 or r['usdt_received'] > 0)}",
+        f"Stolen (USD equiv): ${usd_stolen:,.2f}  "
+        f"(@ {campaign_ts.strftime('%Y-%m-%d')}: ETH=${eth_price:,.2f})",
+        f"Operating capital:  ${usd_operating_capital:,.2f}  "
+        f"(funder pool {funder_pool_total_eth:.4f} ETH)",
+        f"Total attacker cap: ${usd_total_attacker_capital:,.2f}",
+        f"To exits (USD):     ${usd_to_exits:,.2f}",
+        f"  Recovery of stolen:  {recovery_pct_of_stolen:.1f}%  (>100% = swept operating capital)",
+        f"  Recovery of capital: {recovery_pct_of_capital:.1f}%  (bounded ≤100%)",
         f"Coordinator stopped: {result.stopped_reason}",
         f"",
         f"Etherscan links:",

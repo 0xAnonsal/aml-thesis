@@ -47,6 +47,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Callable
 
 import networkx as nx
@@ -54,6 +55,7 @@ import numpy as np
 
 from aml.detectors.baselines import Detector, PerExchangeDetector
 from aml.detectors.gnn import FEATURE_DIM, FEATURE_NAMES, extract_features
+from aml.env import PriceOracle, build_market_context
 
 
 # Sentinel for "this address has no cluster assignment" — used in
@@ -592,6 +594,13 @@ class LLMDefenderCoordinator(Detector):
     fallback_similarity_threshold: float = 0.95
     llm_client: Any = None                            # LLMClient, or mock for tests
     prior: float = 0.5
+    # Optional USD price context — parity with the attacker Coordinator.
+    # When both are set, the LLM defender's system prompt is augmented
+    # with a market snapshot so it reasons about flagged addresses under
+    # the same USD-denominated FATF regime the attacker planned against.
+    # Absent (both None) → defender runs USD-agnostic (legacy behaviour).
+    oracle: PriceOracle | None = None
+    campaign_ts: datetime | None = None
     # Top-K flagged addresses per exchange sent to the LLM. Rationale:
     # ~650 attacker addresses across all exchanges would produce a ~78k-token
     # prompt AND a >16k-token output (way over max_tokens caps). Realistically,
@@ -660,10 +669,26 @@ class LLMDefenderCoordinator(Detector):
             a for entries in per_exchange_flagged.values() for a, _, _ in entries
         }
 
+        system_prompt = _LLM_COORDINATOR_SYSTEM_PROMPT
+        if self.oracle is not None and self.campaign_ts is not None:
+            system_prompt = (
+                _LLM_COORDINATOR_SYSTEM_PROMPT
+                + "\n\n"
+                + build_market_context(self.oracle, self.campaign_ts)
+                + "\n\nUse the USD thresholds above when interpreting each "
+                "address's log-volume features. Flagged addresses whose "
+                "log_eth_in / log_usdt_in map to values near the $999 "
+                "sub-CTR threshold are candidates for STRUCTURING clusters; "
+                "values well above CTR suggest CONSOLIDATION legs. Both "
+                "patterns are typical of coordinated laundering — cluster "
+                "them accordingly with the fingerprint similarity you "
+                "already reason about."
+            )
+
         try:
             result = self.llm_client.complete(
                 prompt=user_prompt,
-                system=_LLM_COORDINATOR_SYSTEM_PROMPT,
+                system=system_prompt,
                 model=self.llm_model,
                 max_tokens=self.llm_max_tokens,
             )

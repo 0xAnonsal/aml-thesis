@@ -41,10 +41,12 @@ from aml.detectors.multi_agent import (
     MultiAgentDetector,
     actor_clustering_metrics,
 )
+from aml.env import PriceOracle, resolve_campaign_ts
 from aml.utils.env import load_dotenv_if_present
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PRICE_CACHE = REPO_ROOT / "data" / "prices"
 HEIST_PKL = REPO_ROOT / "data" / "ethereum_heist_combined.pkl"
 SEED = 42
 
@@ -143,6 +145,16 @@ def main() -> None:
                              "BitpointHacker (bring working set to ~5-10k nodes)")
     parser.add_argument("--num-exchanges", type=int, default=3)
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument(
+        "--campaign-ts", type=str, default=None,
+        help=(
+            "Freeze the price oracle to a specific date (YYYY-MM-DD). "
+            "Default: today clamped to last cached day. EthereumHeist "
+            "contains historical events — pass the incident date for "
+            "period-accurate market context, or leave default for a "
+            "'defender operating today' interpretation."
+        ),
+    )
     args = parser.parse_args()
 
     scope = "full" if args.include_upbit else "no_upbit"
@@ -233,10 +245,20 @@ def main() -> None:
     print("=" * 78)
     print(f"NOVEL: LLMDefenderCoordinator (model={args.model})")
     print("=" * 78)
+    oracle = PriceOracle(cache_dir=PRICE_CACHE)
+    campaign_ts = resolve_campaign_ts(oracle, args.campaign_ts)
+    print(
+        f"  Market context: campaign_ts={campaign_ts.isoformat()}  "
+        f"ETH=${oracle.price('eth', campaign_ts):,.2f}  "
+        f"USDT=${oracle.price('usdt', campaign_ts):.4f}"
+    )
+
     t0 = time.time()
     llm_det = LLMDefenderCoordinator(
         detector_factory=lambda: GCNDetector(seed=SEED, epochs=50),
         llm_model=args.model,
+        oracle=oracle,
+        campaign_ts=campaign_ts,
     )
     llm_det.fit_per_view(views, train_labels)
     llm_elapsed = time.time() - t0

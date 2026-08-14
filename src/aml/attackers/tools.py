@@ -76,7 +76,7 @@ _MAX_BURNERS_PER_SMURF = 5000
 # must keep it at or above floor unless explicitly told to drain. Matches
 # real-world launderer OPSEC where the operator drips fixed gas dust into
 # each disposable wallet and never strands one mid-campaign.
-_DEFAULT_GAS_RESERVE_ETH = 0.05
+_DEFAULT_GAS_RESERVE_ETH = 0.01
 
 # Gwei budget for a standard ETH transfer (21k gas baseline).
 _ETH_TRANSFER_GAS = 21_000
@@ -331,11 +331,14 @@ _TOOL_SCHEMAS: list[dict] = [
             "between operations (Lazarus/Bybit waited weeks before the "
             "first Tornado Cash deposit; HTX/HECO Bridge attacker "
             "waited 4 months). Delays differentiate a hit-and-run from "
-            "sophisticated APT operations. On Anvil this is instant "
-            "(anvil_mine RPC). On live testnets like Sepolia this is a "
-            "REAL time.sleep, capped at 30 blocks (~6 min wall-clock) "
-            "to keep campaign runtime bounded — use sparingly. 1 "
-            "Ethereum block ≈ 12 seconds."
+            "sophisticated APT operations. On Anvil, the per-block "
+            "interval is randomised each call from a weighted APT "
+            "distribution (60% quick 12s-5min/block, 25% cooling-off "
+            "5min-1h/block, 15% deep dormancy 1h-12h/block) — chain "
+            "time is realistic, wall clock is instant. On live testnets "
+            "the call sleeps a random 10-360s wall clock (network "
+            "controls actual block progression). Response includes the "
+            "sampled interval so you can see what delay you got."
         ),
         "input_schema": {
             "type": "object",
@@ -344,9 +347,13 @@ _TOOL_SCHEMAS: list[dict] = [
                     "type": "integer",
                     "description": (
                         "How many blocks to advance. On Anvil [100, "
-                        "1000000] (typical 5000-500000 for hours to "
-                        "months). On live chains [5, 30] (typical 5-15 "
-                        "= 1-3 min real wait between phases)."
+                        "1000000]; combined with the random per-block "
+                        "interval this yields chain-time from minutes "
+                        "(100 blocks × 12s) up to years (1M blocks × "
+                        "12h) — pick num_blocks to bound roughly what "
+                        "you want, the sampler decides the exact gap. "
+                        "On live chains [5, 30]; num_blocks is a hint "
+                        "only (wall-clock jitter is fixed 10-360s)."
                     ),
                 },
             },
@@ -905,13 +912,45 @@ def _run_zk_helper(*args: str) -> str:
     return proc.stdout.strip()
 
 
+def _find_snarkjs() -> str:
+    """Locate the snarkjs binary, checking common install paths beyond PATH.
+
+    npm's default `~/.npm-global/bin` is often not on PATH inside conda envs
+    or subprocess-launched shells. Falls back to explicit path probing.
+    """
+    from shutil import which
+    hit = which("snarkjs")
+    if hit:
+        return hit
+    from pathlib import Path
+    candidates = [
+        Path.home() / ".npm-global" / "bin" / "snarkjs",
+        Path.home() / ".nvm" / "versions" / "node" / "*" / "bin" / "snarkjs",
+        Path("/usr/local/bin/snarkjs"),
+        Path("/opt/homebrew/bin/snarkjs"),
+    ]
+    for c in candidates:
+        if "*" in str(c):
+            import glob
+            hits = glob.glob(str(c))
+            if hits:
+                return hits[0]
+        elif c.exists():
+            return str(c)
+    raise RuntimeError(
+        "`snarkjs` not found. Install via `npm install -g snarkjs` and "
+        "ensure ~/.npm-global/bin is on PATH, or set NPM prefix accordingly."
+    )
+
+
 def _run_snarkjs(*args: str) -> None:
     """Run `snarkjs <args...>`. Raises RuntimeError on missing binary or failure."""
+    binary = _find_snarkjs()
     try:
-        proc = subprocess.run(["snarkjs", *args], capture_output=True, text=True)
+        proc = subprocess.run([binary, *args], capture_output=True, text=True)
     except FileNotFoundError:
         raise RuntimeError(
-            "`snarkjs` not found on PATH — ZK mixer tools need snarkjs"
+            f"`snarkjs` binary vanished between lookup and exec: {binary}"
         ) from None
     if proc.returncode != 0:
         detail = proc.stderr.strip() or proc.stdout.strip() or "no output"
@@ -984,6 +1023,10 @@ class ToolDispatcher:
         # breaking the single-source co-funding heuristic that trivially
         # groups all campaign wallets in one graph hop.
         self._funder_pool: list[str] = []
+        # Count of bulk-refill events (whole-pool refills from deployer).
+        # Incremented in _pick_funder when the pool exhausts. Runners
+        # surface this in meta.funder_pool.refill_events for reporting.
+        self._funder_refill_events: int = 0
         self.wallets: dict[str, str] = {
             Web3.to_checksum_address(addr): key for addr, key in wallets.items()
         }
@@ -1226,9 +1269,22 @@ class ToolDispatcher:
             })
 
     def bootstrap_funder_pool(
-        self, num_funders: int, eth_per_funder: float = 1.0,
+        self,
+        num_funders: int | None = None,
+        eth_per_funder: float = 1.0,
+        *,
+        amounts_eth: list[float] | None = None,
     ) -> None:
-        """Create `num_funders` funder wallets, each funded from the deployer.
+        """Create funder wallets, each funded from the deployer.
+
+        Two invocation modes:
+          - Legacy: pass `num_funders` and `eth_per_funder` — all funders
+            get the same amount. Kept so older tests + runs stay
+            reproducible.
+          - Preferred: pass `amounts_eth` — one funder per element, each
+            seeded with its own amount. Enables non-uniform (e.g. random-
+            per-funder) balances that break the "all funders identical"
+            detection signal.
 
         Once bootstrapped, all subsequent gas-seeding operations (initial
         wallet dust, runtime top-ups) pick a RANDOM funder from the pool
@@ -1249,11 +1305,18 @@ class ToolDispatcher:
             return
         if not self.wallets:
             raise RuntimeError("cannot bootstrap funder pool without deployer")
-        for _ in range(num_funders):
+        if amounts_eth is None:
+            if num_funders is None:
+                raise ValueError(
+                    "bootstrap_funder_pool: pass either amounts_eth or "
+                    "num_funders (+ eth_per_funder)"
+                )
+            amounts_eth = [eth_per_funder] * num_funders
+        for amount in amounts_eth:
             acct = Account.create()
             self.wallets[acct.address] = acct.key.hex()
             try:
-                self._seed_gas(acct.address, eth_per_funder)
+                self._seed_gas(acct.address, amount)
                 self._funder_pool.append(acct.address)
             except Exception:   # noqa: BLE001
                 # Partial pool is still better than none; skip this funder.
@@ -1273,18 +1336,40 @@ class ToolDispatcher:
         """
         if not self._funder_pool:
             return None
-        funder = random.choice(self._funder_pool)
-        min_liquidity_wei = int(0.1 * 10**18)
+
+        # Two-stage rotation (2026-08-14): prefer any funder still
+        # holding >= min_liquidity ETH. If NONE are active, refill only
+        # ONE funder (a random pick) from the deployer and return it.
+        # Rationale: a real attacker rotates through cold wallets and
+        # reloads them one at a time from cold storage — not a continuous
+        # drip, and not a bulk pool reload. Detection-wise the deployer
+        # is quiet during rotation windows and only fires a single edge
+        # when a funder needs to come back online.
+        min_liquidity_wei = int(0.02 * 10**18)   # 2× the 0.01 seed floor
         refill_eth = 0.5
+        deployer = next(iter(self.wallets))
+
         try:
-            if self.w3.eth.get_balance(funder) < min_liquidity_wei:
-                # Refill directly from deployer (first wallet). Explicit
-                # source=deployer so we don't recurse into _pick_funder.
-                deployer = next(iter(self.wallets))
-                if funder != deployer:
-                    self._seed_gas(funder, refill_eth, source=deployer)
-        except Exception:   # noqa: BLE001 — best-effort refill
-            pass
+            active = [
+                f for f in self._funder_pool
+                if self.w3.eth.get_balance(f) >= min_liquidity_wei
+            ]
+        except Exception:   # noqa: BLE001
+            active = list(self._funder_pool)   # if RPC fails, fall through
+
+        if active:
+            return random.choice(active)
+
+        # Whole pool exhausted: refill just ONE (random) funder and
+        # return it. The rest stay out of service until they too get
+        # refilled in a later exhaustion event.
+        funder = random.choice(self._funder_pool)
+        if funder != deployer:
+            try:
+                self._seed_gas(funder, refill_eth, source=deployer)
+                self._funder_refill_events += 1
+            except Exception:   # noqa: BLE001 — best-effort refill
+                pass
         return funder
 
     def _seed_gas(
@@ -1551,6 +1636,105 @@ class ToolDispatcher:
             "forwarded": forwarded_reports,
         }
 
+    def sweep_funder_pool(self, destination: str | None = None) -> dict:
+        """Return residual ETH from every funder wallet back to `destination`.
+
+        Called at end-of-campaign so the funder pool is left at ~0 ETH,
+        letting the runner compute the TRUE gas cost as
+        (initial pool allocated) - (amount recovered by sweep). Anything
+        that isn't recovered was consumed by chain gas or refills into
+        burners the funder seeded. Matches Sepolia's manual sweep
+        semantics (scripts/sweep_sepolia.py) so both chains behave the
+        same.
+
+        For each funder in the pool:
+          1. Query current balance.
+          2. If balance > gas cost of a plain ETH transfer, send
+             (balance - gas cost) back to `destination`.
+          3. Skip funders whose balance is below the gas floor (nothing
+             worth sweeping — they're already effectively empty).
+
+        `destination`: address to send the recovered ETH. Defaults to
+        the first registered wallet (canonical deployer/faucet).
+
+        Returns a dict suitable for embedding in campaign metadata:
+          {
+            "num_funders": int,       # funders in the pool at sweep time
+            "swept": int,             # number of funders that returned ETH
+            "skipped": int,           # funders below the gas floor
+            "failed": list[str],      # funders whose sweep tx failed
+            "total_returned_wei": int,
+            "total_returned_eth": float,
+            "per_funder": {addr: {"balance_before_wei": int,
+                                  "returned_wei": int,
+                                  "status": "swept" | "skipped" | "failed"}}
+          }
+        """
+        if destination is None:
+            destination = next(iter(self.wallets))
+        destination = Web3.to_checksum_address(destination)
+
+        try:
+            gas_price = self.w3.eth.gas_price
+        except Exception:   # noqa: BLE001
+            gas_price = self.w3.to_wei(3, "gwei")
+        gas_cost_wei = _ETH_TRANSFER_GAS * int(gas_price * 1.2)
+
+        report: dict = {
+            "num_funders": len(self._funder_pool),
+            "swept": 0,
+            "skipped": 0,
+            "failed": [],
+            "total_returned_wei": 0,
+            "per_funder": {},
+        }
+
+        for funder in list(self._funder_pool):
+            balance_wei = self.w3.eth.get_balance(funder)
+            entry = {
+                "balance_before_wei": balance_wei,
+                "returned_wei": 0,
+                "status": "skipped",
+            }
+
+            if balance_wei <= gas_cost_wei:
+                report["skipped"] += 1
+                report["per_funder"][funder] = entry
+                continue
+
+            send_amount_wei = balance_wei - gas_cost_wei
+            try:
+                tx = {
+                    "from": funder,
+                    "to": destination,
+                    "value": send_amount_wei,
+                    "nonce": self.w3.eth.get_transaction_count(funder),
+                    "gas": _ETH_TRANSFER_GAS,
+                    "gasPrice": gas_price,
+                    "chainId": self.w3.eth.chain_id,
+                }
+                signed = self.w3.eth.account.sign_transaction(
+                    tx, private_key=self.wallets[funder]
+                )
+                tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
+                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+                if receipt.status == 1:
+                    entry["returned_wei"] = send_amount_wei
+                    entry["status"] = "swept"
+                    report["swept"] += 1
+                    report["total_returned_wei"] += send_amount_wei
+                else:
+                    entry["status"] = "failed"
+                    report["failed"].append(funder)
+            except Exception:   # noqa: BLE001
+                entry["status"] = "failed"
+                report["failed"].append(funder)
+
+            report["per_funder"][funder] = entry
+
+        report["total_returned_eth"] = report["total_returned_wei"] / 10**18
+        return report
+
     def _peel_chain(
         self, from_address: str, asset: str, initial_amount: float,
         num_hops: int = 15, peel_pct: float = 0.07,
@@ -1683,17 +1867,17 @@ class ToolDispatcher:
         })
 
     def _advance_blocks(self, num_blocks: int) -> ToolResult:
-        """Advance the local chain by N blocks (anvil_mine RPC on Anvil,
-        real time.sleep on live testnets like Sepolia).
+        """Advance the chain with a randomised timing delay.
 
-        Simulates timing delays between laundering phases. On Anvil this
-        is instant via anvil_mine RPC. On live chains (chain_id != 31337)
-        it becomes a real time.sleep of num_blocks × 12 seconds, capped
-        at 30 blocks (~6 min) to avoid excessive wall-clock cost during
-        a research campaign.
+        On Anvil the per-block interval is drawn from a weighted APT
+        distribution (60% quick hop 12s-5min per block, 25% cooling-off
+        5min-1h, 15% deep dormancy 1h-12h). Chain-time reflects real
+        launderer OPSEC patterns; wall-clock stays instant.
+
+        On live chains (Sepolia etc.) the delay is a random wall-clock
+        sleep in [10s, 360s] regardless of num_blocks — bounded so a
+        campaign never blocks on any single call.
         """
-        # Detect chain: Anvil default chain_id is 31337. Anything else
-        # is treated as a live chain (Sepolia, mainnet, etc.).
         is_anvil = self.w3.eth.chain_id == 31337
         max_blocks = 1_000_000 if is_anvil else 30
         min_blocks = 100 if is_anvil else 5
@@ -1705,20 +1889,39 @@ class ToolDispatcher:
         block_before = self.w3.eth.block_number
         try:
             if is_anvil:
-                self.w3.provider.make_request("anvil_mine", [hex(num_blocks)])
+                # Weighted bucket over per-block interval (seconds).
+                # Mirrors observed APT laundering cadence.
+                bucket = random.choices(
+                    population=[(12, 300), (300, 3600), (3600, 43200)],
+                    weights=[0.60, 0.25, 0.15],
+                    k=1,
+                )[0]
+                interval_s = random.randint(bucket[0], bucket[1])
+                self.w3.provider.make_request(
+                    "anvil_mine",
+                    [hex(num_blocks), hex(interval_s)],
+                )
+                wall_clock_s = 0
             else:
-                # Real sleep for live chains — 12s per Ethereum block
+                # Live chain: block progression is set by the network,
+                # not by us. Only choose a bounded random wall-clock
+                # jitter to break deterministic timing signatures.
                 import time as _time
-                _time.sleep(num_blocks * 12)
+                interval_s = 12  # real ethereum
+                wall_clock_s = random.uniform(10, 360)
+                _time.sleep(wall_clock_s)
         except Exception as e:   # noqa: BLE001
             return ToolResult(error=f"advance_blocks failed: {e}")
         block_after = self.w3.eth.block_number
+        chain_seconds = num_blocks * interval_s if is_anvil else (block_after - block_before) * 12
         return ToolResult(output={
             "block_before": block_before,
             "block_after": block_after,
             "blocks_advanced": block_after - block_before,
-            "approx_ethereum_seconds": (block_after - block_before) * 12,
-            "approx_ethereum_days": round((block_after - block_before) * 12 / 86400, 2),
+            "interval_seconds_per_block": interval_s,
+            "chain_seconds_elapsed": chain_seconds,
+            "chain_days_elapsed": round(chain_seconds / 86400, 2),
+            "wall_clock_seconds": round(wall_clock_s, 1),
         })
 
     def _mint_usdt(self, to_address: str, amount_usdt: float) -> ToolResult:

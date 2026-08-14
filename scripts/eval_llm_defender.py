@@ -37,10 +37,12 @@ from aml.detectors.multi_agent import (
     actor_clustering_metrics,
     true_actor_clusters,
 )
+from aml.env import PriceOracle, resolve_campaign_ts
 from aml.utils.env import load_dotenv_if_present
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PRICE_CACHE = REPO_ROOT / "data" / "prices"
 DATASET_PKL = Path.home() / "aml-results" / "batch_2026-06-26" / "dataset.pkl"
 SEED = 42
 
@@ -56,6 +58,15 @@ def main() -> None:
                         help="Output JSON path (default: results/eval_llm_defender_<model>.json)")
     parser.add_argument("--num-exchanges", type=int, default=3,
                         help="Number of exchange partitions")
+    parser.add_argument(
+        "--campaign-ts", type=str, default=None,
+        help=(
+            "Freeze the price oracle to a specific date (YYYY-MM-DD or "
+            "ISO 8601) for reproducible market context. Default: today "
+            "clamped to last cached day. Match the attacker's --campaign-ts "
+            "when doing paired attacker/defender comparisons."
+        ),
+    )
     args = parser.parse_args()
 
     out_json = args.out or (REPO_ROOT / "results" / f"eval_llm_defender_{args.model}.json")
@@ -137,10 +148,20 @@ def main() -> None:
     print("=" * 78)
     print(f"NOVEL: LLMDefenderCoordinator (model={args.model})")
     print("=" * 78)
+    oracle = PriceOracle(cache_dir=PRICE_CACHE)
+    campaign_ts = resolve_campaign_ts(oracle, args.campaign_ts)
+    print(
+        f"  Market context: campaign_ts={campaign_ts.isoformat()}  "
+        f"ETH=${oracle.price('eth', campaign_ts):,.2f}  "
+        f"USDT=${oracle.price('usdt', campaign_ts):.4f}"
+    )
+
     t0 = time.time()
     llm_det = LLMDefenderCoordinator(
         detector_factory=lambda: GCNDetector(seed=SEED, epochs=50),
         llm_model=args.model,
+        oracle=oracle,
+        campaign_ts=campaign_ts,
     )
     llm_det.fit_per_view(views, train_labels)
     llm_elapsed = time.time() - t0
