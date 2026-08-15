@@ -102,6 +102,41 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
         w3 = Web3(Web3.HTTPProvider(node.rpc_url))
         deployer, deployer_key = node.accounts[0], node.private_keys[0]
         alice, alice_key = node.accounts[1], node.private_keys[1]
+
+        # Anvil pre-funds every account with 10_000 ETH by default. Alice
+        # is meant to hold EXACTLY `amount` ETH — the "stolen loot" she
+        # will launder. Real hackers only have what they stole; any gas
+        # they pay for onward transfers comes OUT of the loot, not from
+        # magic side-funds. Without this drain, the Coordinator could
+        # route more than `amount` ETH from Alice's Anvil-inherited 10K
+        # into laundering and inflate the recovery metric past 100%.
+        #
+        # Alice's own tx gas will come from `amount` (the tools respect
+        # a reserve_eth=0.01 default so she never bricks herself; the
+        # last-mile drain can pass reserve_eth=0 to sweep the residual).
+        alice_target_wei = int(amount * 10**18)
+        alice_balance_wei = w3.eth.get_balance(alice)
+        if alice_balance_wei > alice_target_wei:
+            gas_price = w3.eth.gas_price
+            drain_gas = 21_000
+            drain_value = alice_balance_wei - alice_target_wei - (drain_gas * int(gas_price * 1.2))
+            if drain_value > 0:
+                tx = {
+                    "from": alice, "to": deployer, "value": drain_value,
+                    "nonce": w3.eth.get_transaction_count(alice),
+                    "gas": drain_gas, "gasPrice": gas_price,
+                    "chainId": w3.eth.chain_id,
+                }
+                from eth_account import Account
+                signed = Account.sign_transaction(tx, private_key=alice_key)
+                tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+                w3.eth.wait_for_transaction_receipt(tx_hash)
+        print(
+            f"[runner] alice normalized: "
+            f"{w3.eth.get_balance(alice)/1e18:.4f} ETH "
+            f"(target exact: {amount:.4f})",
+            file=sys.stderr,
+        )
         # Clean exits are NOT pre-allocated. The Integration sub-agent
         # creates them dynamically via register_clean_exit, and we read
         # the resulting list from dispatcher.registered_clean_exits at

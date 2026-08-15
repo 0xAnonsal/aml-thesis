@@ -52,8 +52,8 @@ WASM = CIRCUIT_BUILD / "withdraw_js" / "withdraw.wasm"
 ZKEY = CIRCUIT_BUILD / "withdraw_final.zkey"
 HELPER_JS = REPO_ROOT / "scripts" / "zk_helpers.js"
 
-BOOTSTRAP_USDT = 1_000_000 * 10**6
-BOOTSTRAP_ETH_WEI = 500 * 10**18
+BOOTSTRAP_USDT = 10_000_000 * 10**6   # was 1M — 10× larger pool (2026-08-14)
+BOOTSTRAP_ETH_WEI = 5_000 * 10**18    # was 500 — reduces 10-ETH swap slippage 1.86% → 0.46%
 TORNADO_DENOMINATION_WEI = 10**18
 BRIDGE_DEMO_AMOUNT = 2_500 * 10**6
 TRON_DEST_DEMO = b"TR1ce9NK4DM7XFq9RzTronAddrPadding"[:32].ljust(32, b"\x00")

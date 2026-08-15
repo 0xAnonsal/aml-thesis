@@ -270,7 +270,7 @@ def main():
 
     alice_funding = (
         args.alice_funding_eth if args.alice_funding_eth is not None
-        else amount + 0.5   # amount to launder + 0.5 ETH for gas buffer
+        else amount   # exact loot amount — gas comes OUT of it (realistic)
     )
 
     rpc, deployer_key = load_sepolia_env()
