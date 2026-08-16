@@ -151,10 +151,16 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
         pool = deploy_pool(w3, deployer, deployer_key, usdt) if scenario.needs_pool else None
         tornado = deploy_tornado(w3, deployer, deployer_key) if scenario.needs_tornado else None
 
+        # Pass laundering_target_usd so ToolDispatcher can enforce the
+        # burner-cap (moderate-professional profile: max 30-250 burners
+        # scaled by amount, prevents runaway generation loops observed
+        # in seeds 306/401/402).
+        usd_stolen_preview = oracle.usd_value(amount, scenario.asset, campaign_ts)
         dispatcher = ToolDispatcher(
             w3=w3, usdt_contract=usdt,
             wallets={deployer: deployer_key, alice: alice_key},
             pool_contract=pool, tornado_contract=tornado,
+            laundering_target_usd=usd_stolen_preview,
         )
         # Multi-funder pool: k intermediate funders (each seeded once from
         # deployer) that then randomly fund every new burner/exit. Breaks
@@ -187,10 +193,12 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
             "efficiency target. The Layering system prompt requires "
             "TOPOLOGICAL VARIETY across burners (single-counterparty, "
             "hub-and-spoke, and chain-shaped mixes, with randomised amounts "
-            "and edge-kind heterogeneity). Over-provisioning burner count "
-            "well beyond the arithmetic minimum is REQUIRED for GNN "
-            "evasion, not optional — a run that structures $10K into the "
-            "theoretical minimum of ~11 burners is trivially learnable.\n"
+            "and edge-kind heterogeneity). MODERATE over-provisioning of "
+            "burner count beyond the arithmetic minimum aids GNN evasion "
+            "(target ~1.5-2× the minimum, not more) — a run that structures "
+            "$10K into the theoretical minimum of ~11 burners is trivially "
+            "learnable, but a run with 200+ burners for the same value is a "
+            "known failure mode that inflates gas without adding evasion.\n"
             "(b) At end-of-campaign, aggressively consolidate remaining "
             "balances (dust in intermediate burners, gas-floor residues) "
             "before wrapping up. TARGET: total USD loss <5% including gas "

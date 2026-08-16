@@ -344,6 +344,7 @@ def main():
         "SEPOLIA_LOGS_RPC_URL",
         "https://ethereum-sepolia-rpc.publicnode.com",
     )
+    usd_stolen_preview = oracle.usd_value(amount, scenario.asset, campaign_ts)
     dispatcher = ToolDispatcher(
         w3=w3,
         usdt_contract=contracts["usdt"],
@@ -352,6 +353,7 @@ def main():
         tornado_contract=contracts["tornado"] if scenario.needs_tornado else None,
         mixer_events_from_block=tornado_deploy_block,
         logs_rpc_url=logs_rpc_url,
+        laundering_target_usd=usd_stolen_preview,
     )
     # Multi-funder pool for gas obfuscation. On Sepolia we keep a smaller
     # bootstrap amount per funder to avoid burning deployer ETH — 0.2 ETH
@@ -396,8 +398,8 @@ def main():
         "efficiency target. The Layering system prompt requires "
         "TOPOLOGICAL VARIETY across burners (single-counterparty, "
         "hub-and-spoke, and chain-shaped mixes, with randomised amounts "
-        "and edge-kind heterogeneity). Over-provisioning burner count "
-        "well beyond the arithmetic minimum is REQUIRED for GNN "
+        "and edge-kind heterogeneity). MODERATE over-provisioning of "
+        "burner count beyond the arithmetic minimum aids GNN "
         "evasion, not optional — a run that structures $10K into the "
         "theoretical minimum of ~11 burners is trivially learnable.\n"
         "(b) At end-of-campaign, aggressively consolidate remaining "
