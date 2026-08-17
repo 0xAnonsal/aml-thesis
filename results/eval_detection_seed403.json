@@ -1,0 +1,240 @@
+{
+  "attacker_run": "2026-08-16T20-20-49_defi-exploit_seed403",
+  "num_benigns": 50,
+  "n_attacker_addresses_ground_truth": 53,
+  "n_benign_addresses_labeled": 2244,
+  "configs": {
+    "louvain": {
+      "federation_tp": 53,
+      "federation_fp": 0,
+      "federation_fn": 0,
+      "federation_precision": 1.0,
+      "federation_recall": 1.0,
+      "federation_f1": 1.0,
+      "per_view": {
+        "exchange_A": {
+          "n_addresses_visible": 745,
+          "n_flagged": 23,
+          "tp": 20,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "attacker_addrs_in_view": 20
+        },
+        "exchange_B": {
+          "n_addresses_visible": 790,
+          "n_flagged": 17,
+          "tp": 14,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "attacker_addrs_in_view": 14
+        },
+        "exchange_C": {
+          "n_addresses_visible": 779,
+          "n_flagged": 22,
+          "tp": 19,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "attacker_addrs_in_view": 19
+        }
+      },
+      "fit_time": 0.16
+    },
+    "gcn": {
+      "federation_tp": 53,
+      "federation_fp": 291,
+      "federation_fn": 0,
+      "federation_precision": 0.1541,
+      "federation_recall": 1.0,
+      "federation_f1": 0.267,
+      "per_view": {
+        "exchange_A": {
+          "n_addresses_visible": 745,
+          "n_flagged": 24,
+          "tp": 20,
+          "fp": 1,
+          "fn": 0,
+          "precision": 0.9524,
+          "recall": 1.0,
+          "f1": 0.9756,
+          "attacker_addrs_in_view": 20
+        },
+        "exchange_B": {
+          "n_addresses_visible": 790,
+          "n_flagged": 307,
+          "tp": 14,
+          "fp": 290,
+          "fn": 0,
+          "precision": 0.0461,
+          "recall": 1.0,
+          "f1": 0.0881,
+          "attacker_addrs_in_view": 14
+        },
+        "exchange_C": {
+          "n_addresses_visible": 779,
+          "n_flagged": 20,
+          "tp": 19,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "attacker_addrs_in_view": 19
+        }
+      },
+      "fit_time": 0.76
+    },
+    "gcn+llm_opus": {
+      "federation_tp": 53,
+      "federation_fp": 291,
+      "federation_fn": 0,
+      "federation_precision": 0.1541,
+      "federation_recall": 1.0,
+      "federation_f1": 0.267,
+      "per_view": {
+        "exchange_A": {
+          "n_addresses_visible": 745,
+          "n_flagged": 24,
+          "tp": 20,
+          "fp": 1,
+          "fn": 0,
+          "precision": 0.9524,
+          "recall": 1.0,
+          "f1": 0.9756,
+          "attacker_addrs_in_view": 20
+        },
+        "exchange_B": {
+          "n_addresses_visible": 790,
+          "n_flagged": 307,
+          "tp": 14,
+          "fp": 290,
+          "fn": 0,
+          "precision": 0.0461,
+          "recall": 1.0,
+          "f1": 0.0881,
+          "attacker_addrs_in_view": 14
+        },
+        "exchange_C": {
+          "n_addresses_visible": 779,
+          "n_flagged": 20,
+          "tp": 19,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "attacker_addrs_in_view": 19
+        }
+      },
+      "fit_time": 141.58,
+      "cost_usd": 0.1543,
+      "llm_reasoning": "Cluster 0 groups mixer-deposit-only source wallets (identical single-out mixer_deposit fingerprint) across A and C. Cluster 1 is the paired mixer-withdraw sinks on A. Cluster 2 groups the two-in mixer_withdraw+transfer pattern (5973E887 & B08D9553) seen on both A and B. Cluster 3 collapses the case-variant duplicates of the a513e6e4 hub address seen on all three exchanges \u2014 same real actor. Cluster 4 is the twin transfer_in\u2192mixer_deposit_out relay pair on A. Cluster 5 groups fan-out distributor addresses (one-in, many-out transfers). Cluster 6 collects small transfer_eth_in singletons on A and B likely being drop wallets of one ETH-payout campaign. Cluster 7 pairs the high-volume USDT swap consolidators (025Ab7b0 and 9aA6eB66). Cluster 8 groups exchange_C mixer_withdraw\u2192transfer_out relays. Cluster 9 collects small ETH-transfer relays across exchanges. Cluster 10 groups small USDT deposits (~$400-$900, sub-CTR structuring). Cluster 11 groups larger USDT structuring legs (~$1000+ range near CTR threshold). Clusters 12-17 partition the large pools of near-zero-feature isolated flagged nodes into moderate-sized campaign-sized buckets by exchange and address ordering, reflecting likely independent burner batches.",
+      "clustering": {
+        "n_attacker_addrs_assigned": 53,
+        "n_clusters_touched_by_attackers": 17,
+        "top_clusters_by_attacker_count": {
+          "6": 8,
+          "11": 6,
+          "0": 6,
+          "12": 6,
+          "9": 5
+        },
+        "cluster_composition": {
+          "1": {
+            "size": 2,
+            "attackers": 2,
+            "purity": 1.0
+          },
+          "7": {
+            "size": 2,
+            "attackers": 2,
+            "purity": 1.0
+          },
+          "6": {
+            "size": 8,
+            "attackers": 8,
+            "purity": 1.0
+          },
+          "1425": {
+            "size": 1,
+            "attackers": 1,
+            "purity": 1.0
+          },
+          "11": {
+            "size": 6,
+            "attackers": 6,
+            "purity": 1.0
+          },
+          "9": {
+            "size": 5,
+            "attackers": 5,
+            "purity": 1.0
+          },
+          "10": {
+            "size": 4,
+            "attackers": 4,
+            "purity": 1.0
+          },
+          "0": {
+            "size": 6,
+            "attackers": 6,
+            "purity": 1.0
+          },
+          "12": {
+            "size": 8,
+            "attackers": 6,
+            "purity": 0.75
+          },
+          "14": {
+            "size": 10,
+            "attackers": 1,
+            "purity": 0.1
+          },
+          "5": {
+            "size": 2,
+            "attackers": 2,
+            "purity": 1.0
+          },
+          "8": {
+            "size": 3,
+            "attackers": 3,
+            "purity": 1.0
+          },
+          "4": {
+            "size": 2,
+            "attackers": 2,
+            "purity": 1.0
+          },
+          "1414": {
+            "size": 1,
+            "attackers": 1,
+            "purity": 1.0
+          },
+          "2": {
+            "size": 2,
+            "attackers": 2,
+            "purity": 1.0
+          },
+          "2172": {
+            "size": 1,
+            "attackers": 1,
+            "purity": 1.0
+          },
+          "832": {
+            "size": 1,
+            "attackers": 1,
+            "purity": 1.0
+          }
+        }
+      }
+    }
+  }
+}
