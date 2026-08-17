@@ -13,9 +13,24 @@ build/
 
 # Virtual envs / secrets
 .env
+.env.*
+!.env.example
+!.env.*.example
 .venv
 venv/
 ENV/
+
+# Sepolia deployment output (public addresses, no secrets). Tracked in Git
+# so the TFM can reference the specific deployed contracts and any reader
+# can verify them on sepolia.etherscan.io. A re-deploy would produce NEW
+# addresses (non-deterministic), so tracking is the only way to preserve
+# provenance for the writeup.
+!deployments/*.json
+
+# Campaign wallets_keys.json — contains PRIVATE KEYS of every burner/exit
+# wallet generated during a Sepolia campaign. Enables scripts/sweep_sepolia.py
+# to reclaim residual ETH+USDT back to the deployer. NEVER commit.
+**/wallets_keys.json
 
 # Conda
 .conda/
@@ -42,6 +57,9 @@ data/tron/*
 *.parquet
 *.h5
 *.npz
+# Combined dataset pickles (regenerable via scripts/load_ethereum_heist.py etc.)
+*.pkl
+*.pickle
 
 # Price cache is small + reproducibility-critical, keep it tracked
 !data/prices/

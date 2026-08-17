@@ -82,8 +82,14 @@ def decode_event(log, known_contracts: dict[str, Any]) -> dict | None:
 
 def extract_chain_trace(
     w3, end_block: int, known_contracts: dict[str, Any],
+    start_block: int = 0,
 ) -> list[dict]:
-    """Walk every tx in blocks [0, end_block]; emit one record per tx.
+    """Walk every tx in blocks [start_block, end_block]; emit one record per tx.
+
+    start_block defaults to 0 (Anvil-compatible: walks from genesis). For
+    live testnets (Sepolia, mainnet forks) callers MUST pass a non-zero
+    start_block — walking from genesis on public chains would iterate
+    millions of unrelated blocks.
 
     Each record fields:
       tx_hash    hex hash, 0x-prefixed
@@ -99,7 +105,7 @@ def extract_chain_trace(
     Suitable for direct json.dumps line-by-line into a .jsonl file.
     """
     trace: list[dict] = []
-    for block_num in range(end_block + 1):
+    for block_num in range(start_block, end_block + 1):
         block = w3.eth.get_block(block_num, full_transactions=True)
         for tx in block.transactions:
             try:

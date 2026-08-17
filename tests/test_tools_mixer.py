@@ -323,3 +323,226 @@ def test_mixer_withdraw_malformed_note_returns_error():
         })
         assert result.is_error, f"{bad!r} should have errored"
         assert "note" in result.error.lower(), f"{bad!r}: {result.error}"
+
+
+# --- Batched mixer tools (Chema-approved batched pattern) ----------------
+
+
+@needs_foundry
+@needs_zk_setup
+@needs_circomlibjs
+def test_mixer_batch_deposit_creates_n_notes():
+    """Batch of 3 deposits: 3 distinct notes, 3 sequential leaf indices."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        alice, alice_key = node.accounts[1], node.private_keys[1]
+        tornado = _deploy_tornado(w3, deployer, deployer_key)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=None, wallets={alice: alice_key},
+            tornado_contract=tornado,
+        )
+        result = dispatcher.dispatch("mixer_batch_deposit", {
+            "from_address": alice, "num_deposits": 3,
+        })
+        assert not result.is_error, result.error
+        assert result.output["num_requested"] == 3
+        assert result.output["num_successful"] == 3
+        notes = result.output["deposit_notes"]
+        assert len(notes) == 3
+        # All notes must be distinct (fresh nullifier+secret per deposit)
+        assert len(set(notes)) == 3
+        for n in notes:
+            assert n.startswith("aml-mixer-note-v1:")
+        assert result.output["leaf_indices"] == [0, 1, 2]
+        assert result.output["total_eth_deposited"] == 3.0
+        assert result.output["failures"] == []
+        # Pool now holds 3 ETH
+        assert tornado.functions.poolBalance().call() == 3 * DENOMINATION_WEI
+
+
+def test_mixer_batch_deposit_exceeds_cap_returns_error():
+    """num_deposits > _MAX_MIXER_BATCH → clean cap error before any chain call."""
+    from aml.attackers.tools import _MAX_MIXER_BATCH
+    dispatcher = ToolDispatcher(
+        w3=Web3(), usdt_contract=None,
+        wallets={"0x" + "1" * 40: "0x" + "0" * 64},
+        tornado_contract=object(),
+    )
+    result = dispatcher.dispatch("mixer_batch_deposit", {
+        "from_address": "0x" + "1" * 40,
+        "num_deposits": _MAX_MIXER_BATCH + 1,
+    })
+    assert result.is_error
+    assert "exceeds cap" in result.error.lower()
+
+
+def test_mixer_batch_deposit_no_tornado_returns_error():
+    """Dispatcher without tornado → clean error, no crash."""
+    dispatcher = ToolDispatcher(
+        w3=Web3(), usdt_contract=None, wallets={}, tornado_contract=None,
+    )
+    result = dispatcher.dispatch("mixer_batch_deposit", {
+        "from_address": "0x" + "1" * 40, "num_deposits": 5,
+    })
+    assert result.is_error
+    assert "tornado" in result.error.lower()
+
+
+def test_mixer_batch_deposit_zero_or_negative_returns_error():
+    """num_deposits must be positive."""
+    dispatcher = ToolDispatcher(
+        w3=Web3(), usdt_contract=None,
+        wallets={"0x" + "1" * 40: "0x" + "0" * 64},
+        tornado_contract=object(),
+    )
+    for bad_n in (0, -1, -100):
+        result = dispatcher.dispatch("mixer_batch_deposit", {
+            "from_address": "0x" + "1" * 40, "num_deposits": bad_n,
+        })
+        assert result.is_error, f"num_deposits={bad_n} should error"
+        assert "positive" in result.error.lower()
+
+
+@needs_foundry
+@needs_zk_setup
+@needs_circomlibjs
+@needs_snarkjs
+def test_mixer_batch_withdraw_broadcast_recipient():
+    """3 notes all withdrawn to the SAME recipient — recipient collects 3 ETH."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        alice, alice_key = node.accounts[1], node.private_keys[1]
+        bob, bob_key = node.accounts[2], node.private_keys[2]
+        tornado = _deploy_tornado(w3, deployer, deployer_key)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=None,
+            wallets={alice: alice_key, bob: bob_key},
+            tornado_contract=tornado,
+        )
+
+        # Batch-deposit 3 notes
+        dep = dispatcher.dispatch("mixer_batch_deposit", {
+            "from_address": alice, "num_deposits": 3,
+        })
+        assert not dep.is_error, dep.error
+        notes = dep.output["deposit_notes"]
+
+        # Fresh consolidation address (not in registry, starts at 0 ETH)
+        consol = w3.eth.account.create().address
+        assert w3.eth.get_balance(consol) == 0
+
+        # Broadcast: single string recipient → all 3 withdraws go to consol
+        wd = dispatcher.dispatch("mixer_batch_withdraw", {
+            "deposit_notes": notes,
+            "recipients": consol,
+            "gas_payer": bob,
+        })
+        assert not wd.is_error, wd.error
+        assert wd.output["num_successful"] == 3
+        assert wd.output["num_failed"] == 0
+        assert wd.output["total_eth_withdrawn"] == 3.0
+        # Recipient consolidated all 3 ETH
+        assert w3.eth.get_balance(consol) == 3 * DENOMINATION_WEI
+        # Mixer drained
+        assert tornado.functions.poolBalance().call() == 0
+
+
+@needs_foundry
+@needs_zk_setup
+@needs_circomlibjs
+@needs_snarkjs
+def test_mixer_batch_withdraw_per_note_recipients():
+    """3 notes → 3 distinct recipients (unlinkability preserving pattern)."""
+    with AnvilNode() as node:
+        w3 = Web3(Web3.HTTPProvider(node.rpc_url))
+        deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        alice, alice_key = node.accounts[1], node.private_keys[1]
+        bob, bob_key = node.accounts[2], node.private_keys[2]
+        tornado = _deploy_tornado(w3, deployer, deployer_key)
+
+        dispatcher = ToolDispatcher(
+            w3=w3, usdt_contract=None,
+            wallets={alice: alice_key, bob: bob_key},
+            tornado_contract=tornado,
+        )
+
+        dep = dispatcher.dispatch("mixer_batch_deposit", {
+            "from_address": alice, "num_deposits": 3,
+        })
+        notes = dep.output["deposit_notes"]
+
+        # 3 distinct fresh addresses
+        recipients = [w3.eth.account.create().address for _ in range(3)]
+        for r in recipients:
+            assert w3.eth.get_balance(r) == 0
+
+        wd = dispatcher.dispatch("mixer_batch_withdraw", {
+            "deposit_notes": notes,
+            "recipients": recipients,
+            "gas_payer": bob,
+        })
+        assert not wd.is_error, wd.error
+        assert wd.output["num_successful"] == 3
+        # Each recipient got exactly 1 ETH
+        for r in recipients:
+            assert w3.eth.get_balance(r) == DENOMINATION_WEI
+
+
+def test_mixer_batch_withdraw_recipients_length_mismatch_returns_error():
+    """len(recipients_list) != len(deposit_notes) → clean error."""
+    dispatcher = ToolDispatcher(
+        w3=Web3(), usdt_contract=None, wallets={},
+        tornado_contract=object(),
+    )
+    result = dispatcher.dispatch("mixer_batch_withdraw", {
+        "deposit_notes": ["note1", "note2", "note3"],
+        "recipients": ["0x" + "1" * 40, "0x" + "2" * 40],   # only 2
+    })
+    assert result.is_error
+    assert "must equal" in result.error.lower()
+
+
+def test_mixer_batch_withdraw_empty_list_returns_error():
+    """Empty deposit_notes → clean error."""
+    dispatcher = ToolDispatcher(
+        w3=Web3(), usdt_contract=None, wallets={},
+        tornado_contract=object(),
+    )
+    result = dispatcher.dispatch("mixer_batch_withdraw", {
+        "deposit_notes": [],
+        "recipients": "0x" + "1" * 40,
+    })
+    assert result.is_error
+    assert "non-empty" in result.error.lower()
+
+
+def test_mixer_batch_withdraw_exceeds_cap_returns_error():
+    """len(deposit_notes) > _MAX_MIXER_BATCH → clean cap error."""
+    from aml.attackers.tools import _MAX_MIXER_BATCH
+    dispatcher = ToolDispatcher(
+        w3=Web3(), usdt_contract=None, wallets={},
+        tornado_contract=object(),
+    )
+    too_many = ["note"] * (_MAX_MIXER_BATCH + 1)
+    result = dispatcher.dispatch("mixer_batch_withdraw", {
+        "deposit_notes": too_many,
+        "recipients": "0x" + "1" * 40,
+    })
+    assert result.is_error
+    assert "exceeds cap" in result.error.lower()
+
+
+def test_mixer_batch_withdraw_no_tornado_returns_error():
+    """Dispatcher without tornado → clean error."""
+    dispatcher = ToolDispatcher(
+        w3=Web3(), usdt_contract=None, wallets={}, tornado_contract=None,
+    )
+    result = dispatcher.dispatch("mixer_batch_withdraw", {
+        "deposit_notes": ["note"], "recipients": "0x" + "1" * 40,
+    })
+    assert result.is_error
+    assert "tornado" in result.error.lower()

@@ -1,0 +1,250 @@
+%% References for TFM — verified 2026-08-03
+%% Only entries that have been checked against arXiv / ACM DL / journal DOIs
+%% are included. Placeholder / unverifiable citations have been removed from
+%% the prose (see corrections audit trail in chapters/02_estado_del_arte.md).
+
+%% ===== Datasets AML =====
+
+@inproceedings{weber2019elliptic,
+  author    = {Weber, Mark and Domeniconi, Giacomo and Chen, Jie and
+               Weidele, Daniel Karl I. and Bellei, Claudio and
+               Robinson, Tom and Leiserson, Charles E.},
+  title     = {Anti-Money Laundering in {Bitcoin}: Experimenting with
+               Graph Convolutional Networks for Financial Forensics},
+  booktitle = {{KDD} '19 Workshop on Anomaly Detection in Finance},
+  year      = {2019},
+  eprint    = {1908.02591},
+  archivePrefix = {arXiv},
+}
+
+@inproceedings{elmougy2023ellipticpp,
+  author    = {Elmougy, Youssef and Liu, Ling},
+  title     = {Demystifying Fraudulent Transactions and Illicit Nodes in
+               the {Bitcoin} Network for Financial Forensics},
+  booktitle = {Proc. 29th ACM SIGKDD Conference on Knowledge Discovery
+               and Data Mining ({KDD} '23)},
+  year      = {2023},
+  pages     = {5040--5050},
+  doi       = {10.1145/3580305.3599803},
+  eprint    = {2306.06108},
+  archivePrefix = {arXiv},
+  note      = {Elliptic++ dataset: 822k Bitcoin wallets, 1.27M temporal
+               interactions. Repo: github.com/git-disl/EllipticPlusPlus},
+}
+
+@article{wu2023ethereumheist,
+  author    = {Wu, Jiajing and Lin, Dan and Fu, Qishuang and Yang, Shuo
+               and Chen, Ting and Zheng, Zibin and Song, Bowen},
+  title     = {Toward Understanding Asset Flows in Crypto Money Laundering
+               Through the Lenses of {Ethereum} Heists},
+  journal   = {IEEE Transactions on Information Forensics and Security},
+  volume    = {19},
+  pages     = {1994--2009},
+  year      = {2023},
+  doi       = {10.1109/TIFS.2023.3346276},
+  eprint    = {2305.14748},
+  archivePrefix = {arXiv},
+  note      = {EthereumHeist dataset: 23 real ETH heist campaigns},
+}
+
+@inproceedings{altman2023amlworld,
+  author    = {Altman, Erik and Blanu{\v s}a, Jovan and von Niederh{\"a}usern,
+               Luc and Egressy, B{\'e}ni and Anghel, Andreea and Atasu, Kubilay},
+  title     = {Realistic Synthetic Financial Transactions for
+               Anti-Money Laundering Models},
+  booktitle = {Advances in Neural Information Processing Systems
+               ({NeurIPS}) Datasets and Benchmarks Track},
+  year      = {2023},
+  eprint    = {2306.16424},
+  archivePrefix = {arXiv},
+  note      = {AMLWorld: synthetic multi-agent AML transaction generator},
+}
+
+@misc{openaml2025,
+  author       = {{OpenAML Project (FINOS)}},
+  title        = {{OpenAML}: Open and Intelligent Compliance for On-Chain
+                  Anti-Money Laundering},
+  year         = {2025},
+  howpublished = {Software repository, Linux Foundation FINOS},
+  url          = {https://github.com/finos-labs/dtcch-2025-OpenAML},
+  note         = {Winning project of DTCC AI Hackathon 2025.
+                  Maintainer: Luciano Juvinski},
+}
+
+%% ===== Regulatory =====
+
+@techreport{fatf2021virtualassets,
+  author      = {{Financial Action Task Force (FATF)}},
+  title       = {Virtual Assets Red Flag Indicators of Money Laundering
+                 and Terrorist Financing},
+  institution = {FATF/OECD},
+  year        = {2021},
+}
+
+@misc{eu2023mica,
+  author       = {{European Union}},
+  title        = {Regulation ({EU}) 2023/1114 on markets in
+                  crypto-assets ({MiCA})},
+  year         = {2023},
+  howpublished = {Official Journal of the European Union},
+}
+
+@misc{eu2023travelrule,
+  author       = {{European Union}},
+  title        = {Regulation ({EU}) 2023/1113 on information accompanying
+                  transfers of funds and certain crypto-assets},
+  year         = {2023},
+  howpublished = {Official Journal of the European Union},
+}
+
+%% ===== Detectors, GNNs, metrics =====
+
+@inproceedings{kipf2017gcn,
+  author    = {Kipf, Thomas N. and Welling, Max},
+  title     = {Semi-Supervised Classification with Graph Convolutional
+               Networks},
+  booktitle = {5th International Conference on Learning Representations ({ICLR})},
+  year      = {2017},
+  eprint    = {1609.02907},
+  archivePrefix = {arXiv},
+}
+
+@article{blondel2008louvain,
+  author    = {Blondel, Vincent D. and Guillaume, Jean-Loup and
+               Lambiotte, Renaud and Lefebvre, Etienne},
+  title     = {Fast unfolding of communities in large networks},
+  journal   = {Journal of Statistical Mechanics: Theory and Experiment},
+  volume    = {2008},
+  number    = {10},
+  pages     = {P10008},
+  year      = {2008},
+  doi       = {10.1088/1742-5468/2008/10/P10008},
+}
+
+@article{hubert1985ari,
+  author    = {Hubert, Lawrence and Arabie, Phipps},
+  title     = {Comparing partitions},
+  journal   = {Journal of Classification},
+  volume    = {2},
+  number    = {1},
+  pages     = {193--218},
+  year      = {1985},
+}
+
+@inproceedings{rosenberg2007vmeasure,
+  author    = {Rosenberg, Andrew and Hirschberg, Julia},
+  title     = {V-Measure: A Conditional Entropy-Based External Cluster
+               Evaluation Measure},
+  booktitle = {Proceedings of the 2007 Joint Conference on Empirical Methods
+               in Natural Language Processing and Computational Natural
+               Language Learning ({EMNLP-CoNLL})},
+  year      = {2007},
+  pages     = {410--420},
+}
+
+%% ===== LLMs, agents, graph reasoning =====
+
+@inproceedings{sun2024gptscan,
+  author    = {Sun, Yuqiang and Wu, Daoyuan and Xue, Yue and Liu, Han and
+               Wang, Haijun and Xu, Zhengzi and Xie, Xiaofei and Liu, Yang},
+  title     = {{GPTScan}: Detecting Logic Vulnerabilities in Smart Contracts
+               by Combining {GPT} with Program Analysis},
+  booktitle = {Proc. IEEE/ACM 46th International Conference on Software
+               Engineering ({ICSE} 2024)},
+  year      = {2024},
+  doi       = {10.1145/3597503.3639117},
+  eprint    = {2308.03314},
+  archivePrefix = {arXiv},
+}
+
+@inproceedings{fatemi2024talklikeagraph,
+  author    = {Fatemi, Bahare and Halcrow, Jonathan and Perozzi, Bryan},
+  title     = {Talk like a Graph: Encoding Graphs for Large Language Models},
+  booktitle = {12th International Conference on Learning Representations ({ICLR})},
+  year      = {2024},
+  eprint    = {2310.04560},
+  archivePrefix = {arXiv},
+}
+
+@misc{wu2023autogen,
+  author    = {Wu, Qingyun and Bansal, Gagan and Zhang, Jieyu and
+               Wu, Yiran and Zhang, Shaokun and Zhu, Erkang and Li, Beibin
+               and Jiang, Li and Zhang, Xiaoyun and Wang, Chi},
+  title     = {{AutoGen}: Enabling Next-Gen {LLM} Applications via Multi-Agent
+               Conversation Framework},
+  year      = {2023},
+  eprint    = {2308.08155},
+  archivePrefix = {arXiv},
+}
+
+@inproceedings{park2023generativeagents,
+  author    = {Park, Joon Sung and O'Brien, Joseph C. and Cai, Carrie J.
+               and Morris, Meredith Ringel and Liang, Percy and
+               Bernstein, Michael S.},
+  title     = {Generative Agents: Interactive Simulacra of Human Behavior},
+  booktitle = {Proc. 36th Annual ACM Symposium on User Interface Software
+               and Technology ({UIST})},
+  year      = {2023},
+  eprint    = {2304.03442},
+  archivePrefix = {arXiv},
+}
+
+%% ===== Tornado Cash, zk-SNARKs, deanonymization =====
+
+@misc{pertsev2019tornadocash,
+  author       = {Pertsev, Alexey and Semenov, Roman and Storm, Roman},
+  title        = {Tornado Cash Privacy Solution Version 1.4},
+  year         = {2019},
+  howpublished = {Whitepaper},
+}
+
+@inproceedings{beres2021tornado,
+  author    = {B{\'e}res, Ferenc and Seres, Istv{\'a}n A. and
+               Bencz{\'u}r, Andr{\'a}s A. and Quintyne-Collins, Mikerah},
+  title     = {Blockchain is Watching You: Profiling and Deanonymizing
+               {Ethereum} Users},
+  booktitle = {IEEE International Conference on Decentralized Applications
+               and Infrastructures ({DAPPS} 2021)},
+  year      = {2021},
+}
+
+@inproceedings{tornado2025walletfingerprints,
+  author    = {{Anonymous ACM SAC 2025 authors}},
+  title     = {Attacking Anonymity Set in Tornado Cash via Wallet
+               Fingerprints},
+  booktitle = {Proc. 40th ACM/SIGAPP Symposium on Applied Computing
+               ({SAC} 2025)},
+  year      = {2025},
+  doi       = {10.1145/3672608.3707896},
+  note      = {Reduces Tornado Cash anonymity set by ~37\% via
+               wallet-software fingerprinting},
+}
+
+%% ===== Adversarial multi-agent AML simulators =====
+
+@article{hideandseek2025,
+  author    = {{Complex \& Intelligent Systems authors}},
+  title     = {Hide and Seek in Transaction Networks: A Multi-Agent
+               Framework for Simulating and Detecting Money Laundering
+               Activities},
+  journal   = {Complex \& Intelligent Systems},
+  year      = {2025},
+  doi       = {10.1007/s40747-025-01913-w},
+  note      = {Hide-and-seek adversarial multi-agent AML simulator},
+}
+
+@misc{amlnet2025,
+  author       = {{AMLNet authors}},
+  title        = {{AMLNet}: A Knowledge-Based Multi-Agent Framework to Generate
+                  and Detect Realistic Money Laundering Transactions},
+  year         = {2025},
+  eprint       = {2509.11595},
+  archivePrefix = {arXiv},
+}
+
+%% ===== Note on remaining verification =====
+%% Author names in the two entries above (@tornado2025walletfingerprints,
+%% @hideandseek2025, @amlnet2025) are placeholders — the papers exist and
+%% the DOIs/arXiv IDs are correct, but the specific authors were not
+%% resolved during the 2026-08-03 verification pass. Before submit, fetch
+%% each DOI and populate the author list from the canonical source.

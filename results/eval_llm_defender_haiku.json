@@ -1,0 +1,40 @@
+{
+  "dataset": "/home/anon/aml-results/batch_2026-06-26/dataset.pkl",
+  "num_exchanges": 3,
+  "seed": 42,
+  "llm_model": "haiku",
+  "n_graph_nodes": 10311,
+  "n_graph_edges": 101880,
+  "n_runs": 420,
+  "n_true_actor_clusters": 9604,
+  "baseline_cosine": {
+    "fit_time_seconds": 3.16,
+    "n_addresses": 10233,
+    "n_clusters_true": 9604,
+    "n_clusters_pred": 9649,
+    "ari": 0.0813,
+    "homogeneity": 0.9993,
+    "completeness": 0.9979
+  },
+  "llm_defender": {
+    "model": "haiku",
+    "fit_time_seconds": 77.66,
+    "cost_usd": 0.0391,
+    "input_tokens": 11879,
+    "output_tokens": 5438,
+    "used_fallback": false,
+    "reasoning": "Clustering strategy: Identified 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853 as the primary cross-exchange hub actor flagged on all three exchanges with consistent high-volume Tornado-style mixer behavior (deposit_in/withdraw_out pattern). Clustered 0x31A1EfAA1dBd6a6fE63bc0445467187C28EFC9BB and 0x2b0D8b4fe0D362A448baF5192Ea97393e929fa55 as secondary swap/USDT laundering actors across exchanges A and B with matching mid-tier complexity signatures. Identified two high-complexity actors (0x70997970C51812dc3A010C7d01b50e0d17dc79C8 and 0x207ABfFC04029AE074e069A005e4990e0B778E06) with exceptional USDT volumes and bilateral swap patterns. Grouped symmetric small-scale mixer pairs (clusters 3-4) with matching fingerprints across exchanges. Recognized batch-deployed addresses with identical or near-identical fingerprints (clusters 5, 7, 10, 14, 17) as coordinated infrastructure suggesting automated wallet generation by single actors for rapid cycling. Remaining addresses segregated into smaller matched pairs (clusters 6, 8-9, 15-16) based on cross-exchange similarity or marked as singletons (clusters 11-13) where insufficient corroboration exists. Total of 18 clusters capturing 90 addresses; high-confidence cross-exchange matches weighted heavily given AML detection principle that actors split deposits across 2-5 institutions.",
+    "n_addresses": 10233,
+    "n_clusters_true": 9604,
+    "n_clusters_pred": 10176,
+    "ari": 0.0046,
+    "homogeneity": 0.9989,
+    "completeness": 0.9979
+  },
+  "head_to_head": {
+    "baseline_ari": 0.0813,
+    "llm_ari": 0.0046,
+    "diff": -0.0767,
+    "verdict": "Cosine wins"
+  }
+}

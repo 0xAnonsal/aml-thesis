@@ -1,0 +1,41 @@
+{
+  "dataset": "EthereumHeist (Wu 2023, real ETH hacks)",
+  "scope": "no_upbit",
+  "seed": 42,
+  "num_exchanges": 3,
+  "n_graph_nodes": 4796,
+  "n_graph_edges": 48408,
+  "n_labeled": 4708,
+  "n_heist_labeled": 300,
+  "n_true_hack_clusters": 19,
+  "baseline_cosine": {
+    "fit_time_seconds": 123.38,
+    "n_addresses": 4708,
+    "n_clusters_true": 4427,
+    "n_clusters_pred": 4203,
+    "ari": 0.066,
+    "homogeneity": 0.9998,
+    "completeness": 0.9966
+  },
+  "llm_defender": {
+    "model": "haiku",
+    "fit_time_seconds": 193.92,
+    "cost_usd": 0.0446,
+    "input_tokens": 15827,
+    "output_tokens": 5763,
+    "used_fallback": false,
+    "reasoning": "This batch contains 180 addresses across three exchanges. Clustering identified ~104 distinct campaigns based on fingerprint similarity (degree distribution, log_unique counts, and magnitude alignment). Major patterns include: (1) High-volume mix distributors on exchange_B (0x6fdc428d, 0xb3c839db, 0x74de5d4f) forming isolated large-scale operations; (2) Medium-degree balanced traders (in-out ratios ~1:1-2:1) across all exchanges grouped by similar total degree ranges (60-180); (3) Small burner/sweep networks (in=2, out=1, total=3) clustered together on exchange_A (13 identical siblings); (4) Singleton pure deposit collectors (in-only, high in_degree, minimal out) on exchange_C; (5) Tiny transactional addresses (degree 1-5, log_unique all 0.69) grouped into distinct low-activity campaigns. Cross-exchange matching is minimal (no identical fingerprints across exchanges), suggesting mostly independent regional operations. Clusters 16-17 capture 33 minimal-activity addresses that function as exit points or final laundering legs, while clusters 0-15 capture the major active laundering infrastructure per exchange.",
+    "n_addresses": 4708,
+    "n_clusters_true": 4427,
+    "n_clusters_pred": 4634,
+    "ari": 0.038,
+    "homogeneity": 0.9937,
+    "completeness": 0.9962
+  },
+  "head_to_head": {
+    "baseline_ari": 0.066,
+    "llm_ari": 0.038,
+    "diff": -0.028,
+    "verdict": "Cosine wins"
+  }
+}

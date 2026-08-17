@@ -41,6 +41,11 @@ Tools shipped:
     mixer_withdraw           — withdraw 1 ETH from the mixer to any
                                recipient using a deposit note + a Groth16
                                proof generated internally via snarkjs
+    mixer_batch_deposit      — batch N deposits into the mixer in one call;
+                               returns N deposit notes. Collapses N
+                               Coordinator round-trips into one.
+    mixer_batch_withdraw     — batch N withdrawals from the mixer in one
+                               call; per-note success/failure preserved.
 """
 from __future__ import annotations
 
@@ -71,7 +76,7 @@ _MAX_BURNERS_PER_SMURF = 5000
 # must keep it at or above floor unless explicitly told to drain. Matches
 # real-world launderer OPSEC where the operator drips fixed gas dust into
 # each disposable wallet and never strands one mid-campaign.
-_DEFAULT_GAS_RESERVE_ETH = 0.05
+_DEFAULT_GAS_RESERVE_ETH = 0.005
 
 # Gwei budget for a standard ETH transfer (21k gas baseline).
 _ETH_TRANSFER_GAS = 21_000
@@ -101,6 +106,13 @@ _MERKLE_DEPTH = 10
 
 # MockTornado.DENOMINATION — the fixed mixer deposit/withdraw size.
 _MIXER_DENOMINATION_WEI = 10**18
+
+# Hard cap on mixer_batch_{deposit,withdraw} to prevent runaway ZK proof
+# generation time. Each deposit re-hashes the full Merkle path (~3M gas,
+# a few seconds on-chain). Each withdraw generates a Groth16 proof
+# (~10-30s per note off-chain via snarkjs). A batch of 100 withdraws is
+# already ~15-50 min of proof generation — reasonable ceiling.
+_MAX_MIXER_BATCH = 100
 
 # Deposit-note wire format: "<prefix>:<nullifier_hex>:<secret_hex>", each
 # component zero-padded to 64 hex chars. The note is the *only* secret
@@ -313,17 +325,20 @@ _TOOL_SCHEMAS: list[dict] = [
     {
         "name": "advance_blocks",
         "description": (
-            "Advance the local blockchain by N blocks — used to simulate "
+            "Advance the blockchain by N blocks — used to simulate "
             "TIMING DELAYS between laundering phases. Real-world crypto "
-            "laundering commonly involves waits of days to months between "
-            "operations (e.g. Lazarus/Bybit waited weeks before the first "
-            "Tornado Cash deposit; HTX/HECO Bridge attacker waited 4 "
-            "months). Delays are what differentiate a hit-and-run from "
-            "sophisticated APT operations. Anvil mines N empty blocks "
-            "instantly, so no real time passes but the on-chain distance "
-            "between events becomes distinctive in the transaction graph. "
-            "1 Ethereum block ≈ 12 seconds, so 5,000 blocks ≈ 16 hours, "
-            "50,400 blocks ≈ 7 days, 218,400 blocks ≈ 30 days."
+            "laundering commonly involves waits of days to months "
+            "between operations (Lazarus/Bybit waited weeks before the "
+            "first Tornado Cash deposit; HTX/HECO Bridge attacker "
+            "waited 4 months). Delays differentiate a hit-and-run from "
+            "sophisticated APT operations. On Anvil, the per-block "
+            "interval is randomised each call from a weighted APT "
+            "distribution (60% quick 12s-5min/block, 25% cooling-off "
+            "5min-1h/block, 15% deep dormancy 1h-12h/block) — chain "
+            "time is realistic, wall clock is instant. On live testnets "
+            "the call sleeps a random 10-360s wall clock (network "
+            "controls actual block progression). Response includes the "
+            "sampled interval so you can see what delay you got."
         ),
         "input_schema": {
             "type": "object",
@@ -331,11 +346,14 @@ _TOOL_SCHEMAS: list[dict] = [
                 "num_blocks": {
                     "type": "integer",
                     "description": (
-                        "How many blocks to advance. Typical values: "
-                        "5000-20000 (short delay, hours to a day), "
-                        "50000-100000 (medium delay, ~1-2 weeks), "
-                        "200000-500000 (long delay, 1-3 months). Range "
-                        "[100, 1000000] enforced."
+                        "How many blocks to advance. On Anvil [100, "
+                        "1000000]; combined with the random per-block "
+                        "interval this yields chain-time from minutes "
+                        "(100 blocks × 12s) up to years (1M blocks × "
+                        "12h) — pick num_blocks to bound roughly what "
+                        "you want, the sampler decides the exact gap. "
+                        "On live chains [5, 30]; num_blocks is a hint "
+                        "only (wall-clock jitter is fixed 10-360s)."
                     ),
                 },
             },
@@ -714,6 +732,92 @@ _TOOL_SCHEMAS: list[dict] = [
         },
     },
     {
+        "name": "mixer_batch_deposit",
+        "description": (
+            "Batch deposit: make N mixer_deposit calls in a single tool call. "
+            "Deposits N × 1 ETH from `from_address` and returns the N "
+            "corresponding deposit notes. Each deposit is independent and "
+            "generates a fresh (nullifier, secret) pair, so each of the N "
+            "notes withdraws exactly 1 ETH separately. `from_address` must "
+            "hold at least N × 1 ETH plus gas. All N notes are returned in "
+            f"the response — save ALL of them. Cap: {_MAX_MIXER_BATCH} "
+            "deposits per call. Use instead of calling mixer_deposit in a "
+            "loop when planning mixer-heavy campaigns (ransomware-cashout, "
+            "DeFi-exploit) — collapses N Coordinator round-trips into one."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "from_address": {
+                    "type": "string",
+                    "description": (
+                        "Wallet making the deposits. Must be in the registry "
+                        "and hold >= num_deposits × 1 ETH plus gas."
+                    ),
+                },
+                "num_deposits": {
+                    "type": "integer",
+                    "description": (
+                        f"How many separate 1-ETH deposits to make. Capped "
+                        f"at {_MAX_MIXER_BATCH}."
+                    ),
+                },
+            },
+            "required": ["from_address", "num_deposits"],
+        },
+    },
+    {
+        "name": "mixer_batch_withdraw",
+        "description": (
+            "Batch withdraw: withdraw N notes from the mixer in a single "
+            "tool call. Pass `deposit_notes` (list, length N) and either "
+            "`recipients` as a list of length N (one recipient per note) OR "
+            "a single string (all N notes withdraw to the same address — "
+            "useful for consolidation). Optional `gas_payer` (registered "
+            "wallet) submits all N withdrawal txs and pays their gas. Each "
+            "withdrawal generates a fresh Groth16 proof (~10-30s per note), "
+            "so a batch of N takes roughly N × those seconds. Returns per-"
+            "note success/failure so partial success is preserved. Cap: "
+            f"{_MAX_MIXER_BATCH} notes per call. Use when consolidating a "
+            "mixer-heavy campaign into a single Coordinator round-trip."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "deposit_notes": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "List of deposit_note strings from prior mixer_deposit "
+                        "or mixer_batch_deposit calls."
+                    ),
+                },
+                "recipients": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "array", "items": {"type": "string"}},
+                    ],
+                    "description": (
+                        "Either a single recipient string (all withdrawals to "
+                        "the same address) or a list of length equal to "
+                        "deposit_notes (one recipient per note). Any address; "
+                        "recipients need not be in the wallet registry."
+                    ),
+                },
+                "gas_payer": {
+                    "type": "string",
+                    "description": (
+                        "Optional. Registered wallet that submits all "
+                        "withdrawal txs and pays their gas. Defaults to the "
+                        "first registered wallet. For unlinkability, use a "
+                        "wallet unrelated to the deposits and the recipients."
+                    ),
+                },
+            },
+            "required": ["deposit_notes", "recipients"],
+        },
+    },
+    {
         "name": "inspect_chain",
         "description": (
             "Read-only audit of the current chain state. Returns a "
@@ -808,13 +912,45 @@ def _run_zk_helper(*args: str) -> str:
     return proc.stdout.strip()
 
 
+def _find_snarkjs() -> str:
+    """Locate the snarkjs binary, checking common install paths beyond PATH.
+
+    npm's default `~/.npm-global/bin` is often not on PATH inside conda envs
+    or subprocess-launched shells. Falls back to explicit path probing.
+    """
+    from shutil import which
+    hit = which("snarkjs")
+    if hit:
+        return hit
+    from pathlib import Path
+    candidates = [
+        Path.home() / ".npm-global" / "bin" / "snarkjs",
+        Path.home() / ".nvm" / "versions" / "node" / "*" / "bin" / "snarkjs",
+        Path("/usr/local/bin/snarkjs"),
+        Path("/opt/homebrew/bin/snarkjs"),
+    ]
+    for c in candidates:
+        if "*" in str(c):
+            import glob
+            hits = glob.glob(str(c))
+            if hits:
+                return hits[0]
+        elif c.exists():
+            return str(c)
+    raise RuntimeError(
+        "`snarkjs` not found. Install via `npm install -g snarkjs` and "
+        "ensure ~/.npm-global/bin is on PATH, or set NPM prefix accordingly."
+    )
+
+
 def _run_snarkjs(*args: str) -> None:
     """Run `snarkjs <args...>`. Raises RuntimeError on missing binary or failure."""
+    binary = _find_snarkjs()
     try:
-        proc = subprocess.run(["snarkjs", *args], capture_output=True, text=True)
+        proc = subprocess.run([binary, *args], capture_output=True, text=True)
     except FileNotFoundError:
         raise RuntimeError(
-            "`snarkjs` not found on PATH — ZK mixer tools need snarkjs"
+            f"`snarkjs` binary vanished between lookup and exec: {binary}"
         ) from None
     if proc.returncode != 0:
         detail = proc.stderr.strip() or proc.stdout.strip() or "no output"
@@ -861,14 +997,58 @@ class ToolDispatcher:
         wallets: dict[str, str],
         pool_contract: Any = None,
         tornado_contract: Any = None,
+        mixer_events_from_block: int = 0,
+        logs_rpc_url: str | None = None,
+        laundering_target_usd: float | None = None,
     ):
         self.w3 = w3
         self.usdt = usdt_contract
         self.pool = pool_contract
         self.tornado = tornado_contract
+        # Laundering target in USD — used to derive the max burner count.
+        # Cap = max(30, min(250, 3 * ceil(usd / 999))), aligned with the
+        # "moderate professional" laundering profile documented in AML
+        # literature (Chainalysis 2023: ~$250-750 per intermediate wallet).
+        # If None (legacy call), _burner_cap falls back to 100.
+        self.laundering_target_usd: float | None = laundering_target_usd
+        # Block from which _mixer_collect_leaves starts scanning Deposit
+        # events. On live Sepolia this MUST be the tornado deploy block —
+        # missing history rebuilds a stale local Merkle tree and withdraw
+        # proofs fail on-chain `isKnownRoot()`.
+        self.mixer_events_from_block = int(mixer_events_from_block)
+        # Separate RPC for eth_getLogs. Alchemy free tier caps range at
+        # 10 blocks — unusable for scanning ~10k blocks of mixer history.
+        # publicnode.com allows 10k-block ranges free. If not provided we
+        # fall back to `w3`; caller decides whether that's acceptable.
+        if logs_rpc_url:
+            self._logs_w3 = Web3(Web3.HTTPProvider(logs_rpc_url))
+        else:
+            self._logs_w3 = w3
+        # Pool of intermediate funder wallets for gas seeding — populated
+        # lazily via bootstrap_funder_pool(). When populated, gas top-ups
+        # pick a RANDOM funder instead of always coming from the deployer,
+        # breaking the single-source co-funding heuristic that trivially
+        # groups all campaign wallets in one graph hop.
+        self._funder_pool: list[str] = []
+        # Count of bulk-refill events (whole-pool refills from deployer).
+        # Incremented in _pick_funder when the pool exhausts. Runners
+        # surface this in meta.funder_pool.refill_events for reporting.
+        self._funder_refill_events: int = 0
         self.wallets: dict[str, str] = {
             Web3.to_checksum_address(addr): key for addr, key in wallets.items()
         }
+        # The DEPLOYER is chain infrastructure (Anvil faucet / initial pool
+        # liquidity source / test-network deployer key). It IS a signing
+        # wallet the dispatcher can use for internal ops (_seed_gas source,
+        # funder-pool bootstrap, funder refills, funder sweep destination)
+        # but it is NEVER a valid attacker wallet for LLM-callable write
+        # tools — the deployer holds 10_000 ETH from Anvil's genesis, so
+        # letting the Coordinator route funds through it would inflate the
+        # recovery metric by orders of magnitude. dispatch() enforces this.
+        # First wallet is by convention the deployer (see run_campaign.py).
+        self._deployer_addr: str | None = (
+            next(iter(self.wallets)) if self.wallets else None
+        )
         # Wallets the attacker explicitly registered as intended clean
         # exits (off-ramp destinations) via register_clean_exit. Each entry
         # is {address, exchange_platform, note?} and is consumed at end-of-
@@ -888,7 +1068,59 @@ class ToolDispatcher:
         self.wallets[Web3.to_checksum_address(address)] = private_key
 
     def dispatch(self, tool_name: str, tool_input: dict) -> ToolResult:
-        """Execute the named tool with the given input dict."""
+        """Execute the named tool with the given input dict.
+
+        Defensively filters tool_input to only the kwargs the target method
+        accepts. LLMs occasionally hallucinate extra parameters (e.g.
+        Sonnet 4.6 was observed passing `note` to `transfer_eth` on Sepolia
+        2026-08-11); a hard TypeError would crash the whole campaign. The
+        filter silently drops unknown kwargs so the tool proceeds with the
+        LLM's other (valid) inputs.
+        """
+        # Guard: reject any LLM tool call that names the deployer as an
+        # attacker wallet. The deployer is chain infrastructure holding
+        # the Anvil 10_000 ETH genesis balance + initial MockUSDT mint —
+        # if the Coordinator routes swaps or transfers through it, the
+        # attacker effectively laundered chain-supply funds instead of
+        # (or in addition to) Alice's stolen amount. Observed 2026-08-14
+        # inflating recovery to ~200%. Applies to sender ("from_address")
+        # and to counterparty roles ("to_address", "recipient",
+        # "gas_payer") because either direction lets the LLM interact
+        # with the infrastructure wallet.
+        if self._deployer_addr:
+            SENDER_KEYS = ("from_address", "gas_payer", "sender")
+            RECIPIENT_KEYS = ("to_address", "recipient", "destination")
+            for k in SENDER_KEYS + RECIPIENT_KEYS:
+                v = tool_input.get(k)
+                if isinstance(v, str):
+                    try:
+                        if Web3.to_checksum_address(v) == self._deployer_addr:
+                            return ToolResult(error=(
+                                f"Rejected: {k}={v} is the deployer "
+                                f"(chain infrastructure — Anvil faucet + "
+                                f"initial pool liquidity source, holds "
+                                f"10_000 ETH from genesis). Do NOT route "
+                                f"laundering through the deployer; it "
+                                f"would launder chain-supply funds and "
+                                f"inflate recovery metrics past 100%. "
+                                f"Use Alice, attacker-generated burners, "
+                                f"or registered clean exits instead."
+                            ))
+                    except (ValueError, TypeError):
+                        pass   # invalid checksum falls through to the tool
+        import inspect
+        method = getattr(self, f"_{tool_name}", None)
+        if method is not None:
+            sig = inspect.signature(method)
+            if not any(
+                p.kind == inspect.Parameter.VAR_KEYWORD
+                for p in sig.parameters.values()
+            ):
+                declared = set(sig.parameters.keys())
+                tool_input = {
+                    k: v for k, v in tool_input.items() if k in declared
+                }
+
         if tool_name == "get_balance":
             return self._get_balance(**tool_input)
         if tool_name == "transfer_usdt":
@@ -917,6 +1149,10 @@ class ToolDispatcher:
             return self._mixer_deposit(**tool_input)
         if tool_name == "mixer_withdraw":
             return self._mixer_withdraw(**tool_input)
+        if tool_name == "mixer_batch_deposit":
+            return self._mixer_batch_deposit(**tool_input)
+        if tool_name == "mixer_batch_withdraw":
+            return self._mixer_batch_withdraw(**tool_input)
         if tool_name == "peel_chain":
             return self._peel_chain(**tool_input)
         if tool_name == "advance_blocks":
@@ -965,6 +1201,11 @@ class ToolDispatcher:
 
         amount_base = int(amount_usdt * 10**6)
 
+        # Pre-transfer: ensure sender has gas dust. Prevents "insufficient
+        # funds" reverts when a wallet has relayed many times and burned
+        # through its initial 0.05 ETH seed.
+        self._ensure_gas_dust(from_address)
+
         try:
             tx = self.usdt.functions.transfer(to_address, amount_base).build_transaction({
                 "from": from_address,
@@ -985,6 +1226,11 @@ class ToolDispatcher:
                 error=f"Transfer reverted on-chain (tx_hash={tx_hash.hex()})"
             )
 
+        # Post-transfer: ensure recipient has gas dust so any downstream
+        # move of this USDT (relay, exit off-ramp, etc.) can pay for
+        # itself. No-op if recipient is external / already funded.
+        self._ensure_gas_dust(to_address)
+
         return ToolResult(output={
             "tx_hash": tx_hash.hex(),
             "from_address": from_address,
@@ -995,6 +1241,33 @@ class ToolDispatcher:
 
     # --- New tools (PR 5.4) -------------------------------------------------
 
+    def _burner_cap(self) -> int:
+        """Max burner count for this campaign, derived from laundering scale.
+
+        Formula: max(30, min(250, 3 * ceil(usd / 999))). Corresponds to the
+        "moderate professional" laundering profile in Chainalysis 2023
+        (~$250-750 per intermediate wallet), aggressive enough for realistic
+        sophistication without allowing the runaway loops observed in
+        seed 306 (Haiku, 236 burners for 1 ETH) and seeds 401/402 (Sonnet
+        WSL-crashing loops). Absolute floor 30 protects small runs; cap 250
+        aligns with Bybit-tier sophistication for large runs (up to 125 ETH
+        scope per the thesis).
+        """
+        import math
+        if self.laundering_target_usd is None:
+            return 100   # legacy fallback for callers that don't pass the target
+        return max(30, min(250, 3 * math.ceil(self.laundering_target_usd / 999)))
+
+    def _current_burner_count(self) -> int:
+        """Burners generated so far (excludes deployer, alice, funders, exits)."""
+        return max(
+            0,
+            len(self.wallets)
+            - 2                                     # deployer + alice
+            - len(self._funder_pool)
+            - len(self.registered_clean_exits),
+        )
+
     def _generate_burner_wallet(self) -> ToolResult:
         """Create a fresh keypair, register it, auto-seed it with gas dust.
 
@@ -1003,7 +1276,27 @@ class ToolDispatcher:
         transferred to the burner would be stranded — burners with no ETH
         can't even submit transactions. Matches the real-world pattern where
         the operator drips gas dust into each disposable hop wallet.
+
+        Hard-capped at _burner_cap() to prevent runaway generation loops
+        (observed empirically in seed 306 Haiku: 188 empty generate calls
+        in a single Layering sub-agent). Forces the Coordinator to STOP
+        creating new wallets and USE the ones it already has.
         """
+        cap = self._burner_cap()
+        count = self._current_burner_count()
+        if count >= cap:
+            return ToolResult(error=(
+                f"HARD LIMIT reached: {count} burners already generated in "
+                f"this campaign (cap: {cap}, derived from laundering value "
+                f"${self.laundering_target_usd or 0:,.0f} USD). Do NOT "
+                f"generate more burners. Instead: (a) use existing burners "
+                f"for the next layering hop, (b) consolidate USDT to a "
+                f"burner you already control, or (c) route funds to the "
+                f"clean exits you registered. Generating more burners "
+                f"without a specific plan is a known failure mode that "
+                f"inflates gas costs and chain state without improving "
+                f"GNN evasion."
+            ))
         acct = Account.create()
         address = acct.address  # already checksummed by eth_account
         # acct.key is a HexBytes; .hex() produces the 0x-prefixed string
@@ -1014,10 +1307,13 @@ class ToolDispatcher:
         # registered — caller gets a warning and zero gas_seed_eth so they
         # can react.
         try:
-            self._seed_gas(address, _DEFAULT_GAS_RESERVE_ETH)
+            self._seed_gas(address, _DEFAULT_GAS_RESERVE_ETH,
+                           source=self._pick_funder())
             return ToolResult(output={
                 "address": address,
                 "gas_seed_eth": _DEFAULT_GAS_RESERVE_ETH,
+                "burners_in_campaign": count + 1,
+                "cap_remaining": cap - (count + 1),
             })
         except Exception as e:   # noqa: BLE001 — surface to LLM as a warning
             return ToolResult(output={
@@ -1056,7 +1352,8 @@ class ToolDispatcher:
         # Auto-seed gas dust — same as burners. If seeding fails the exit
         # is still registered and the agent gets a warning.
         try:
-            self._seed_gas(address, _DEFAULT_GAS_RESERVE_ETH)
+            self._seed_gas(address, _DEFAULT_GAS_RESERVE_ETH,
+                           source=self._pick_funder())
             return ToolResult(output={
                 "address": address,
                 "exchange_platform": platform,
@@ -1070,38 +1367,472 @@ class ToolDispatcher:
                 "warning": f"Clean exit registered but gas seeding failed: {e}",
             })
 
-    def _seed_gas(self, recipient: str, amount_eth: float) -> str:
-        """Send `amount_eth` ETH from the faucet wallet to `recipient`.
+    def bootstrap_funder_pool(
+        self,
+        num_funders: int | None = None,
+        eth_per_funder: float = 1.0,
+        *,
+        amounts_eth: list[float] | None = None,
+    ) -> None:
+        """Create funder wallets, each funded from the deployer.
 
-        Faucet = first registered wallet (same convention `_mint_usdt` uses).
-        Raises RuntimeError if no faucet is registered or the seed tx fails
-        — caller is expected to wrap with try/except and return a clean
-        ToolResult.error. Returns the tx hash on success.
+        Two invocation modes:
+          - Legacy: pass `num_funders` and `eth_per_funder` — all funders
+            get the same amount. Kept so older tests + runs stay
+            reproducible.
+          - Preferred: pass `amounts_eth` — one funder per element, each
+            seeded with its own amount. Enables non-uniform (e.g. random-
+            per-funder) balances that break the "all funders identical"
+            detection signal.
+
+        Once bootstrapped, all subsequent gas-seeding operations (initial
+        wallet dust, runtime top-ups) pick a RANDOM funder from the pool
+        instead of going straight to the deployer. Breaks the single-
+        source co-funding heuristic that would otherwise let a GNN
+        clustering detector group all campaign wallets in one hop.
+
+        Idempotent — a second call is a no-op. Bootstrap failures on any
+        individual funder are surfaced by falling back to fewer funders
+        (the pool is whatever succeeded).
+
+        Call this once at the top of a campaign, after the deployer has
+        been registered and before any burners are generated. Reproducible
+        with random.seed(seed) since _pick_funder uses the global random
+        state.
+        """
+        if self._funder_pool:
+            return
+        if not self.wallets:
+            raise RuntimeError("cannot bootstrap funder pool without deployer")
+        if amounts_eth is None:
+            if num_funders is None:
+                raise ValueError(
+                    "bootstrap_funder_pool: pass either amounts_eth or "
+                    "num_funders (+ eth_per_funder)"
+                )
+            amounts_eth = [eth_per_funder] * num_funders
+        for amount in amounts_eth:
+            acct = Account.create()
+            self.wallets[acct.address] = acct.key.hex()
+            try:
+                self._seed_gas(acct.address, amount)
+                self._funder_pool.append(acct.address)
+            except Exception:   # noqa: BLE001
+                # Partial pool is still better than none; skip this funder.
+                del self.wallets[acct.address]
+
+    def _pick_funder(self) -> str | None:
+        """Random funder from the pool. None if pool not bootstrapped.
+
+        If the picked funder has fallen below a minimum liquidity floor
+        (0.1 ETH — enough for ~2 seed txs on Sepolia), refill it from the
+        deployer before returning. Prevents silent-fail cascades where a
+        bankrupt funder returns from _pick_funder, _seed_gas via that
+        funder throws (insufficient funds), and the caller's caught
+        exception silently strands the wallet. Refill amount is
+        deliberately small (0.5 ETH) so the co-funding signal stays
+        distributed across funders instead of concentrating on one.
+        """
+        if not self._funder_pool:
+            return None
+
+        # Two-stage rotation (2026-08-14): prefer any funder still
+        # holding >= min_liquidity ETH. If NONE are active, refill only
+        # ONE funder (a random pick) from the deployer and return it.
+        # Rationale: a real attacker rotates through cold wallets and
+        # reloads them one at a time from cold storage — not a continuous
+        # drip, and not a bulk pool reload. Detection-wise the deployer
+        # is quiet during rotation windows and only fires a single edge
+        # when a funder needs to come back online.
+        min_liquidity_wei = int(0.01 * 10**18)   # 2× the 0.005 seed floor
+        refill_eth = 0.025  # 5 seeds worth at 0.005 each — modest bump
+        deployer = next(iter(self.wallets))
+
+        try:
+            active = [
+                f for f in self._funder_pool
+                if self.w3.eth.get_balance(f) >= min_liquidity_wei
+            ]
+        except Exception:   # noqa: BLE001
+            active = list(self._funder_pool)   # if RPC fails, fall through
+
+        if active:
+            return random.choice(active)
+
+        # Whole pool exhausted: refill just ONE (random) funder and
+        # return it. The rest stay out of service until they too get
+        # refilled in a later exhaustion event.
+        funder = random.choice(self._funder_pool)
+        if funder != deployer:
+            try:
+                self._seed_gas(funder, refill_eth, source=deployer)
+                self._funder_refill_events += 1
+            except Exception:   # noqa: BLE001 — best-effort refill
+                pass
+        return funder
+
+    def _seed_gas(
+        self, recipient: str, amount_eth: float, source: str | None = None,
+    ) -> str:
+        """Send `amount_eth` ETH from `source` (default: faucet) to `recipient`.
+
+        If `source` is None, uses the first registered wallet (canonical
+        deployer/faucet). Callers that want random-funder obfuscation pass
+        the result of `_pick_funder()` (may be None if pool not
+        bootstrapped — then falls through to deployer, preserving legacy
+        behaviour).
+
+        Uses EIP-1559 gas fields (maxFeePerGas / maxPriorityFeePerGas) with
+        a 2× base_fee headroom. The old legacy `gasPrice` field silently
+        failed on Sepolia when base_fee ticked up between fetch and submit,
+        leaving clean_exits with 0 ETH — the 2026-08-13 stranded-wallet
+        symptom that motivated the rescue feature in sweep_sepolia.py.
         """
         if not self.wallets:
             raise RuntimeError("no registered wallet to seed gas from")
         if amount_eth <= 0:
             raise RuntimeError(f"seed amount must be positive, got {amount_eth}")
 
-        faucet = next(iter(self.wallets))
+        if source is None:
+            source = next(iter(self.wallets))
+        elif source not in self.wallets:
+            raise RuntimeError(f"source wallet {source} not registered")
+        faucet = source
         faucet_key = self.wallets[faucet]
         recipient = Web3.to_checksum_address(recipient)
 
-        tx = {
-            "from": faucet,
-            "to": recipient,
-            "value": int(amount_eth * 10**18),
-            "nonce": self.w3.eth.get_transaction_count(faucet),
-            "gas": _ETH_TRANSFER_GAS,
-            "gasPrice": self.w3.eth.gas_price,
-            "chainId": self.w3.eth.chain_id,
-        }
+        latest = self.w3.eth.get_block("latest")
+        base_fee = latest.get("baseFeePerGas")
+        if base_fee is None:
+            # Non-EIP-1559 chain — fall back to legacy gasPrice.
+            tx = {
+                "from": faucet, "to": recipient,
+                "value": int(amount_eth * 10**18),
+                "nonce": self.w3.eth.get_transaction_count(faucet),
+                "gas": _ETH_TRANSFER_GAS,
+                "gasPrice": self.w3.eth.gas_price,
+                "chainId": self.w3.eth.chain_id,
+            }
+        else:
+            priority = self.w3.to_wei(1, "gwei")
+            max_fee = base_fee * 2 + priority
+            tx = {
+                "from": faucet, "to": recipient,
+                "value": int(amount_eth * 10**18),
+                "nonce": self.w3.eth.get_transaction_count(faucet),
+                "gas": _ETH_TRANSFER_GAS,
+                "maxFeePerGas": max_fee,
+                "maxPriorityFeePerGas": priority,
+                "chainId": self.w3.eth.chain_id,
+            }
         signed = self.w3.eth.account.sign_transaction(tx, private_key=faucet_key)
         tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
         if receipt.status != 1:
             raise RuntimeError(f"gas seed tx reverted (tx_hash={tx_hash.hex()})")
         return tx_hash.hex()
+
+    def _ensure_gas_dust(
+        self, address: str, min_eth: float = _DEFAULT_GAS_RESERVE_ETH,
+    ) -> None:
+        """Top up `address` to `min_eth` ETH from the faucet if below floor.
+
+        Called before/after tx-emitting operations to prevent wallets from
+        running out of gas mid-campaign. Silent no-op when:
+          - address not in our wallet registry (can't sign for it)
+          - address IS the faucet (would be recursive)
+          - balance already >= min_eth
+          - top-up tx fails (best-effort; sweep_sepolia rescue is the
+            second-line safety net)
+        """
+        try:
+            address = Web3.to_checksum_address(address)
+        except ValueError:
+            return
+        if address not in self.wallets or not self.wallets:
+            return
+        faucet = next(iter(self.wallets))
+        if address == faucet:
+            return
+        min_wei = int(min_eth * 10**18)
+        try:
+            current_wei = self.w3.eth.get_balance(address)
+        except Exception:   # noqa: BLE001
+            return
+        if current_wei >= min_wei:
+            return
+        top_up_eth = (min_wei - current_wei) / 10**18
+        try:
+            # Random funder from pool if bootstrapped; else fallback to
+            # deployer. `source=None` means _seed_gas uses the deployer.
+            self._seed_gas(address, top_up_eth, source=self._pick_funder())
+        except Exception:   # noqa: BLE001 — best-effort
+            pass
+
+    def _forward_stranded_usdt(self, from_addr: str) -> dict:
+        """After rescuing gas, complete the laundering path for a stranded wallet.
+
+        Semantic: the whole point of moving USDT through a burner is to
+        route it further toward a clean_exit off-ramp. If Sonnet ran out
+        of iterations before finishing that route, the intermediate burner
+        is stuck holding USDT that never reached its final destination.
+
+        Fix: forward the balance to random registered clean_exits, in
+        sub-$999 chunks (CTR threshold). Skips wallets that ARE clean_exits
+        themselves (already at destination). No-op if no exits are
+        registered (nothing to forward to).
+
+        Returns: {"forwarded_usdt": float, "chunks": int, "destinations": list[str]}
+        """
+        empty = {"forwarded_usdt": 0.0, "chunks": 0, "destinations": []}
+        if self.usdt is None or not self.registered_clean_exits:
+            return empty
+        exit_addrs = [e["address"] for e in self.registered_clean_exits]
+        if from_addr in set(exit_addrs):
+            return empty   # already at destination — leave it
+        try:
+            usdt_wei = self.usdt.functions.balanceOf(from_addr).call()
+        except Exception:   # noqa: BLE001
+            return empty
+        if usdt_wei <= 0:
+            return empty
+
+        # $999 CTR cap in USDT base units (6 decimals). Use $980 as the
+        # per-chunk soft cap to leave headroom for rounding.
+        chunk_cap_wei = int(980 * 10**6)
+        total_forwarded = 0
+        destinations: list[str] = []
+        chunks = 0
+        remaining = usdt_wei
+
+        # Cap iterations at 20 to prevent runaway if something goes wrong.
+        for _ in range(20):
+            if remaining <= 0:
+                break
+            # Pick a random exit; multiple chunks may go to the same exit
+            # if the pool is small — that's fine, real launderers do too.
+            dest = random.choice(exit_addrs)
+            chunk_wei = min(remaining, chunk_cap_wei)
+            chunk_usdt = chunk_wei / 10**6
+            try:
+                result = self._transfer_usdt(from_addr, dest, chunk_usdt)
+            except Exception:   # noqa: BLE001
+                break
+            if result.error is not None:
+                break
+            total_forwarded += chunk_wei
+            destinations.append(dest)
+            chunks += 1
+            remaining -= chunk_wei
+
+        return {
+            "forwarded_usdt": total_forwarded / 10**6,
+            "chunks": chunks,
+            "destinations": destinations,
+        }
+
+    def rescue_stranded_wallets(
+        self, min_eth: float = _DEFAULT_GAS_RESERVE_ETH,
+    ) -> dict:
+        """Post-campaign safety net: top-up any wallet stranded with USDT.
+
+        Called by the runner right before writing artifacts. Does two passes:
+
+          1. Scan every wallet we hold a key for. Any wallet with USDT > 0
+             but ETH below `usdt_gas_wei` (65k * gas_price × 1.2) is
+             stranded — it holds value it cannot move.
+          2. For each stranded wallet, top up from _pick_funder() (random
+             funder from the pool, or the deployer if the pool is empty).
+             Uses _ensure_gas_dust so it inherits the funder-obfuscation
+             behaviour.
+          3. Re-check the same set. Any wallet still stranded after top-up
+             is a hard failure signal (funder pool exhausted, RPC issues,
+             etc.) — surfaced in the return dict for the runner to log.
+
+        Returns a metrics dict suitable for embedding in campaign.json:
+          {
+            "stranded_before": int,   # wallets that had USDT but no gas
+            "rescued": int,            # of those, successfully topped up
+            "stranded_after": int,     # still stranded after our rescue
+            "stranded_addresses": list[str],   # the after-set
+          }
+        """
+        empty = {
+            "stranded_before": 0, "rescued": 0, "stranded_after": 0,
+            "stranded_addresses": [], "forwarded": [],
+        }
+        if self.usdt is None:
+            return empty
+
+        # Gas-cost threshold for the ETH balance check.
+        try:
+            gas_price = self.w3.eth.gas_price
+        except Exception:   # noqa: BLE001
+            gas_price = self.w3.to_wei(3, "gwei")
+        usdt_gas_wei = 65_000 * int(gas_price * 1.2)
+
+        # Skip DUST-stranded wallets: if the USDT is worth less than the
+        # gas it would take to rescue + forward it, rescue is negative-
+        # value work. Floor at $5 USDT (5e6 base units) — a rescue costs
+        # ~86k gas across two txs (top-up + forward). At 3 gwei on
+        # Sepolia and the mock pool rate of ~6,255 USDT/ETH that's about
+        # $1.60; the $5 floor gives a comfortable ~3x margin so we stay
+        # net-positive even under gas spikes, without missing any real
+        # laundering-scale amount.
+        min_stranded_usdt_wei = 5_000_000
+
+        # Pass 1: identify stranded set (worth-rescuing only).
+        stranded_before: list[str] = []
+        for addr in list(self.wallets.keys()):
+            try:
+                eth = self.w3.eth.get_balance(addr)
+            except Exception:   # noqa: BLE001
+                continue
+            if eth >= usdt_gas_wei:
+                continue
+            try:
+                usdt = self.usdt.functions.balanceOf(addr).call()
+            except Exception:   # noqa: BLE001
+                continue
+            if usdt >= min_stranded_usdt_wei:
+                stranded_before.append(addr)
+
+        # Pass 2: top up each stranded wallet from a random funder.
+        for addr in stranded_before:
+            self._ensure_gas_dust(addr, min_eth=min_eth)
+
+        # Pass 2.5: forward stranded USDT to random clean_exits so the
+        # laundering path completes. Skips wallets that ARE clean_exits
+        # (already at destination). Splits into sub-$999 chunks.
+        forwarded_reports: list[dict] = []
+        for addr in stranded_before:
+            fw = self._forward_stranded_usdt(addr)
+            if fw["forwarded_usdt"] > 0:
+                forwarded_reports.append({"from": addr, **fw})
+
+        # Pass 3: re-check. A wallet is still stranded if it holds
+        # more than dust USDT and less than gas-worth of ETH. The
+        # forwarding pass may have emptied its USDT — that also counts
+        # as no longer stranded (nothing left to move).
+        stranded_after: list[str] = []
+        for addr in stranded_before:
+            try:
+                usdt = self.usdt.functions.balanceOf(addr).call()
+                if usdt < min_stranded_usdt_wei:
+                    continue   # forwarding worked, nothing left
+                eth = self.w3.eth.get_balance(addr)
+                if eth >= usdt_gas_wei:
+                    continue   # rescue put gas in place
+                stranded_after.append(addr)
+            except Exception:   # noqa: BLE001
+                stranded_after.append(addr)
+
+        return {
+            "stranded_before": len(stranded_before),
+            "rescued": len(stranded_before) - len(stranded_after),
+            "stranded_after": len(stranded_after),
+            "stranded_addresses": stranded_after,
+            "forwarded": forwarded_reports,
+        }
+
+    def sweep_funder_pool(self, destination: str | None = None) -> dict:
+        """Return residual ETH from every funder wallet back to `destination`.
+
+        Called at end-of-campaign so the funder pool is left at ~0 ETH,
+        letting the runner compute the TRUE gas cost as
+        (initial pool allocated) - (amount recovered by sweep). Anything
+        that isn't recovered was consumed by chain gas or refills into
+        burners the funder seeded. Matches Sepolia's manual sweep
+        semantics (scripts/sweep_sepolia.py) so both chains behave the
+        same.
+
+        For each funder in the pool:
+          1. Query current balance.
+          2. If balance > gas cost of a plain ETH transfer, send
+             (balance - gas cost) back to `destination`.
+          3. Skip funders whose balance is below the gas floor (nothing
+             worth sweeping — they're already effectively empty).
+
+        `destination`: address to send the recovered ETH. Defaults to
+        the first registered wallet (canonical deployer/faucet).
+
+        Returns a dict suitable for embedding in campaign metadata:
+          {
+            "num_funders": int,       # funders in the pool at sweep time
+            "swept": int,             # number of funders that returned ETH
+            "skipped": int,           # funders below the gas floor
+            "failed": list[str],      # funders whose sweep tx failed
+            "total_returned_wei": int,
+            "total_returned_eth": float,
+            "per_funder": {addr: {"balance_before_wei": int,
+                                  "returned_wei": int,
+                                  "status": "swept" | "skipped" | "failed"}}
+          }
+        """
+        if destination is None:
+            destination = next(iter(self.wallets))
+        destination = Web3.to_checksum_address(destination)
+
+        try:
+            gas_price = self.w3.eth.gas_price
+        except Exception:   # noqa: BLE001
+            gas_price = self.w3.to_wei(3, "gwei")
+        gas_cost_wei = _ETH_TRANSFER_GAS * int(gas_price * 1.2)
+
+        report: dict = {
+            "num_funders": len(self._funder_pool),
+            "swept": 0,
+            "skipped": 0,
+            "failed": [],
+            "total_returned_wei": 0,
+            "per_funder": {},
+        }
+
+        for funder in list(self._funder_pool):
+            balance_wei = self.w3.eth.get_balance(funder)
+            entry = {
+                "balance_before_wei": balance_wei,
+                "returned_wei": 0,
+                "status": "skipped",
+            }
+
+            if balance_wei <= gas_cost_wei:
+                report["skipped"] += 1
+                report["per_funder"][funder] = entry
+                continue
+
+            send_amount_wei = balance_wei - gas_cost_wei
+            try:
+                tx = {
+                    "from": funder,
+                    "to": destination,
+                    "value": send_amount_wei,
+                    "nonce": self.w3.eth.get_transaction_count(funder),
+                    "gas": _ETH_TRANSFER_GAS,
+                    "gasPrice": gas_price,
+                    "chainId": self.w3.eth.chain_id,
+                }
+                signed = self.w3.eth.account.sign_transaction(
+                    tx, private_key=self.wallets[funder]
+                )
+                tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
+                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+                if receipt.status == 1:
+                    entry["returned_wei"] = send_amount_wei
+                    entry["status"] = "swept"
+                    report["swept"] += 1
+                    report["total_returned_wei"] += send_amount_wei
+                else:
+                    entry["status"] = "failed"
+                    report["failed"].append(funder)
+            except Exception:   # noqa: BLE001
+                entry["status"] = "failed"
+                report["failed"].append(funder)
+
+            report["per_funder"][funder] = entry
+
+        report["total_returned_eth"] = report["total_returned_wei"] / 10**18
+        return report
 
     def _peel_chain(
         self, from_address: str, asset: str, initial_amount: float,
@@ -1160,11 +1891,13 @@ class ToolDispatcher:
             # means the burner cannot pay gas onward — for peel-sinks
             # that is acceptable since they are dormant by design).
             try:
-                self._seed_gas(cont_addr, _DEFAULT_GAS_RESERVE_ETH)
+                self._seed_gas(cont_addr, _DEFAULT_GAS_RESERVE_ETH,
+                               source=self._pick_funder())
             except Exception:   # noqa: BLE001
                 pass
             try:
-                self._seed_gas(peel_addr, _DEFAULT_GAS_RESERVE_ETH)
+                self._seed_gas(peel_addr, _DEFAULT_GAS_RESERVE_ETH,
+                               source=self._pick_funder())
             except Exception:   # noqa: BLE001
                 pass
 
@@ -1233,29 +1966,61 @@ class ToolDispatcher:
         })
 
     def _advance_blocks(self, num_blocks: int) -> ToolResult:
-        """Advance the local chain by N blocks (anvil_mine RPC).
+        """Advance the chain with a randomised timing delay.
 
-        Simulates timing delays between laundering phases without
-        requiring real wall-clock time. On Ethereum mainnet 1 block ≈
-        12 seconds, so this becomes distinctive on-chain distance
-        between attacker events in the extracted graph.
+        On Anvil the per-block interval is drawn from a weighted APT
+        distribution (60% quick hop 12s-5min per block, 25% cooling-off
+        5min-1h, 15% deep dormancy 1h-12h). Chain-time reflects real
+        launderer OPSEC patterns; wall-clock stays instant.
+
+        On live chains (Sepolia etc.) the delay is a random wall-clock
+        sleep in [10s, 360s] regardless of num_blocks — bounded so a
+        campaign never blocks on any single call.
         """
-        if num_blocks < 100 or num_blocks > 1_000_000:
+        is_anvil = self.w3.eth.chain_id == 31337
+        max_blocks = 1_000_000 if is_anvil else 30
+        min_blocks = 100 if is_anvil else 5
+        if num_blocks < min_blocks or num_blocks > max_blocks:
             return ToolResult(error=(
-                f"num_blocks must be in [100, 1000000], got {num_blocks}"
+                f"num_blocks must be in [{min_blocks}, {max_blocks}] "
+                f"on this chain (chain_id={self.w3.eth.chain_id}), got {num_blocks}"
             ))
         block_before = self.w3.eth.block_number
         try:
-            self.w3.provider.make_request("anvil_mine", [hex(num_blocks)])
+            if is_anvil:
+                # Weighted bucket over per-block interval (seconds).
+                # Mirrors observed APT laundering cadence.
+                bucket = random.choices(
+                    population=[(12, 300), (300, 3600), (3600, 43200)],
+                    weights=[0.60, 0.25, 0.15],
+                    k=1,
+                )[0]
+                interval_s = random.randint(bucket[0], bucket[1])
+                self.w3.provider.make_request(
+                    "anvil_mine",
+                    [hex(num_blocks), hex(interval_s)],
+                )
+                wall_clock_s = 0
+            else:
+                # Live chain: block progression is set by the network,
+                # not by us. Only choose a bounded random wall-clock
+                # jitter to break deterministic timing signatures.
+                import time as _time
+                interval_s = 12  # real ethereum
+                wall_clock_s = random.uniform(10, 360)
+                _time.sleep(wall_clock_s)
         except Exception as e:   # noqa: BLE001
-            return ToolResult(error=f"anvil_mine RPC failed: {e}")
+            return ToolResult(error=f"advance_blocks failed: {e}")
         block_after = self.w3.eth.block_number
+        chain_seconds = num_blocks * interval_s if is_anvil else (block_after - block_before) * 12
         return ToolResult(output={
             "block_before": block_before,
             "block_after": block_after,
             "blocks_advanced": block_after - block_before,
-            "approx_ethereum_seconds": (block_after - block_before) * 12,
-            "approx_ethereum_days": round((block_after - block_before) * 12 / 86400, 2),
+            "interval_seconds_per_block": interval_s,
+            "chain_seconds_elapsed": chain_seconds,
+            "chain_days_elapsed": round(chain_seconds / 86400, 2),
+            "wall_clock_seconds": round(wall_clock_s, 1),
         })
 
     def _mint_usdt(self, to_address: str, amount_usdt: float) -> ToolResult:
@@ -1403,7 +2168,8 @@ class ToolDispatcher:
         seed_failures = 0
         for burner in burner_addresses:
             try:
-                self._seed_gas(burner, _DEFAULT_GAS_RESERVE_ETH)
+                self._seed_gas(burner, _DEFAULT_GAS_RESERVE_ETH,
+                               source=self._pick_funder())
             except Exception:   # noqa: BLE001 — count and continue
                 seed_failures += 1
 
@@ -1635,7 +2401,8 @@ class ToolDispatcher:
         seed_failures = 0
         for burner in burner_addresses:
             try:
-                self._seed_gas(burner, _DEFAULT_GAS_RESERVE_ETH)
+                self._seed_gas(burner, _DEFAULT_GAS_RESERVE_ETH,
+                               source=self._pick_funder())
             except Exception:   # noqa: BLE001 — count and continue
                 seed_failures += 1
 
@@ -2056,20 +2823,48 @@ class ToolDispatcher:
         Returns (leaves ordered by on-chain index, index of target_commitment
         within that list). The index is None if the commitment was never
         deposited. Raises RuntimeError if the event scan itself fails.
-        """
-        deposit_event = self.tornado.events.Deposit()
-        try:
-            try:
-                logs = deposit_event.get_logs(from_block=0)
-            except TypeError:   # web3.py v6 uses fromBlock
-                logs = deposit_event.get_logs(fromBlock=0)
-        except Exception as e:   # noqa: BLE001 — surfaced as a tool error
-            raise RuntimeError(f"failed to scan mixer deposit events: {e}") from e
 
+        Paginates get_logs via `self._logs_w3` (may point at a provider
+        with a wider range limit than the main w3 — Alchemy free tier caps
+        at 10 blocks/request whereas publicnode allows 10k). Missing
+        history would rebuild an incorrect Merkle tree — proofs computed
+        against it fail on-chain `isKnownRoot()`. Root cause of the
+        2026-08-12 seed200 withdraw failure.
+        """
+        # Rebind the tornado contract to the logs-specific provider so
+        # web3.py sends the eth_getLogs to publicnode (or whichever RPC
+        # the dispatcher was configured with) instead of the main Alchemy
+        # provider. ABI + address stay identical.
+        tornado_logs = self._logs_w3.eth.contract(
+            address=self.tornado.address, abi=self.tornado.abi,
+        )
+        deposit_event = tornado_logs.events.Deposit()
+        latest_block = self._logs_w3.eth.block_number
+        chunk_size = 9000   # publicnode limit is 10k; leave headroom
         by_index: dict[int, int] = {}
-        for log in logs:
-            idx = log["args"]["leafIndex"]
-            by_index[idx] = int.from_bytes(bytes(log["args"]["commitment"]), "big")
+        cursor = self.mixer_events_from_block
+        while cursor <= latest_block:
+            to_block = min(cursor + chunk_size - 1, latest_block)
+            try:
+                try:
+                    logs = deposit_event.get_logs(
+                        from_block=cursor, to_block=to_block,
+                    )
+                except TypeError:   # web3.py v6 uses fromBlock/toBlock
+                    logs = deposit_event.get_logs(
+                        fromBlock=cursor, toBlock=to_block,
+                    )
+            except Exception as e:   # noqa: BLE001 — surfaced as a tool error
+                raise RuntimeError(
+                    f"failed to scan mixer deposit events "
+                    f"(range {cursor}-{to_block}): {e}"
+                ) from e
+            for log in logs:
+                idx = log["args"]["leafIndex"]
+                by_index[idx] = int.from_bytes(
+                    bytes(log["args"]["commitment"]), "big",
+                )
+            cursor = to_block + 1
 
         if not by_index:
             return [], None
@@ -2240,6 +3035,188 @@ class ToolDispatcher:
             "nullifier_hash": "0x" + nullifier_hash_bytes.hex(),
             "anonymity_set_size": len(leaves),
             "gas_used": receipt.gasUsed,
+        })
+
+    # --- Batched ZK mixer tools (Chema-approved batched pattern) ------------
+    # Same tradeoff as smurf_split: the Coordinator picks the parameters, the
+    # dispatcher does the N sequential ops. Avoids N round-trips of tool_use
+    # / tool_result blocks (each ~2KB of context growth) that would burn
+    # tokens and hit max_iterations on any batch >20.
+
+    def _mixer_batch_deposit(
+        self, from_address: str, num_deposits: int,
+    ) -> ToolResult:
+        """Batch deposit: N × 1 ETH into the mixer, return N notes."""
+        if self.tornado is None:
+            return ToolResult(error="Tornado mixer contract not set on dispatcher")
+
+        try:
+            from_address = Web3.to_checksum_address(from_address)
+        except ValueError as e:
+            return ToolResult(error=f"Invalid sender: {e}")
+        if from_address not in self.wallets:
+            return ToolResult(error=f"No private key registered for {from_address}")
+        if num_deposits <= 0:
+            return ToolResult(
+                error=f"num_deposits must be positive, got {num_deposits}"
+            )
+        if num_deposits > _MAX_MIXER_BATCH:
+            return ToolResult(error=(
+                f"num_deposits={num_deposits} exceeds cap of "
+                f"{_MAX_MIXER_BATCH} (set to prevent runaway gas/runtime)"
+            ))
+
+        # Balance pre-check: N × 1 ETH plus generous gas margin. Each deposit
+        # uses ~3M gas (MiMC hashes the full Merkle path); with a headroom
+        # factor of 1.2× we don't strand the sender mid-batch.
+        balance = self.w3.eth.get_balance(from_address)
+        gas_price = self.w3.eth.gas_price
+        required_deposit_wei = num_deposits * _MIXER_DENOMINATION_WEI
+        estimated_gas_wei = int(num_deposits * 3_000_000 * gas_price * 1.2)
+        if balance < required_deposit_wei + estimated_gas_wei:
+            return ToolResult(error=(
+                f"Insufficient ETH: {from_address} holds "
+                f"{balance / 10**18:.4f} ETH, batch of {num_deposits} "
+                f"deposits requires {required_deposit_wei / 10**18} ETH "
+                f"plus ~{estimated_gas_wei / 10**18:.4f} ETH gas"
+            ))
+
+        notes: list[str] = []
+        tx_hashes: list[str] = []
+        leaf_indices: list[int | None] = []
+        commitments: list[str] = []
+        total_gas = 0
+        failures: list[dict] = []
+
+        # Reuse the single-deposit implementation for consistency. Stop on
+        # first failure — the mixer state is deterministic per-tx, so a
+        # failure typically means insufficient balance or contract issue
+        # that won't self-heal for the next tx in the batch.
+        for i in range(num_deposits):
+            result = self._mixer_deposit(from_address)
+            if result.error:
+                failures.append({"index": i, "error": result.error})
+                break
+            out = result.output
+            notes.append(out["deposit_note"])
+            tx_hashes.append(out["tx_hash"])
+            leaf_indices.append(out.get("leaf_index"))
+            commitments.append(out.get("commitment", ""))
+            total_gas += out.get("gas_used", 0)
+
+        return ToolResult(output={
+            "from_address": from_address,
+            "num_requested": num_deposits,
+            "num_successful": len(notes),
+            # ALL notes returned — agent NEEDS every one to withdraw. This
+            # is the payload the batch exists to produce.
+            "deposit_notes": notes,
+            "leaf_indices": leaf_indices,
+            # Sample tx_hashes + commitments to avoid context blowup on
+            # large batches — full receipts are on-chain if the agent needs
+            # them later (via inspect_chain).
+            "tx_hashes_sample": (
+                tx_hashes[:5] + (["..."] if len(tx_hashes) > 5 else [])
+            ),
+            "commitments_sample": (
+                commitments[:5] + (["..."] if len(commitments) > 5 else [])
+            ),
+            "total_gas_used": total_gas,
+            "total_eth_deposited": (
+                len(notes) * _MIXER_DENOMINATION_WEI / 10**18
+            ),
+            "failures": failures,
+            "warning": (
+                "SAVE ALL deposit_notes — each is the ONLY way to withdraw "
+                "its corresponding 1 ETH. Anyone holding a note controls "
+                "its ETH."
+            ),
+        })
+
+    def _mixer_batch_withdraw(
+        self,
+        deposit_notes: list[str],
+        recipients: list[str] | str,
+        gas_payer: str | None = None,
+    ) -> ToolResult:
+        """Batch withdraw: N notes from the mixer, per-note success/failure."""
+        if self.tornado is None:
+            return ToolResult(error="Tornado mixer contract not set on dispatcher")
+        if not isinstance(deposit_notes, list) or not deposit_notes:
+            return ToolResult(
+                error="deposit_notes must be a non-empty list"
+            )
+        if len(deposit_notes) > _MAX_MIXER_BATCH:
+            return ToolResult(error=(
+                f"len(deposit_notes)={len(deposit_notes)} exceeds cap of "
+                f"{_MAX_MIXER_BATCH}"
+            ))
+
+        # Normalize recipients: str → broadcast to all notes; list → 1:1.
+        if isinstance(recipients, str):
+            recipients_list = [recipients] * len(deposit_notes)
+        elif isinstance(recipients, list):
+            if len(recipients) != len(deposit_notes):
+                return ToolResult(error=(
+                    f"len(recipients)={len(recipients)} must equal "
+                    f"len(deposit_notes)={len(deposit_notes)}, or pass a "
+                    "single string to broadcast one recipient across notes"
+                ))
+            recipients_list = recipients
+        else:
+            return ToolResult(
+                error="recipients must be str or list[str]"
+            )
+
+        successes: list[dict] = []
+        failures: list[dict] = []
+        total_gas = 0
+
+        # Reuse the single-withdraw path per note. Each call re-scans mixer
+        # events + generates a fresh Groth16 proof (~10-30s per note); this
+        # is the dominant cost and cannot be trivially batched because
+        # proofs are per-nullifier. Continue on failure — a single bad
+        # note (already-spent, malformed) shouldn't kill the whole batch.
+        for i, (note, recipient) in enumerate(
+            zip(deposit_notes, recipients_list)
+        ):
+            result = self._mixer_withdraw(note, recipient, gas_payer)
+            if result.error:
+                failures.append({
+                    "index": i,
+                    "recipient": recipient,
+                    "error": result.error,
+                })
+                continue
+            out = result.output
+            successes.append({
+                "index": i,
+                "tx_hash": out["tx_hash"],
+                "recipient": out["recipient"],
+            })
+            total_gas += out.get("gas_used", 0)
+
+        return ToolResult(output={
+            "num_requested": len(deposit_notes),
+            "num_successful": len(successes),
+            "num_failed": len(failures),
+            # Sample successes to bound context; full tx_hashes recoverable
+            # on-chain if needed.
+            "successes_sample": (
+                successes[:5] + (["..."] if len(successes) > 5 else [])
+            ),
+            # Failures kept in full — they're the actionable information
+            # the agent needs to decide what to do next (retry, skip, etc.)
+            "failures": failures,
+            "total_gas_used": total_gas,
+            "total_eth_withdrawn": (
+                len(successes) * _MIXER_DENOMINATION_WEI / 10**18
+            ),
+            "anonymity_note": (
+                "Each withdrawal used a fresh Groth16 proof — on-chain "
+                "observers cannot link individual withdrawals to specific "
+                "deposits beyond the mixer's anonymity set."
+            ),
         })
 
     # --- Coordinator reflection tool (PR 42: smarter attacker, A) -----------

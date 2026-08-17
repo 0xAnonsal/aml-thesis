@@ -1,0 +1,38 @@
+{
+  "dataset": "EthereumHeist (Wu et al. 2023, 23 real ETH hacks)",
+  "n_nodes_graph": 633057,
+  "n_edges_graph": 2452786,
+  "n_train": 78162,
+  "n_test": 19541,
+  "n_test_positive": 9541,
+  "seed": 42,
+  "exclude_upbit": false,
+  "models": {
+    "RandomForest": {
+      "f1_heist": 0.9858,
+      "precision_heist": 0.9837,
+      "recall_heist": 0.9878,
+      "roc_auc": 0.9964,
+      "confusion": {
+        "tp": 9425,
+        "fp": 156,
+        "tn": 9844,
+        "fn": 116
+      },
+      "train_time_seconds": 2.68
+    },
+    "LogisticRegression": {
+      "f1_heist": 0.9221,
+      "precision_heist": 0.9186,
+      "recall_heist": 0.9257,
+      "roc_auc": 0.9777,
+      "confusion": {
+        "tp": 8832,
+        "fp": 783,
+        "tn": 9217,
+        "fn": 709
+      },
+      "train_time_seconds": 0.63
+    }
+  }
+}

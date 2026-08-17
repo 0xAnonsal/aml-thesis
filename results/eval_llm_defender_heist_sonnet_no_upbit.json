@@ -1,0 +1,41 @@
+{
+  "dataset": "EthereumHeist (Wu 2023, real ETH hacks)",
+  "scope": "no_upbit",
+  "seed": 42,
+  "num_exchanges": 3,
+  "n_graph_nodes": 4796,
+  "n_graph_edges": 48408,
+  "n_labeled": 4708,
+  "n_heist_labeled": 300,
+  "n_true_hack_clusters": 19,
+  "baseline_cosine": {
+    "fit_time_seconds": 258.1,
+    "n_addresses": 4708,
+    "n_clusters_true": 4427,
+    "n_clusters_pred": 4203,
+    "ari": 0.066,
+    "homogeneity": 0.9998,
+    "completeness": 0.9966
+  },
+  "llm_defender": {
+    "model": "sonnet",
+    "fit_time_seconds": 455.45,
+    "cost_usd": 0.1443,
+    "input_tokens": 15828,
+    "output_tokens": 6456,
+    "used_fallback": false,
+    "reasoning": "Cluster 0 groups the three ultra-high-fanout pure-distributor addresses (out_degree 635, 1195, 701) across exchanges A and B that serve as top-level fund dispersal hubs. Cluster 1 captures large mixed in/out hubs (0x0e860f, 0x74de5d, 0x262feb, 0xc4af9d) with hundreds of edges suggesting layering intermediaries. Cluster 2 isolates extreme in-degree sink addresses (0xa9bf7 with 2541 in_degree, 0xc8a65 with 592, 0x6e121 with 91, 0xa2a17 with 146, 0x70faa with 45 in/1 out) that act as consolidation wallets. Cluster 3 groups medium-high out-degree distributor addresses (0xb022a out=129, 0x4bb7d out=226, 0x9fa01 out=219, 0x36d01 out=87, 0x37a0d out=60) with similar broadcast patterns. Cluster 4 groups balanced mid-size in/out addresses (total ~68-164, similar unique-counterparty logs) across exchanges A and B suggesting one coordinated layering campaign. Cluster 5 groups moderate-out-degree addresses (out=52-79) with balanced in-flows from exchanges A and C suggesting a shared peeling-chain campaign. Cluster 6 groups addresses with asymmetric moderate in/out degrees (total 45-112) and similar log_unique values suggesting a mid-tier collection campaign. Cluster 7 groups small-to-medium balanced addresses (total 15-34) with similar in/out profiles across exchanges A, B, C. Cluster 8 groups small asymmetric addresses (low in, moderate out, total 7-35) serving as feeder wallets. Cluster 9 groups very small balanced-degree addresses (total 3-11) with similar in/out ratios, likely burner pairs. Cluster 10 groups small pure-out or near-pure-out addresses (out=2-53, total\u226453) with minimal in-flow, acting as exit points. Cluster 11 captures the large set of exchange_A identical-fingerprint addresses (in=2, out=1, total=3) plus exchange_B equivalents \u2014 a classic burner wallet fan-out campaign. Cluster 12 captures exchange_A singleton-out (out=1, total=1) leaf addresses \u2014 the clean-exit terminal wallet campaign. Cluster 13 groups exchange_B small (total=2-3) low-degree addresses with similar minimal fingerprints forming one B-side burner campaign. Cluster 14 groups exchange_B moderate-in-degree sink and swap addresses (in-heavy or balanced, total 9-42) forming a collection sub-campaign. Cluster 15 groups small-to-moderate out-heavy addresses in exchange_C (out=7-65) that feed into mixers or swaps. Cluster 16 groups exchange_B/C pure-in sinks and near-singletons with in-only or tiny out (total 2-4), including known aggregator contract addresses. Cluster 17 groups exchange_C addresses with dominant in-degree and near-zero out (in=9-61, out=0-1) acting as final collection points. Cluster 18 groups exchange_C tiny balanced or pure-in addresses (total 2-11) with nearly identical minimal fingerprints \u2014 a second wave of burners. Cluster 19 groups exchange_C pure in-degree=1 singletons forming the leaf/exit layer of a separate C-side campaign. Note: 0x6fdc428d appears in both cluster 0 and 20 \u2014 it is correctly assigned only to cluster 0 (cluster 20 is a duplicate artifact to be ignored; the address is in cluster 0 only).",
+    "n_addresses": 4708,
+    "n_clusters_true": 4427,
+    "n_clusters_pred": 4555,
+    "ari": 0.0401,
+    "homogeneity": 0.9958,
+    "completeness": 0.9962
+  },
+  "head_to_head": {
+    "baseline_ari": 0.066,
+    "llm_ari": 0.0401,
+    "diff": -0.0259,
+    "verdict": "Cosine wins"
+  }
+}

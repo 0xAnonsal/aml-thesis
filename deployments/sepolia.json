@@ -1,0 +1,21 @@
+{
+  "chain_id": 11155111,
+  "chain_name": "sepolia",
+  "deployed_at_utc": "2026-08-11T16:24:24Z",
+  "tornado_deploy_block": 11467324,
+  "contracts": {
+    "MockUSDT": "0x665A2176d7beF3bccE52F37F1e64c99D993Aa7Ba",
+    "MockUniswapV2Pool": "0x229cC888FE17c81CD474Ea8eb6F5387f1739a4c4",
+    "MiMCSponge": "0x615FD17d605325eb05d784Aa8189518FeE5f0Ce6",
+    "Verifier": "0x2FDceD2D3C9c3A9322d04afc1e6A243a98a68f46",
+    "MockTornado": "0x199181F8a480A61520Ca3Eb2Ae6BF5dbBc6550C5",
+    "MockBridge": "0x99DFe4eEAbbA728CE1271d0Ba6a0959883986600"
+  },
+  "constants": {
+    "merkle_depth": 10,
+    "tornado_denomination_wei": 1000000000000000000,
+    "bootstrap_usdt_micro": 100000000000,
+    "bootstrap_eth_wei": 500000000000000000
+  },
+  "notes": "Deploy completado en 2 fases: USDT+Pool en primer run (scripts/deploy_eth_mocks_sepolia.py), MiMC+Verifier+Tornado+Bridge en fase resume (deploy_sepolia_resume.py) tras cancelar tx MiMC pendiente por gas legacy underpriced."
+}

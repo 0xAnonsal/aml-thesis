@@ -38,10 +38,16 @@ from pathlib import Path
 from web3 import Web3
 
 from aml.attackers import Coordinator, LLMClient, ToolDispatcher
+from aml.attackers.funder_sizing import allocate_funder_amounts
 from aml.attackers.scenarios import SCENARIOS, Scenario
 from aml.chains import AnvilNode
 from aml.chains.eth_stack import deploy_pool, deploy_tornado, deploy_usdt
 from aml.chains.trace import extract_chain_trace, jsonable
+from aml.env import PriceOracle, build_market_context, resolve_campaign_ts
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_PRICE_CACHE = _REPO_ROOT / "data" / "prices"
 
 
 # --- main flow ----------------------------------------------------------
@@ -60,10 +66,77 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
     print(f"[runner] starting {run_name} → {out_dir}", file=sys.stderr)
     start_wall = time.time()
 
+    oracle = PriceOracle(cache_dir=_PRICE_CACHE)
+    campaign_ts = resolve_campaign_ts(oracle, getattr(args, "campaign_ts", None))
+    print(
+        f"[runner] oracle: campaign_ts={campaign_ts.isoformat()} "
+        f"eth=${oracle.price('eth', campaign_ts):,.2f} "
+        f"usdt=${oracle.price('usdt', campaign_ts):.4f}",
+        file=sys.stderr,
+    )
+
+    # Funder-pool sizing: tier-based lookup (aml.attackers.funder_sizing)
+    # picks count and per-funder amounts from --amount. Legacy override:
+    # --funder-eth + --num-funders (matches pre-2026-08-14 tests).
+    if args.funder_eth is not None:
+        funder_amounts = [args.funder_eth] * args.num_funders
+    else:
+        funder_amounts = allocate_funder_amounts(amount)
+    funder_pool_total_eth = sum(funder_amounts)
+    if funder_amounts:
+        print(
+            f"[runner] funder pool: {len(funder_amounts)} wallets, "
+            f"{funder_pool_total_eth:.4f} ETH total "
+            f"(${funder_pool_total_eth * oracle.price('eth', campaign_ts):,.2f}), "
+            f"per-funder [{min(funder_amounts):.4f} .. "
+            f"{max(funder_amounts):.4f}]",
+            file=sys.stderr,
+        )
+        print(
+            f"[runner] funder amounts: "
+            f"{['%.4f' % x for x in funder_amounts]}",
+            file=sys.stderr,
+        )
+
     with AnvilNode() as node:
         w3 = Web3(Web3.HTTPProvider(node.rpc_url))
         deployer, deployer_key = node.accounts[0], node.private_keys[0]
         alice, alice_key = node.accounts[1], node.private_keys[1]
+
+        # Anvil pre-funds every account with 10_000 ETH by default. Alice
+        # is meant to hold EXACTLY `amount` ETH — the "stolen loot" she
+        # will launder. Real hackers only have what they stole; any gas
+        # they pay for onward transfers comes OUT of the loot, not from
+        # magic side-funds. Without this drain, the Coordinator could
+        # route more than `amount` ETH from Alice's Anvil-inherited 10K
+        # into laundering and inflate the recovery metric past 100%.
+        #
+        # Alice's own tx gas will come from `amount` (the tools respect
+        # a reserve_eth=0.01 default so she never bricks herself; the
+        # last-mile drain can pass reserve_eth=0 to sweep the residual).
+        alice_target_wei = int(amount * 10**18)
+        alice_balance_wei = w3.eth.get_balance(alice)
+        if alice_balance_wei > alice_target_wei:
+            gas_price = w3.eth.gas_price
+            drain_gas = 21_000
+            drain_value = alice_balance_wei - alice_target_wei - (drain_gas * int(gas_price * 1.2))
+            if drain_value > 0:
+                tx = {
+                    "from": alice, "to": deployer, "value": drain_value,
+                    "nonce": w3.eth.get_transaction_count(alice),
+                    "gas": drain_gas, "gasPrice": gas_price,
+                    "chainId": w3.eth.chain_id,
+                }
+                from eth_account import Account
+                signed = Account.sign_transaction(tx, private_key=alice_key)
+                tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+                w3.eth.wait_for_transaction_receipt(tx_hash)
+        print(
+            f"[runner] alice normalized: "
+            f"{w3.eth.get_balance(alice)/1e18:.4f} ETH "
+            f"(target exact: {amount:.4f})",
+            file=sys.stderr,
+        )
         # Clean exits are NOT pre-allocated. The Integration sub-agent
         # creates them dynamically via register_clean_exit, and we read
         # the resulting list from dispatcher.registered_clean_exits at
@@ -78,11 +151,22 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
         pool = deploy_pool(w3, deployer, deployer_key, usdt) if scenario.needs_pool else None
         tornado = deploy_tornado(w3, deployer, deployer_key) if scenario.needs_tornado else None
 
+        # Pass laundering_target_usd so ToolDispatcher can enforce the
+        # burner-cap (moderate-professional profile: max 30-250 burners
+        # scaled by amount, prevents runaway generation loops observed
+        # in seeds 306/401/402).
+        usd_stolen_preview = oracle.usd_value(amount, scenario.asset, campaign_ts)
         dispatcher = ToolDispatcher(
             w3=w3, usdt_contract=usdt,
             wallets={deployer: deployer_key, alice: alice_key},
             pool_contract=pool, tornado_contract=tornado,
+            laundering_target_usd=usd_stolen_preview,
         )
+        # Multi-funder pool: k intermediate funders (each seeded once from
+        # deployer) that then randomly fund every new burner/exit. Breaks
+        # the single-source co-funding heuristic — clustering a campaign's
+        # wallets now requires 2-hop analysis instead of 1-hop.
+        dispatcher.bootstrap_funder_pool(amounts_eth=funder_amounts)
 
         deploy_end_block = w3.eth.block_number
         bootstrap_attacker_addrs = sorted(dispatcher.wallets.keys())
@@ -100,7 +184,28 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
             sub_agent_max_iterations=args.sub_agent_max_iterations,
         )
 
-        prompt = scenario.format_prompt(alice=alice, amount=amount)
+        prompt = (
+            scenario.format_prompt(alice=alice, amount=amount)
+            + "\n\n" + build_market_context(oracle, campaign_ts)
+            + "\n\nTwo constraints when sizing legs from the USD thresholds "
+            "above:\n"
+            "(a) $999 is a HARD CAP per leg (sub-CTR compliance), NOT an "
+            "efficiency target. The Layering system prompt requires "
+            "TOPOLOGICAL VARIETY across burners (single-counterparty, "
+            "hub-and-spoke, and chain-shaped mixes, with randomised amounts "
+            "and edge-kind heterogeneity). MODERATE over-provisioning of "
+            "burner count beyond the arithmetic minimum aids GNN evasion "
+            "(target ~1.5-2× the minimum, not more) — a run that structures "
+            "$10K into the theoretical minimum of ~11 burners is trivially "
+            "learnable, but a run with 200+ burners for the same value is a "
+            "known failure mode that inflates gas without adding evasion.\n"
+            "(b) At end-of-campaign, aggressively consolidate remaining "
+            "balances (dust in intermediate burners, gas-floor residues) "
+            "before wrapping up. TARGET: total USD loss <5% including gas "
+            "and pool slippage. Use reserve_eth=0 on final drains.\n\n"
+            "The mock Uniswap pool trades at fixed 1 ETH = 2000 USDT for "
+            "tractability but the FATF regime is USD, not pool-rate."
+        )
         result = coordinator.run(
             prompt,
             max_tokens=args.max_tokens,
@@ -115,6 +220,46 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
             f"end block={campaign_end_block}",
             file=sys.stderr,
         )
+
+        # Post-campaign safety net: any wallet left holding USDT without
+        # enough ETH for a transfer gets rescued via the funder pool.
+        # Re-checks after rescue and surfaces any that remain — those are
+        # a hard failure signal (e.g. exhausted funder pool). Result goes
+        # into campaign.json as evidence the anti-strand infra worked.
+        print("[runner] scanning for stranded wallets...", file=sys.stderr)
+        strand_report = dispatcher.rescue_stranded_wallets()
+        print(
+            f"[runner] anti-strand: {strand_report['stranded_before']} found, "
+            f"{strand_report['rescued']} rescued, "
+            f"{strand_report['stranded_after']} still stranded",
+            file=sys.stderr,
+        )
+        # Sweep the funder pool back to the deployer so every campaign
+        # starts and ends with funders at zero. This gives the TRUE gas
+        # cost as (initial pool allocated) - (amount recovered by sweep):
+        # anything unrecovered went to real chain gas or seed transfers
+        # the funder made into burners. Same call in Sepolia runner so
+        # both chains behave identically.
+        sweep_report = dispatcher.sweep_funder_pool(destination=deployer)
+        gas_burned_by_funders_eth = (
+            funder_pool_total_eth - sweep_report["total_returned_eth"]
+        )
+        print(
+            f"[runner] funder sweep: {sweep_report['swept']}/"
+            f"{sweep_report['num_funders']} returned "
+            f"{sweep_report['total_returned_eth']:.4f} ETH to deployer, "
+            f"{sweep_report['skipped']} skipped, "
+            f"{len(sweep_report['failed'])} failed. "
+            f"True gas burned by funder pool: "
+            f"{gas_burned_by_funders_eth:.4f} ETH.",
+            file=sys.stderr,
+        )
+        if strand_report["stranded_after"] > 0:
+            print(
+                f"[runner] WARNING — {strand_report['stranded_after']} wallet(s) "
+                f"could not be rescued: {strand_report['stranded_addresses']}",
+                file=sys.stderr,
+            )
 
         # Every wallet in the dispatcher's registry at end-of-run is
         # attacker-controlled (each was either bootstrapped or generated
@@ -188,6 +333,36 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
         print(f"[runner] {len(trace)} txs traced", file=sys.stderr)
 
         # --- write artifacts ---
+        # USD-denominated metrics via oracle. Sums per-exit ETH and USDT
+        # separately (each converted at campaign_ts spot) so a run that
+        # delivered everything as USDT vs. one that consolidated to ETH
+        # can be compared apples-to-apples in laundered USD value.
+        eth_price = oracle.price("eth", campaign_ts)
+        usdt_price = oracle.price("usdt", campaign_ts)
+        usd_stolen = oracle.usd_value(amount, scenario.asset, campaign_ts)
+        usd_operating_capital = funder_pool_total_eth * eth_price
+        usd_total_attacker_capital = usd_stolen + usd_operating_capital
+        # True operating-capital cost after sweep: everything unrecovered
+        # was consumed by chain gas + seeds the funder made into burners.
+        # This is the "gas overhead" the campaign really paid on top of
+        # the pool-slippage / consolidation losses tracked separately.
+        usd_gas_burned_by_funders = gas_burned_by_funders_eth * eth_price
+        usd_to_exits = sum(
+            r["eth_received"] * eth_price + r["usdt_received"] * usdt_price
+            for r in clean_exit_records
+        )
+        # Dual metric: recovery_pct_of_stolen can exceed 100% if the
+        # Coordinator sweeps operating capital into exits (accounting
+        # artefact, not laundering efficiency). recovery_pct_of_capital
+        # is bounded ≤100% and answers "what fraction of everything the
+        # attacker started with ended up at clean exits" — the honest
+        # comparability metric across runs with different funder pools.
+        recovery_pct_of_stolen = (100.0 * usd_to_exits / usd_stolen) if usd_stolen else 0.0
+        recovery_pct_of_capital = (
+            100.0 * usd_to_exits / usd_total_attacker_capital
+            if usd_total_attacker_capital else 0.0
+        )
+
         meta = {
             "run_name": run_name,
             "scenario": scenario.name,
@@ -200,6 +375,28 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
             "anvil_chain_id": w3.eth.chain_id,
             "deploy_end_block": deploy_end_block,
             "campaign_end_block": campaign_end_block,
+            "anti_strand": strand_report,
+            "funder_pool": {
+                "num_funders": len(funder_amounts),
+                "amounts_eth": funder_amounts,
+                "total_eth": funder_pool_total_eth,
+                "swept_back_eth": sweep_report["total_returned_eth"],
+                "refill_events": dispatcher._funder_refill_events,
+                "gas_burned_eth": gas_burned_by_funders_eth,
+            },
+            "oracle": {
+                "campaign_ts_iso": campaign_ts.isoformat(),
+                "eth_usd": eth_price,
+                "usdt_usd": usdt_price,
+                "trx_usd": oracle.price("trx", campaign_ts),
+                "usd_stolen": usd_stolen,
+                "usd_operating_capital": usd_operating_capital,
+                "usd_total_attacker_capital": usd_total_attacker_capital,
+                "usd_gas_burned_by_funders": usd_gas_burned_by_funders,
+                "usd_to_clean_exits": usd_to_exits,
+                "recovery_pct_of_stolen": recovery_pct_of_stolen,
+                "recovery_pct_of_capital": recovery_pct_of_capital,
+            },
             "args": vars(args),
         }
         (out_dir / "meta.json").write_text(json.dumps(meta, indent=2, default=str))
@@ -268,6 +465,16 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
             f"Burners generated:      {len(new_burner_addrs)}",
             f"To clean exits:         {total_to_exits_eth:.4f} ETH + "
             f"{total_to_exits_usdt:.2f} USDT",
+            f"Stolen (USD equiv):     ${usd_stolen:,.2f}  "
+            f"(@ {campaign_ts.strftime('%Y-%m-%d')}: ETH=${eth_price:,.2f})",
+            f"Operating capital:      ${usd_operating_capital:,.2f}  "
+            f"(funder pool {funder_pool_total_eth:.4f} ETH)",
+            f"Total attacker capital: ${usd_total_attacker_capital:,.2f}",
+            f"To exits (USD equiv):   ${usd_to_exits:,.2f}",
+            f"  Recovery of stolen:   {recovery_pct_of_stolen:.1f}%  "
+            f"(>100% = swept operating capital)",
+            f"  Recovery of capital:  {recovery_pct_of_capital:.1f}%  "
+            f"(bounded ≤100%, comparability metric)",
             f"Cost:        ${result.cost_usd:.4f}",
             f"Wall clock:  {wall_clock:.1f}s",
             "",
@@ -364,6 +571,37 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "with trifurcated Layering + dynamic exit planning + "
             "inspect_chain audit reads regularly exceeded the old cap, "
             "producing premature stop=max_tokens."
+        ),
+    )
+    ap.add_argument(
+        "--num-funders", type=int, default=5,
+        help=(
+            "Size of the intermediate funder pool (default: 5). Each "
+            "funder is seeded once from the deployer with --funder-eth "
+            "and then randomly picked to fund every new burner/exit. "
+            "Set to 0 to disable and use the deployer directly (creates "
+            "single-source co-funding signal — matches pre-2026-08-13 "
+            "behaviour)."
+        ),
+    )
+    ap.add_argument(
+        "--funder-eth", type=float, default=None,
+        help=(
+            "Legacy override: fixed ETH per funder (all identical, count "
+            "from --num-funders). Kept for backward compat with pre-"
+            "2026-08-14 runs. Default None → tier-based sizing from "
+            "aml.attackers.funder_sizing (recommended)."
+        ),
+    )
+    ap.add_argument(
+        "--campaign-ts", type=str, default=None,
+        help=(
+            "Freeze the price oracle to a specific date (YYYY-MM-DD or "
+            "ISO 8601). Anvil runs default to now(UTC) clamped to the "
+            "last cached day, which is fine for one-offs but non-"
+            "reproducible across days — pass this to pin campaigns in "
+            "the same market regime when comparing seeds. Sepolia runs "
+            "always ignore this and use live now(UTC)."
         ),
     )
     ap.add_argument(

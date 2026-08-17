@@ -1,0 +1,40 @@
+{
+  "dataset": "/home/anon/aml-results/batch_2026-06-26/dataset.pkl",
+  "num_exchanges": 3,
+  "seed": 42,
+  "llm_model": "sonnet",
+  "n_graph_nodes": 10311,
+  "n_graph_edges": 101880,
+  "n_runs": 420,
+  "n_true_actor_clusters": 9604,
+  "baseline_cosine": {
+    "fit_time_seconds": 183.07,
+    "n_addresses": 10233,
+    "n_clusters_true": 9604,
+    "n_clusters_pred": 9649,
+    "ari": 0.0813,
+    "homogeneity": 0.9993,
+    "completeness": 0.9979
+  },
+  "llm_defender": {
+    "model": "sonnet",
+    "fit_time_seconds": 219.02,
+    "cost_usd": 0.1662,
+    "input_tokens": 21571,
+    "output_tokens": 6766,
+    "used_fallback": false,
+    "reasoning": "Cluster 0 is the cross-exchange mixer hub (0xa513e6e4b8f2a923d98304ec87f64353c4d5c853) appearing on all three exchanges with massive mixer_deposit_in/mixer_withdraw_out volumes, acting as the central aggregator node. Cluster 1 groups exchange_A and exchange_C burner wallets with identical mixer_withdraw_in\u2192mixer_deposit_out (1-in/1-out, log=0.69) fingerprints \u2014 pure pass-through mixer hops. Cluster 2 groups exchange_A pure mixer depositors (out_degree=1, mixer_deposit_out=0.69 only, no inflows) \u2014 likely source wallets funding the mixer. Cluster 3 groups exchange_A and exchange_C pure mixer withdrawers (in_degree=1, mixer_withdraw_in=0.69 only, no outflows) \u2014 exit wallets receiving mixer outputs. Cluster 4 pairs two small mixer-in/multi-out addresses (exchange_A + exchange_C) with similar low-volume ETH-in, mixer-withdraw-in, multi-deposit-out structure. Cluster 5 groups three addresses (exchange_A + exchange_C) with mixer_withdraw_in feeding a single transfer_eth_out. Cluster 6 groups four exchange_A addresses that each take one mixer withdrawal and forward via transfer_eth_out at slightly different amounts \u2014 same campaign's distribution arm. Cluster 7 is the USDT+ETH swap campaign tier (exchange_A + exchange_B + exchange_C mid-volume USDT laundering addresses with swap_in/swap_out). Cluster 8 is the large exchange_C swap aggregator node (0x70997970...) with enormous USDT+ETH volume and heavy swap activity. Cluster 9 groups exchange_A mid-tier transfer+mixer-withdraw addresses with mixed transfer_eth_in/out and mixer flows. Cluster 10 groups exchange_B mixer-withdraw\u2192transfer_eth_out addresses (2-in with transfer+mixer, 1-out transfer). Cluster 11 groups exchange_B addresses that receive from transfer+mixer and send one transfer_eth_out, slightly larger in_degree (3). Cluster 12 groups exchange_B pure deposit feeders (transfer_eth_in\u2192mixer_deposit_out, log_eth_in~0.05) \u2014 the exchange_B campaign's feeder layer. Cluster 13 groups exchange_B USDT+ETH mixed addresses with transfer_eth_in+transfer_usdt flows and partial mixer withdrawals. Cluster 14 groups exchange_B small USDT intermediaries (transfer_eth_in+transfer_usdt_in, some with transfer_usdt_out) \u2014 the exchange_B USDT laundering sub-campaign. Cluster 15 is a pair of exchange_B plain transfer-eth addresses with no mixer involvement. Cluster 16 is the lone exchange_B receive-only node (0xA1A1...). Cluster 17 groups exchange_C transfer_eth_in\u2192mixer_deposit_out addresses including the hub 27436D2 and its satellite burners. Cluster 18 groups exchange_A and exchange_C pure USDT-focused addresses (transfer_usdt_in only or usdt_in/usdt_out without mixer). Cluster 19 groups four exchange_A low-confidence transfer_eth_in-only exit addresses. Cluster 20 consolidates all near-zero-feature isolated nodes from exchange_C (likely dormant staging wallets) plus the exchange_A isolated node and the exchange_A pure mixer-withdraw-in address 2A7A2Ab4F1, all sharing essentially zero observable on-chain activity within the local view.",
+    "n_addresses": 10233,
+    "n_clusters_true": 9604,
+    "n_clusters_pred": 10083,
+    "ari": 0.0127,
+    "homogeneity": 0.9983,
+    "completeness": 0.9979
+  },
+  "head_to_head": {
+    "baseline_ari": 0.0813,
+    "llm_ari": 0.0127,
+    "diff": -0.0686,
+    "verdict": "Cosine wins"
+  }
+}

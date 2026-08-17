@@ -28,11 +28,12 @@ POOL_ARTIFACT = REPO_ROOT / "out" / "MockUniswapV2Pool.sol" / "MockUniswapV2Pool
 TORNADO_ARTIFACT = REPO_ROOT / "out" / "MockTornado.sol" / "MockTornado.json"
 VERIFIER_ARTIFACT = REPO_ROOT / "out" / "Verifier.sol" / "Groth16Verifier.json"
 
-# Pool bootstrap parameters: 500 ETH + 1M USDT → spot price 1 ETH = 2000 USDT.
-# Keep these as module constants so callers can reference the spot price
-# without re-deriving it.
-POOL_BOOTSTRAP_ETH_WEI = 500 * 10**18
-POOL_BOOTSTRAP_USDT_BASE = 1_000_000 * 10**6
+# Pool bootstrap: 5000 ETH + 10M USDT → spot price 1 ETH = 2000 USDT.
+# Bumped 10× from 500/1M on 2026-08-14 to reduce swap slippage on typical
+# laundering volumes (8-10 ETH swaps): slippage 1.86% → 0.46%. Matches a
+# medium-liquidity V2 or long-tail V3 pool on mainnet (~$20M TVL).
+POOL_BOOTSTRAP_ETH_WEI = 5_000 * 10**18
+POOL_BOOTSTRAP_USDT_BASE = 10_000_000 * 10**6
 
 # Depth-10 Tornado tree (1024-leaf capacity); matches what was deployed
 # in week 4 and what circuits/withdraw.circom was compiled against.
