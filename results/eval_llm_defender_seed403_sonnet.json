@@ -1,0 +1,41 @@
+{
+  "attacker_run": "2026-08-16T20-20-49_defi-exploit_seed403",
+  "num_benigns": 50,
+  "num_exchanges": 3,
+  "seed": 42,
+  "llm_model": "sonnet",
+  "n_graph_nodes": 2304,
+  "n_graph_edges": 13577,
+  "n_true_actor_clusters": 1193,
+  "n_attacker_addresses": 53,
+  "baseline_cosine": {
+    "fit_time_seconds": 0.9,
+    "n_addresses": 1242,
+    "n_clusters_true": 1193,
+    "n_clusters_pred": 1213,
+    "ari": 0.1809,
+    "homogeneity": 1.0,
+    "completeness": 0.9992
+  },
+  "llm_defender": {
+    "model": "sonnet",
+    "fit_time_seconds": 132.42,
+    "cost_usd": 0.0924,
+    "input_tokens": 9398,
+    "output_tokens": 4283,
+    "used_fallback": false,
+    "reasoning": "Cluster 0 groups the three cross-exchange views of the central mixer hub 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853 (seen on exchange_A with high in/out mixer activity, exchange_B with 1-in/1-out mixer pass-through, and exchange_C with deposit/withdraw pattern), confirming it as the shared laundering nexus. Cluster 1 groups four exchange_A addresses with identical out_degree=1 mixer_deposit_out=0.69 fingerprints \u2014 classic burner wallets feeding a mixer. Cluster 2 groups two exchange_A addresses with identical in_degree=1 mixer_withdraw_in=0.69 \u2014 clean-exit wallets receiving mixer output. Cluster 3 groups two exchange_A transfer-in \u2192 mixer-deposit relay addresses (in+out, transfer_eth_in + mixer_deposit_out). Cluster 4 groups two addresses (exchange_A and exchange_B) with identical 2-in mixed withdraw fingerprints. Cluster 5 groups three exchange_A pure transfer-in receivers (in_degree=1, transfer_eth_in only, no volume). Cluster 6 pairs the high-fan-out exchange_A address (1-in, 7-out transfer dispersal) with the exchange_B 6-out transfer dispersal node \u2014 both are fund-splitting hubs. Cluster 7 pairs the two complex swap+mixer hub addresses across exchange_A and exchange_C that show USDT swap activity. Cluster 8 consolidates the near-zero isolated exchange_A nodes plus the low-confidence duplicate addresses (5FbDB, a513E checksummed) as a shell/dormant campaign. Cluster 9 is the exchange_B 3-degree mixer-deposit node unique to that exchange. Cluster 10 is the exchange_B 2-out transfer splitter. Cluster 11 groups five exchange_B transfer-in receivers with identical minimal fingerprints \u2014 a single campaign's clean-exit layer. Cluster 12 consolidates the large block of 49 exchange_B zero-feature low-confidence addresses as one dormant shell campaign. Cluster 13 groups three exchange_C addresses with identical mixer_withdraw_in \u2192 transfer_eth_out relay pattern. Cluster 14 pairs two exchange_C pure mixer-deposit senders. Cluster 15 groups ten exchange_C USDT-only structuring receivers (log_usdt_in ~5.77-6.82, transfer_usdt_in only) \u2014 a coordinated structuring campaign keeping deposits sub-CTR. Cluster 16 groups two exchange_C low-volume pass-through addresses. Cluster 17 is a singleton exchange_C transfer-out-only address. Cluster 18 groups the two exchange_C low-confidence near-zero duplicates (5FbDB and checksummed a513E).",
+    "n_addresses": 1242,
+    "n_clusters_true": 1193,
+    "n_clusters_pred": 1210,
+    "ari": 0.1338,
+    "homogeneity": 0.9992,
+    "completeness": 0.9992
+  },
+  "head_to_head": {
+    "baseline_ari": 0.1809,
+    "llm_ari": 0.1338,
+    "diff": -0.0472,
+    "verdict": "Cosine wins"
+  }
+}

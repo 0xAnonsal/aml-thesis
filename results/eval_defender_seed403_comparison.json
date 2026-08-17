@@ -1,0 +1,82 @@
+{
+  "attacker_run": "2026-08-16T20-20-49_defi-exploit_seed403",
+  "num_benigns": 50,
+  "num_exchanges": 3,
+  "seed": 42,
+  "n_graph_nodes": 2304,
+  "n_graph_edges": 13577,
+  "n_true_actor_clusters": 1193,
+  "n_attacker_addresses": 53,
+  "configs": {
+    "louvain+cosine": {
+      "fit_time_seconds": 0.2,
+      "cost_usd": 0.0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "used_fallback": false,
+      "n_addresses": 1242,
+      "n_clusters_true": 1193,
+      "n_clusters_pred": 1213,
+      "ari": 0.1809,
+      "homogeneity": 1.0,
+      "completeness": 0.9992
+    },
+    "gcn+cosine": {
+      "fit_time_seconds": 0.86,
+      "cost_usd": 0.0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "used_fallback": false,
+      "n_addresses": 1242,
+      "n_clusters_true": 1193,
+      "n_clusters_pred": 1213,
+      "ari": 0.1809,
+      "homogeneity": 1.0,
+      "completeness": 0.9992
+    },
+    "gcn+llm_haiku": {
+      "fit_time_seconds": 68.69,
+      "cost_usd": 0.0276,
+      "tokens_in": 9397,
+      "tokens_out": 3632,
+      "used_fallback": false,
+      "n_addresses": 1242,
+      "n_clusters_true": 1193,
+      "n_clusters_pred": 1213,
+      "ari": 0.118,
+      "homogeneity": 0.9992,
+      "completeness": 0.9992,
+      "reasoning": "The 106 flagged addresses cluster into 21 distinct campaigns. Cluster 0 comprises four pure mixer-deposit burners (degree=1, log_eth_out\u22480.69) consistent with one AML structuring campaign. Cluster 1 holds two pure mixer-withdrawal receivers (degree=1, log_eth_in\u22480.69), likely the corresponding withdrawal leg. Cluster 2 is the cross-exchange hub 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853, appearing on all three exchanges with medium mixer activity (in/out degree ~2\u20136, log volumes ~1.1\u20131.95). Clusters 3\u20134 are small consolidation/transfer chains (2\u20133 addresses, degree 2\u20133, primarily transfer and mixer_withdraw edges). Clusters 5\u20136 are distributor-type addresses with high out-degree and low log-volume (dust dispersal). Cluster 7 is a small 2-output transfer burner. Cluster 8 comprises five simple recipients sharing identical features (in_degree=1, transfer_eth_in only), likely change addresses in one campaign. Cluster 9 groups three similar pure-input addresses. Cluster 10 is the large, complex hub 0x9aA6eB6610a7c19653f7DaF5466F7812610dc4ba on exchange_C (degree 19, high log_eth and log_usdt, swap + mixer activity), indicating a consolidation center for a medium-sized laundering operation. Clusters 11\u201312 are mixer-withdraw-then-split pairs from exchange_C. Clusters 13\u201318 are isolated or minimal single-address/dual-address clusters with low complexity. Cluster 19 consolidates 8 isolated/near-zero nodes and one low-confidence duplicate from exchange_A, likely spam or unsuccessful connection attempts. Cluster 20 is a massive batch of 50 isolated or near-zero addresses from exchange_B (all conf=0.54), flagged but with no meaningful on-chain footprint \u2014 probable false-positive risk flags or incomplete node data. The core laundering activity is concentrated in clusters 0\u201310 and the focused chains in 11\u201318, while cluster 20 represents bulk low-signal nodes."
+    },
+    "gcn+llm_sonnet": {
+      "fit_time_seconds": 148.6,
+      "cost_usd": 0.1059,
+      "tokens_in": 9398,
+      "tokens_out": 5178,
+      "used_fallback": false,
+      "n_addresses": 1242,
+      "n_clusters_true": 1193,
+      "n_clusters_pred": 1212,
+      "ari": 0.1309,
+      "homogeneity": 0.9992,
+      "completeness": 0.9992,
+      "reasoning": "Twenty-one clusters were identified across the three exchanges. Cluster 0 is the cross-exchange pivot address 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853 (appearing on exchange_A, B, and C with varying local graph views) plus its near-zero confidence duplicates from exchange_A and exchange_C, indicating a single mixer-relay hub used by one coordinated actor. Cluster 1 groups four exchange_A addresses with identical pure mixer-deposit fingerprints (out_degree=1, log_eth_out=0.69, mixer_deposit_out=0.69) \u2014 these are sibling burner wallets funneling into a mixer. Cluster 2 groups two exchange_A mixer-withdraw receivers with identical in-degree-1 mixer_withdraw fingerprints, likely the clean-exit layer. Cluster 3 groups two exchange_A transfer-relay nodes (transfer_eth_in + mixer_deposit_out) acting as pass-through burners. Cluster 4 is a lone exchange_A mixed-source receiver (transfer+mixer_withdraw in). Cluster 5 groups three exchange_A transfer-in-only singletons (in_degree=1, transfer_eth_in, no out-edges) consistent with one campaign's final deposit addresses. Cluster 6 is the exchange_A multi-protocol hub with USDT swapping and mixer_withdraw activity, a distinct complex actor. Cluster 7 is the exchange_A distribution hub with 7 outgoing transfer edges, a fan-out consolidation node. Cluster 8 groups the seven zero-feature isolated nodes from exchange_A plus one shared low-conf address \u2014 dormant or pre-activation burners from one campaign. Cluster 9 groups two exchange_B active addresses (transfer_eth_in + mixer_deposit_out; transfer_eth_in + mixer_withdraw_in) with small-degree mixer bridge fingerprints. Cluster 10 groups two exchange_B transfer-out nodes (one fan-out with 6 edges, one dual transfer) suggesting a distribution layer campaign. Cluster 11 groups five exchange_B transfer-in singletons with identical fingerprints (in_degree=1, transfer_eth_in only) \u2014 a single campaign's receiving burners. Cluster 12 is the large batch of 49 zero-feature exchange_B addresses (conf=0.54) \u2014 a mass-registered dormant burner campaign from one actor. Cluster 13 groups three exchange_C addresses with nearly identical mixer_withdraw_in + transfer_eth_out fingerprints (in_degree=1, out_degree=2), a clean-exit layering layer. Cluster 14 is a lone exchange_C pass-through (transfer in and out, low volumes). Cluster 15 is the exchange_C complex hub 0x9aA6eB6610a7c19653f7DaF5466F7812610dc4ba with high USDT volume, multi-protocol activity, and mixer_withdraw \u2014 a major consolidation node. Cluster 16 groups two exchange_C pure mixer-deposit senders (out_degree=1, mixer_deposit_out=0.69), sibling burners. Cluster 17 is an exchange_C dual-transfer-out node (no eth values, unusual). Cluster 18 is a lone exchange_C transfer-in-only node. Cluster 19 groups ten exchange_C USDT-only inflow addresses (transfer_usdt_in, log_usdt_in ranging 5.77\u20136.82) \u2014 a clear USDT structuring campaign with sub-CTR deposits across multiple accounts. Cluster 20 holds the two cross-exchange low-confidence zero-feature addresses (exchange_A and exchange_C) that share an address string, treated as a separate dormant pair distinct from Cluster 8."
+    },
+    "gcn+llm_opus": {
+      "fit_time_seconds": 151.47,
+      "cost_usd": 0.157,
+      "tokens_in": 11282,
+      "tokens_out": 4025,
+      "used_fallback": false,
+      "n_addresses": 1242,
+      "n_clusters_true": 1193,
+      "n_clusters_pred": 1207,
+      "ari": 0.1686,
+      "homogeneity": 0.9992,
+      "completeness": 0.9992,
+      "reasoning": "Cluster 0 groups mixer-deposit-only source wallets (log_eth_out\u22480.69) across exchanges A and C \u2014 a single laundering ring's deposit siblings. Cluster 1 is the paired mixer-withdraw sink siblings on exchange A. Cluster 2 groups 2-in mixer-withdraw consolidators (A and B twins). Cluster 3 is the cross-exchange hub address 0xa513... (mixer deposit-in/withdraw-out mediator) appearing on A/B/C plus the 0x5FbD low-conf twin. Cluster 4 groups the 1-in/1-out transfer\u2192mixer-deposit relay pattern (A and B). Cluster 5 is a fan-out transfer-only distributor set (7-out on A, 6-out on B, 2-out siblings). Cluster 6 groups sink recipients with in_degree=1 transfer_eth_in fingerprint across A and B (drop wallets). Cluster 7 pairs the two large USDT+ETH swap-heavy consolidation hubs (0x025Ab on A, 0x9aA6 on C \u2014 high log_usdt\u22488\u201310). Cluster 8 groups mixer_withdraw_in\u2192transfer_eth_out exit relays on C. Cluster 9 is the small ETH pass-through pair on C. Cluster 10 is a classic STRUCTURING campaign: 10 addresses each receiving ~1 USDT deposit near log_usdt\u22486.3\u20136.8 (~$500\u20131000, sub-CTR), all in_degree=1. Cluster 11 is the exchange-A isolated-node batch (7 addresses). Clusters 12\u201318 partition the 53 exchange-B isolated-node addresses into 7 mid-sized (~7-8 addr) campaign-sized groups by address-space locality, reflecting the batch-of-many-parallel-campaigns structure typical of federated flag dumps."
+    }
+  },
+  "total_cost_usd": 0.2905,
+  "total_time_seconds": 369.82
+}
