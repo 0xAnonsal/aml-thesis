@@ -1,62 +1,62 @@
-# Sepolia deploy — TFM external validation runbook
+# Despliegue en Sepolia — runbook de validación externa del TFM
 
-End-to-end guide to deploy the mock AML contract stack on Ethereum Sepolia
-testnet. This is Task #4 in the TFM plan and unblocks Task #7 (6-8h attacker
-campaign, main external validation for chapter 5).
+Guía end-to-end para desplegar el stack de contratos AML mock sobre la testnet
+Ethereum Sepolia. Es la Task #4 del plan del TFM y desbloquea la Task #7 (campaña
+atacante de 6-8 h, la validación externa principal del capítulo 5).
 
-**Total time budget**: ~45-60 min once you have the 3 keys ready.
+**Presupuesto total de tiempo**: ~45-60 min una vez tengas listos los 3 keys.
 
-## 0. Prerequisites — keys you need
+## 0. Prerequisitos — keys que necesitas
 
-Have all three ready BEFORE starting. Missing any of them will block
-mid-deploy and you'll waste Sepolia ETH on retries.
+Tener los tres listos ANTES de empezar. Si falta alguno bloqueás el deploy a
+mitad y desperdiciás ETH Sepolia en retries.
 
-| Key                          | Where to get it                                          | Time  |
-|------------------------------|----------------------------------------------------------|-------|
-| Sepolia RPC URL              | https://dashboard.alchemy.com (Create App -> Sepolia)    | 5 min |
-| Deployer private key         | MetaMask -> Account details -> Show private key          | 1 min |
-| Etherscan API key (optional) | https://etherscan.io/myapikey                             | 3 min |
+| Key                            | Dónde obtenerlo                                            | Tiempo |
+|--------------------------------|------------------------------------------------------------|--------|
+| Sepolia RPC URL                | https://dashboard.alchemy.com (Create App → Sepolia)       | 5 min  |
+| Deployer private key           | MetaMask → Account details → Show private key              | 1 min  |
+| Etherscan API key (opcional)   | https://etherscan.io/myapikey                              | 3 min  |
 
-**SECURITY**:
-- Never paste the private key into chat, screenshots, logs, or Git.
-- The `.env.sepolia` file is gitignored. Keep it that way.
-- Even though Sepolia ETH has no dollar value, treat the key like mainnet
-  so you build safe habits.
+**SEGURIDAD**:
+- Nunca pegues la private key en chat, screenshots, logs, o Git.
+- El fichero `.env.sepolia` está gitignored. Mantenlo así.
+- Aunque el ETH Sepolia no tiene valor en dólares, trata la key como si fuera
+  mainnet para construir hábitos seguros.
 
-## 1. Local setup (one-time)
+## 1. Setup local (una sola vez)
 
 ```bash
 cd ~/aml-thesis
 
-# Confirm Foundry is installed
-~/.foundry/bin/forge --version   # should print v1.7.0 or newer
+# Confirmar que Foundry está instalado
+~/.foundry/bin/forge --version   # debería imprimir v1.7.0 o superior
 
-# Confirm Python deps
+# Confirmar dependencias Python
 conda activate aml-thesis
 python -c "from aml.chains.mimc import deploy_mimc; print('ok')"
 
-# Ensure ZK verifier is built (contracts/Verifier.sol is per-machine)
+# Asegurar que el verifier ZK está construido (contracts/Verifier.sol es per-machine)
 ls contracts/Verifier.sol || bash scripts/setup_zk.sh withdraw
 
-# Compile all contracts
+# Compilar todos los contratos
 ~/.foundry/bin/forge build
 ```
 
-## 2. Populate .env.sepolia
+## 2. Poblar .env.sepolia
 
 ```bash
 cp .env.sepolia.example .env.sepolia
-# Edit .env.sepolia with your text editor of choice.
-# Fill: SEPOLIA_RPC_URL, SEPOLIA_DEPLOYER_PRIVATE_KEY, ETHERSCAN_API_KEY (optional)
+# Editá .env.sepolia con tu editor de texto favorito.
+# Rellená: SEPOLIA_RPC_URL, SEPOLIA_DEPLOYER_PRIVATE_KEY, ETHERSCAN_API_KEY (opcional)
 ```
 
-## 3. Dry-run — verify environment without spending gas
+## 3. Dry-run — verificar entorno sin gastar gas
 
 ```bash
 python scripts/deploy_eth_mocks_sepolia.py --dry-run
 ```
 
-Expected output:
+Salida esperada:
 ```
 Sepolia RPC:        https://eth-sepolia.g.alchemy.com/v2/*** (chain_id=11155111)
 Deployer:           0x54539B5ef33cfC3C57b9b572fc77d1e5F1CFf4c4
@@ -64,49 +64,51 @@ Balance:            8.0000 ETH
 [--dry-run] Environment OK. Skipping deploy.
 ```
 
-If balance < 0.15 ETH the script will exit. Fund via Sepolia faucet before proceeding.
+Si el balance es < 0.15 ETH el script saldrá con error. Financia con el faucet
+Sepolia antes de continuar.
 
-## 4. Real deploy
+## 4. Deploy real
 
 ```bash
 python scripts/deploy_eth_mocks_sepolia.py
 ```
 
-Expected: ~5-8 minutes wall-clock (7 sequential txs, 12s Sepolia block time).
-Cost: ~0.05-0.1 ETH gas depending on Sepolia gas price.
+Esperar: ~5-8 minutos de wall-clock (7 transacciones secuenciales, 12 s de block
+time en Sepolia). Coste: ~0.05-0.1 ETH gas dependiendo del precio del momento.
 
-The script prints a summary at the end with Etherscan links for each contract.
-Addresses are also saved to `deployments/sepolia.json` for the campaign runner.
+El script imprime al final un resumen con los enlaces Etherscan de cada contrato.
+Las direcciones se guardan también en `deployments/sepolia.json` para que el
+runner de campañas las lea.
 
-## 5. Smoke test — verify deployment is operational
+## 5. Smoke test — verificar que el deploy está operativo
 
 ```bash
 python scripts/verify_sepolia_deployment.py
 ```
 
-Read-only, costs 0 ETH. Confirms:
-- All contracts have bytecode at their address (not just EOAs)
-- Pool has bootstrap liquidity
-- Tornado has correct depth + denomination
-- Bridge operator is set
+Read-only, cuesta 0 ETH. Confirma:
+- Todos los contratos tienen bytecode en su dirección (no son EOAs).
+- El pool tiene liquidez bootstrap.
+- Tornado tiene la profundidad + denominación correctas.
+- El operator del bridge está seteado.
 
-## 6. (Optional) Verify source code on Etherscan
+## 6. (Opcional) Verificar source code en Etherscan
 
-Once contracts are deployed, use Foundry to publish source. Requires
-`ETHERSCAN_API_KEY` in `.env.sepolia`.
+Una vez los contratos están desplegados, usa Foundry para publicar el source.
+Requiere `ETHERSCAN_API_KEY` en `.env.sepolia`.
 
 ```bash
-# Load .env.sepolia into current shell
+# Cargar .env.sepolia en la shell actual
 set -a; source .env.sepolia; set +a
 
-# Verify each contract. Replace 0x... with real address from deployments/sepolia.json.
+# Verificar cada contrato. Reemplaza 0x... con la dirección real de deployments/sepolia.json.
 ~/.foundry/bin/forge verify-contract \
     --chain sepolia \
     --etherscan-api-key "$ETHERSCAN_API_KEY" \
     0x<MockUSDT_ADDRESS> \
     contracts/MockUSDT.sol:MockUSDT
 
-# Pool has a constructor arg (usdt address) — need constructor-args:
+# El Pool tiene un constructor arg (usdt address) — hay que pasar --constructor-args:
 ~/.foundry/bin/forge verify-contract \
     --chain sepolia \
     --etherscan-api-key "$ETHERSCAN_API_KEY" \
@@ -123,42 +125,43 @@ set -a; source .env.sepolia; set +a
     contracts/MockTornado.sol:MockTornado
 ```
 
-Verification uploads the source to Sepolia Etherscan so anyone (Chema, TFM
-reviewers) can read the code at
+La verificación sube el source a Sepolia Etherscan para que cualquiera (Chema, los
+revisores del TFM) pueda leer el código en
 `https://sepolia.etherscan.io/address/0x<ADDR>#code`.
 
-## 7. Next step — attacker campaign (Task #7)
+## 7. Siguiente paso — campaña atacante (Task #7)
 
-Once `verify_sepolia_deployment.py` passes:
-- Deployment addresses live in `deployments/sepolia.json`
-- The 6-8h attacker campaign runner (Task #7 — separate script) will read
-  that JSON and drive real Sepolia txs through the deployed stack.
+Una vez `verify_sepolia_deployment.py` pasa:
+- Las direcciones de deploy viven en `deployments/sepolia.json`.
+- El runner de campaña atacante (Task #7 — script aparte) lee ese JSON y ejecuta
+  transacciones reales sobre Sepolia contra el stack desplegado.
 
 ## Troubleshooting
 
 **"insufficient funds for gas * price + value"**
-The deployer wallet is empty on Sepolia. Fund it via faucet.
+La wallet deployer está vacía en Sepolia. Financia por faucet.
 
 **"replacement transaction underpriced"**
-Sepolia had a pending tx from a previous attempt. Wait ~30s and retry, or
-bump `INTER_TX_SLEEP_S` in the script from 2 to 5.
+Sepolia tenía una tx pendiente de un intento previo. Espera ~30 s y reintenta,
+o sube `INTER_TX_SLEEP_S` en el script de 2 a 5.
 
-**"execution reverted" during pool bootstrap**
-Usually means USDT allowance wasn't set — verify the mint + approve txs
-succeeded on Etherscan before the bootstrap call.
+**"execution reverted" durante bootstrap del pool**
+Normalmente significa que el allowance USDT no fue seteado — verificá que las
+txs de mint + approve tuvieron éxito en Etherscan antes de la llamada bootstrap.
 
 **"Cannot connect to Sepolia RPC"**
-Test manually:
+Prueba manualmente:
 ```bash
 curl -s -X POST -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
   "$SEPOLIA_RPC_URL"
-# expected: {"jsonrpc":"2.0","id":1,"result":"0xaa36a7"}   (0xaa36a7 = 11155111)
+# esperado: {"jsonrpc":"2.0","id":1,"result":"0xaa36a7"}   (0xaa36a7 = 11155111)
 ```
 
-**Etherscan verify fails with "Unable to locate ContractCode"**
-Wait ~30-60s after deploy for Etherscan to index the address, then retry.
+**Etherscan verify falla con "Unable to locate ContractCode"**
+Espera ~30-60 s tras el deploy para que Etherscan indexe la dirección, luego
+reintenta.
 
-**MiMC deploy fails with `node: not found`**
-The MiMCSponge bytecode is generated on-demand by `scripts/zk_helpers.js`
-which requires Node. Run `bash scripts/install_zk_tools.sh` if needed.
+**MiMC deploy falla con `node: not found`**
+El bytecode de MiMCSponge se genera on-demand por `scripts/zk_helpers.js` que
+requiere Node. Ejecuta `bash scripts/install_zk_tools.sh` si es necesario.
