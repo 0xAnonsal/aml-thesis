@@ -112,20 +112,27 @@ money laundering services". Cobran 5-15% de fee.
 counterparty_kyc_level)` que emita un evento pero deje la wallet destino
 "opaca" (no siga con transfers on-chain trackables).
 
-### 2.5 Sweep no recupera ETH atrapado en pool/mixer
+### 2.5 Sweep — ETH intercambiado en pool: **RECUPERADO (2026-08-18)**
 
-**Estado:** `scripts/sweep_sepolia.py` reclama ETH y USDT de wallets con
-private key conocida. NO puede recuperar:
-- ETH depositado en `MockTornado` cuyo withdraw falló (queda locked)
-- ETH intercambiado en `MockUniswapV2Pool` por USDT (queda como
-  liquidez del pool)
+**Estado histórico**: `scripts/sweep_sepolia.py` reclamaba ETH y USDT
+de wallets con private key conocida pero no podía recuperar el ETH
+intercambiado por USDT en el pool ni el ETH depositado en Tornado
+cuyo withdraw falló.
 
-**Impacto:** cada run defi-exploit "pierde" ~1-2 ETH permanentemente en
-esos contracts. Sepolia sin valor real, pero constrained el número de
-runs por refill.
+**Mitigación aplicada 2026-08-18**: el sweep script se extendió con
+un **reverse-swap opcional post-loop** que, tras acumular el USDT en
+la wallet del deployer, ejecuta `approve` + `swapUSDTForETH` sobre
+`MockUniswapV2Pool` con slippage tolerance parametrizable (default
+$2\,\%$). El impacto en la pérdida real por corrida cae desde $\sim
+1$-$2$ ETH histórico a $\sim 0{,}07$ ETH (gas efectivo + $0{,}3\,\%$
+fee del pool).
 
-**Mitigación posible:** añadir a sweep un swap USDT→ETH via el pool para
-drenar el "residual" de las clean_exits antes de reclamar.
+**Pendiente**: el ETH depositado en `MockTornado` sigue siendo
+recuperable únicamente por el mecanismo normal (`mixer_withdraw` con
+la note original preservada); si la note se perdió, el ETH queda
+locked forever. Los runs actuales persisten las notes en
+`chain_trace.jsonl` pero no hay script auxiliar de reclamación —
+extensión de future work.
 
 ### 2.6 Sin adversario que reaccione al defender
 

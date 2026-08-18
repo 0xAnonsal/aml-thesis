@@ -9,13 +9,20 @@ budget for the next campaign run.
 Reads:
   - <run-dir>/wallets_keys.json  (gitignored, contains private keys)
   - <run-dir>/addresses.json     (public addresses + contract handles)
-  - deployments/sepolia.json     (MockUSDT contract for balance queries)
-  - .env.sepolia                 (RPC URL — deployer key not needed)
+  - deployments/sepolia.json     (MockUSDT + MockUniswapV2Pool addresses)
+  - .env.sepolia                 (RPC URL + SEPOLIA_DEPLOYER_PRIVATE_KEY)
 
-For each wallet in wallets_keys.json (other than the deployer itself):
-  1. Query ETH balance. If > estimated_gas_cost, send ETH transfer_eth
-     to deployer, leaving just enough for the tx itself.
-  2. Query USDT balance. If > 0, send transfer to deployer.
+Three phases:
+  1. Per-wallet loop: for each wallet in wallets_keys.json (other than
+     the deployer), query ETH+USDT balance; sweep USDT first (needs
+     wallet ETH for gas), then ETH; optionally rescue stranded wallets
+     that hold USDT but lack ETH for the sweep tx.
+  2. Post-loop reverse swap (opt-out via --no-reverse-swap): if the
+     deployer has accumulated USDT >= MIN_USDT_CONVERT_BASE (100),
+     approve the pool and execute swapUSDTForETH to convert the
+     stablecoin residual back to ETH via MockUniswapV2Pool. Slippage
+     tolerance defaults to 2% (--reverse-swap-slippage).
+  3. Final balance report.
 
 Uses EIP-1559 gas with 3 gwei priority (aligned with the run_sepolia_campaign
 gas floor). Rate-limits between wallets to avoid overwhelming free-tier RPC.
@@ -23,6 +30,8 @@ gas floor). Rate-limits between wallets to avoid overwhelming free-tier RPC.
 Usage:
   python scripts/sweep_sepolia.py --run-dir results/sepolia_campaign/<run-name>
   python scripts/sweep_sepolia.py --run-dir <run-dir> --dry-run
+  python scripts/sweep_sepolia.py --run-dir <run-dir> --no-reverse-swap
+  python scripts/sweep_sepolia.py --run-dir <run-dir> --reverse-swap-slippage 0.03
 """
 from __future__ import annotations
 
@@ -41,9 +50,13 @@ DEPLOYMENTS_JSON = REPO_ROOT / "deployments" / "sepolia.json"
 MIN_GAS_PRICE_GWEI = 3
 ETH_TRANSFER_GAS = 21_000
 ERC20_TRANSFER_GAS = 65_000
-INTER_WALLET_SLEEP_S = 0.5   # avoid Alchemy rate-limit
+ERC20_APPROVE_GAS = 60_000
+POOL_SWAP_GAS = 200_000       # constant-product swap w/ ERC20 transfer
+INTER_WALLET_SLEEP_S = 0.5    # avoid Alchemy rate-limit
+MIN_USDT_CONVERT_BASE = 100 * 10**6   # skip reverse swap below 100 USDT
 
 USDT_ABI_PATH = REPO_ROOT / "out" / "MockUSDT.sol" / "MockUSDT.json"
+POOL_ABI_PATH = REPO_ROOT / "out" / "MockUniswapV2Pool.sol" / "MockUniswapV2Pool.json"
 
 
 def _redact_rpc(rpc: str) -> str:
@@ -71,6 +84,44 @@ def _send_eth(w3, from_addr, from_key, to_addr, value_wei, chain_id):
         "maxFeePerGas": max_fee, "maxPriorityFeePerGas": priority,
         "chainId": chain_id,
     }
+    signed = w3.eth.account.sign_transaction(tx, private_key=from_key)
+    tx_hash = w3.eth.send_raw_transaction(_raw_tx(signed))
+    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+    return tx_hash, receipt
+
+
+def _approve_usdt(w3, usdt, from_addr, from_key, spender_addr, amount_base, chain_id):
+    """Approve `spender_addr` to spend `amount_base` USDT of `from_addr`."""
+    latest = w3.eth.get_block("latest")
+    base_fee = latest.get("baseFeePerGas") or w3.eth.gas_price
+    priority = w3.to_wei(MIN_GAS_PRICE_GWEI, "gwei")
+    max_fee = base_fee * 2 + priority
+    tx = usdt.functions.approve(spender_addr, amount_base).build_transaction({
+        "from": from_addr,
+        "nonce": w3.eth.get_transaction_count(from_addr),
+        "gas": ERC20_APPROVE_GAS,
+        "maxFeePerGas": max_fee, "maxPriorityFeePerGas": priority,
+        "chainId": chain_id,
+    })
+    signed = w3.eth.account.sign_transaction(tx, private_key=from_key)
+    tx_hash = w3.eth.send_raw_transaction(_raw_tx(signed))
+    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+    return tx_hash, receipt
+
+
+def _swap_usdt_for_eth(w3, pool, from_addr, from_key, usdt_in_base, min_out_wei, chain_id):
+    """Execute pool.swapUSDTForETH — caller must have approved `pool` first."""
+    latest = w3.eth.get_block("latest")
+    base_fee = latest.get("baseFeePerGas") or w3.eth.gas_price
+    priority = w3.to_wei(MIN_GAS_PRICE_GWEI, "gwei")
+    max_fee = base_fee * 2 + priority
+    tx = pool.functions.swapUSDTForETH(usdt_in_base, min_out_wei).build_transaction({
+        "from": from_addr,
+        "nonce": w3.eth.get_transaction_count(from_addr),
+        "gas": POOL_SWAP_GAS,
+        "maxFeePerGas": max_fee, "maxPriorityFeePerGas": priority,
+        "chainId": chain_id,
+    })
     signed = w3.eth.account.sign_transaction(tx, private_key=from_key)
     tx_hash = w3.eth.send_raw_transaction(_raw_tx(signed))
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
@@ -105,6 +156,14 @@ def main():
                         help="Do NOT top-up stranded wallets from deployer "
                              "(default: rescue is on if SEPOLIA_DEPLOYER_"
                              "PRIVATE_KEY is set)")
+    parser.add_argument("--no-reverse-swap", action="store_true",
+                        help="Do NOT convert deployer's accumulated USDT "
+                             "back to ETH via the pool at the end "
+                             "(default: reverse swap on if deployer USDT "
+                             ">= 100 and SEPOLIA_DEPLOYER_PRIVATE_KEY set)")
+    parser.add_argument("--reverse-swap-slippage", type=float, default=0.02,
+                        help="Slippage tolerance for the reverse swap "
+                             "(default 0.02 = 2%%)")
     args = parser.parse_args()
 
     keys_path = args.run_dir / "wallets_keys.json"
@@ -132,6 +191,10 @@ def main():
 
     usdt_abi = json.loads(USDT_ABI_PATH.read_text())["abi"]
     usdt = w3.eth.contract(address=usdt_addr, abi=usdt_abi)
+
+    pool_addr = deployment["contracts"]["MockUniswapV2Pool"]
+    pool_abi = json.loads(POOL_ABI_PATH.read_text())["abi"]
+    pool = w3.eth.contract(address=pool_addr, abi=pool_abi)
 
     print(f"Sweep run: {args.run_dir.name}")
     print(f"RPC:       {_redact_rpc(rpc)}")
@@ -245,7 +308,52 @@ def main():
     print(f"  Stranded wallets rescued: {n_rescued} (unlocked {total_usdt_rescued/1e6:,.2f} USDT)")
     print(f"  ETH stranded (below gas threshold): {total_eth_stranded/1e18:.6f}")
 
+    # Reverse swap: convert deployer's accumulated USDT back to ETH
+    # via the pool. Runs only if enabled, deployer key available, and
+    # balance above the min threshold (100 USDT ~ 0.053 ETH at spot,
+    # below which the swap gas cost dominates the recovery).
+    reverse_swap_enabled = (
+        deployer_key is not None
+        and not args.no_reverse_swap
+        and not args.dry_run
+    )
+    if reverse_swap_enabled:
+        deployer_usdt_now = usdt.functions.balanceOf(deployer).call()
+        if deployer_usdt_now >= MIN_USDT_CONVERT_BASE:
+            reserve_eth, reserve_usdt = pool.functions.getReserves().call()
+            expected_eth_wei = pool.functions.getAmountOut(
+                deployer_usdt_now, reserve_usdt, reserve_eth
+            ).call()
+            min_out_wei = int(expected_eth_wei * (1.0 - args.reverse_swap_slippage))
+
+            print()
+            print(f"=== Reverse swap deployer USDT -> ETH ===")
+            print(f"  Deployer USDT:  {deployer_usdt_now/1e6:,.2f}")
+            print(f"  Pool reserves:  {reserve_eth/1e18:.4f} ETH / {reserve_usdt/1e6:,.2f} USDT")
+            print(f"  Expected ETH:   {expected_eth_wei/1e18:.6f}")
+            print(f"  Min ETH out:    {min_out_wei/1e18:.6f} "
+                  f"(slippage tol {args.reverse_swap_slippage*100:.1f}%)")
+
+            try:
+                _approve_usdt(w3, usdt, deployer, deployer_key,
+                              pool_addr, deployer_usdt_now, w3.eth.chain_id)
+                time.sleep(INTER_WALLET_SLEEP_S)
+                tx_hash, receipt = _swap_usdt_for_eth(
+                    w3, pool, deployer, deployer_key,
+                    deployer_usdt_now, min_out_wei, w3.eth.chain_id,
+                )
+                actual_eth_wei = receipt.get("logs")  # from event, if we parsed
+                print(f"  Swap tx:        {tx_hash.hex()}  (status={receipt.status})")
+                print(f"  Recovered:      ~{expected_eth_wei/1e18:.6f} ETH")
+            except Exception as e:
+                print(f"  REVERSE SWAP FAILED: {e}")
+        else:
+            print(f"\nDeployer USDT ({deployer_usdt_now/1e6:.2f}) below "
+                  f"reverse-swap threshold ({MIN_USDT_CONVERT_BASE/1e6:.0f}). "
+                  f"Skipping conversion.")
+
     if not args.dry_run:
+        print()
         print(f"Deployer balance AFTER: {w3.eth.get_balance(deployer)/1e18:.4f} ETH")
         print(f"Deployer USDT AFTER:    {usdt.functions.balanceOf(deployer).call()/1e6:,.2f}")
         print(f"\nOnce satisfied, delete {keys_path} to remove private keys from disk.")
