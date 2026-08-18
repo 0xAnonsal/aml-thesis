@@ -1000,11 +1000,20 @@ class ToolDispatcher:
         mixer_events_from_block: int = 0,
         logs_rpc_url: str | None = None,
         laundering_target_usd: float | None = None,
+        notes_file: Any = None,
     ):
         self.w3 = w3
         self.usdt = usdt_contract
         self.pool = pool_contract
         self.tornado = tornado_contract
+        # Path to a JSONL file where every mixer deposit note is appended
+        # as {ts, from, tx_hash, leaf_index, commitment, note}. Safety net:
+        # if the sub-agent's memory is lost (crash, halt, LLM context
+        # eviction) or if a withdraw fails, the notes persist on disk so
+        # a manual recovery script can still redeem the locked ETH later.
+        # None = disabled (Anvil ephemeral runs where recovery doesn't
+        # matter). Runners MUST set this for Sepolia.
+        self.notes_file: Any = notes_file
         # Laundering target in USD — used to derive the max burner count.
         # Cap = max(30, min(250, 3 * ceil(usd / 999))), aligned with the
         # "moderate professional" laundering profile documented in AML
@@ -2801,10 +2810,34 @@ class ToolDispatcher:
         except Exception:   # noqa: BLE001 — leaf_index is optional
             pass
 
+        note = _encode_note(nullifier, secret)
+        # Safety-net persistence (if enabled by runner). Written IMMEDIATELY
+        # after receipt so a subsequent LLM eviction / crash / halt cannot
+        # lose the note. Each line is a self-contained JSON record that a
+        # separate `scripts/mixer_recover.py` can read to redeem locked ETH.
+        if self.notes_file is not None:
+            try:
+                import json as _json
+                import time as _time
+                from pathlib import Path as _Path
+                _p = _Path(self.notes_file)
+                _p.parent.mkdir(parents=True, exist_ok=True)
+                with _p.open("a") as _f:
+                    _f.write(_json.dumps({
+                        "ts": _time.time(),
+                        "tx_hash": tx_hash.hex(),
+                        "from_address": from_address,
+                        "leaf_index": leaf_index,
+                        "commitment": "0x" + commitment_bytes.hex(),
+                        "note": note,
+                    }) + "\n")
+            except Exception:   # noqa: BLE001 — never let persistence break a deposit
+                pass
+
         return ToolResult(output={
             "tx_hash": tx_hash.hex(),
             "from_address": from_address,
-            "deposit_note": _encode_note(nullifier, secret),
+            "deposit_note": note,
             "commitment": "0x" + commitment_bytes.hex(),
             "leaf_index": leaf_index,
             "amount_eth": _MIXER_DENOMINATION_WEI / 10**18,
@@ -2932,44 +2965,87 @@ class ToolDispatcher:
         except Exception as e:
             return ToolResult(error=f"Failed to read mixer nullifier state: {e}")
 
-        # Rebuild the Merkle tree from on-chain Deposit events.
-        try:
-            leaves, leaf_index = self._mixer_collect_leaves(commitment_int)
-        except RuntimeError as e:
-            return ToolResult(error=str(e))
-        if leaf_index is None:
+        # Rebuild the Merkle tree from on-chain Deposit events. Retry up
+        # to 3 times if the reconstructed root isn't in the on-chain
+        # history — the failure mode is a pagination/RPC race where some
+        # Deposit events are missed by the initial scan, producing an
+        # off-by-N leaf set whose root the contract doesn't recognise.
+        # Re-scanning with a slight delay picks up the missing events.
+        # Root cause of the 2026-08-18 Sepolia seed 500 withdraw failure
+        # that locked 9 ETH in the mixer (see chapter 5 §5.6.5).
+        import time as _t
+        leaves = None
+        leaf_index = None
+        prepared = None
+        root_bytes = None
+        last_error = None
+        for attempt in range(3):
+            try:
+                leaves, leaf_index = self._mixer_collect_leaves(commitment_int)
+            except RuntimeError as e:
+                last_error = str(e)
+                _t.sleep(2 ** attempt)  # 1s, 2s, 4s backoff
+                continue
+            if leaf_index is None:
+                # Deposit event not yet visible to the RPC — wait and rescan
+                # (the deposit tx may have confirmed 1-2 blocks ago and
+                # eth_getLogs on some providers lags briefly).
+                last_error = (
+                    "Commitment not found in the mixer — this note was never "
+                    "deposited (or was deposited to a different mixer instance)"
+                )
+                _t.sleep(2 ** attempt)
+                continue
+            # Build Merkle path for candidate root
+            try:
+                with tempfile.TemporaryDirectory() as tmp:
+                    tmp_path = Path(tmp)
+                    leaves_file = tmp_path / "leaves.json"
+                    leaves_file.write_text(json.dumps([str(x) for x in leaves]))
+                    prepared = json.loads(_run_zk_helper(
+                        "merkle-path", str(_MERKLE_DEPTH), str(leaf_index),
+                        str(leaves_file),
+                    ))
+                root_int = int(prepared["root"])
+                root_bytes = root_int.to_bytes(32, "big")
+            except RuntimeError as e:
+                last_error = f"Merkle path computation failed: {e}"
+                _t.sleep(2 ** attempt)
+                continue
+            # Verify root is known on-chain — if yes we can proceed
+            try:
+                if self.tornado.functions.isKnownRoot(root_bytes).call():
+                    break   # ✓ root recognised, exit retry loop
+                else:
+                    last_error = (
+                        f"Reconstructed Merkle root not known on-chain "
+                        f"(attempt {attempt + 1}/3): local root computed from "
+                        f"{len(leaves)} leaves does not match any of the last "
+                        f"ROOT_HISTORY_SIZE contract roots. Likely cause: "
+                        f"eth_getLogs missed some Deposit events during the "
+                        f"pagination scan. Retrying."
+                    )
+                    _t.sleep(2 ** attempt)
+                    continue
+            except Exception as e:
+                last_error = f"Failed to verify Merkle root: {e}"
+                _t.sleep(2 ** attempt)
+                continue
+        else:
+            # All 3 attempts exhausted without a recognised root
             return ToolResult(error=(
-                "Commitment not found in the mixer — this note was never "
-                "deposited (or was deposited to a different mixer instance)"
+                f"Off-chain leaf set out of sync with the contract after 3 "
+                f"retries. Last error: {last_error}. This is the Sepolia RPC "
+                f"race condition documented in chapter 5 §5.6.5; if the "
+                f"deposit note is preserved (e.g. via ToolDispatcher.notes_file), "
+                f"a manual recovery via scripts/mixer_recover.py can retry "
+                f"the withdrawal later when the tree is quiescent."
             ))
 
-        # Generate the Groth16 proof in an isolated temp dir.
+        # `prepared` and `root_bytes` are populated by the successful
+        # iteration of the retry loop above. Now build the Groth16 proof.
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            try:
-                leaves_file = tmp_path / "leaves.json"
-                leaves_file.write_text(json.dumps([str(x) for x in leaves]))
-                prepared = json.loads(_run_zk_helper(
-                    "merkle-path", str(_MERKLE_DEPTH), str(leaf_index),
-                    str(leaves_file),
-                ))
-            except RuntimeError as e:
-                return ToolResult(error=f"Merkle path computation failed: {e}")
-
-            root_int = int(prepared["root"])
-            root_bytes = root_int.to_bytes(32, "big")
-
-            # Defensive: the root we reconstructed must be one the contract
-            # still has in its bounded history.
-            try:
-                if not self.tornado.functions.isKnownRoot(root_bytes).call():
-                    return ToolResult(error=(
-                        "Reconstructed Merkle root is not known on-chain — the "
-                        "off-chain leaf set is out of sync with the contract"
-                    ))
-            except Exception as e:
-                return ToolResult(error=f"Failed to verify Merkle root: {e}")
-
             circuit_input = {
                 "root": prepared["root"],
                 "nullifierHash": str(nullifier_hash_int),

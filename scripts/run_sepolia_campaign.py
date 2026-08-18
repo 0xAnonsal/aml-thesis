@@ -354,6 +354,13 @@ def main():
         mixer_events_from_block=tornado_deploy_block,
         logs_rpc_url=logs_rpc_url,
         laundering_target_usd=usd_stolen_preview,
+        # Persist every mixer deposit note to disk immediately upon
+        # confirmation. Safety net against the 2026-08-18 seed 500
+        # incident where 9 ETH were locked in the mixer because the
+        # sub-agent's context (holding the notes) was lost after the
+        # Merkle-root-desync errors triggered a halt. Consumed by
+        # scripts/mixer_recover.py for manual reclaim.
+        notes_file=out_dir / "mixer_notes.jsonl",
     )
     # Multi-funder pool for gas obfuscation. On Sepolia we keep a smaller
     # bootstrap amount per funder to avoid burning deployer ETH — 0.2 ETH
