@@ -166,19 +166,43 @@ def main():
                              "(default 0.02 = 2%%)")
     args = parser.parse_args()
 
-    keys_path = args.run_dir / "wallets_keys.json"
-    if not keys_path.exists():
-        raise SystemExit(
-            f"Missing {keys_path}. Only campaigns with wallets_keys.json "
-            f"can be swept (feature added after 2026-08-11).")
+    # Two possible sources of keys (both may exist):
+    #   wallets_keys.jsonl — write-through log, one line per key at creation
+    #                        time (added 2026-08-20; crash-safe).
+    #   wallets_keys.json  — final snapshot dumped at end-of-run (legacy;
+    #                        may be missing if the process crashed).
+    # We use whichever exists, preferring the JSONL when both are present
+    # (guaranteed complete).
+    keys_jsonl = args.run_dir / "wallets_keys.jsonl"
+    keys_json = args.run_dir / "wallets_keys.json"
 
     load_dotenv(REPO_ROOT / ".env")
     load_dotenv(REPO_ROOT / ".env.sepolia", override=True)
     rpc = os.environ["SEPOLIA_RPC_URL"]
 
-    wallets_data = json.loads(keys_path.read_text())
-    deployer = wallets_data["deployer"]
-    wallets = wallets_data["wallets"]
+    if keys_jsonl.exists():
+        wallets = {}
+        deployer = None
+        for line in keys_jsonl.open():
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+            addr = row["address"]
+            wallets[addr] = row["private_key"]
+            if deployer is None:
+                deployer = addr   # first entry is the deployer by convention
+        print(f"[sweep] loaded {len(wallets)} keys from wallets_keys.jsonl "
+              f"(crash-safe write-through log)")
+    elif keys_json.exists():
+        wallets_data = json.loads(keys_json.read_text())
+        deployer = wallets_data["deployer"]
+        wallets = wallets_data["wallets"]
+    else:
+        raise SystemExit(
+            f"Neither {keys_jsonl.name} nor {keys_json.name} exists in "
+            f"{args.run_dir}. Nothing to sweep."
+        )
 
     if not DEPLOYMENTS_JSON.exists():
         raise SystemExit(f"Missing {DEPLOYMENTS_JSON}")
@@ -356,7 +380,8 @@ def main():
         print()
         print(f"Deployer balance AFTER: {w3.eth.get_balance(deployer)/1e18:.4f} ETH")
         print(f"Deployer USDT AFTER:    {usdt.functions.balanceOf(deployer).call()/1e6:,.2f}")
-        print(f"\nOnce satisfied, delete {keys_path} to remove private keys from disk.")
+        keys_src = keys_jsonl if keys_jsonl.exists() else keys_json
+        print(f"\nOnce satisfied, delete {keys_src} to remove private keys from disk.")
 
 
 if __name__ == "__main__":

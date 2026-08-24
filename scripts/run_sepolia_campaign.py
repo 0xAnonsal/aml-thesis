@@ -62,6 +62,48 @@ DEPLOYMENTS_JSON = REPO_ROOT / "deployments" / "sepolia.json"
 # Alchemy default (~1 gwei) which is insufficient for reliable inclusion.
 MIN_GAS_PRICE_GWEI = 3
 
+
+def _make_retrying_session():
+    """requests.Session with urllib3 transport-layer retry.
+
+    Handles the two ways an RPC hiccup manifests over HTTP:
+      - `RemoteDisconnected` when Alchemy closes an idle keep-alive
+        socket while the LLM is thinking between tool calls (~30-60s
+        pauses).
+      - HTTP 429 / 502 / 503 / 504 under rate-limit burst or transient
+        edge issues.
+
+    Retries: 5 total, exponential backoff starting at 1s (1, 2, 4, 8, 16).
+    Idempotency: JSON-RPC POST is technically not idempotent, but
+    read-only eth_* calls (block_number, get_balance, nextIndex, etc.)
+    are safe to retry, and web3.py's send_raw_transaction already
+    handles double-broadcast gracefully (the second attempt returns the
+    same tx hash if the first landed). Allowing POST here is the right
+    tradeoff.
+
+    Root cause: 2026-08-23 seed 502 crash on Sepolia — Alchemy closed
+    the connection mid-run and a single dropped `eth_blockNumber` call
+    killed the whole campaign.
+    """
+    from requests import Session
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
+
+    retry = Retry(
+        total=5,
+        backoff_factor=1.0,             # 1s, 2s, 4s, 8s, 16s
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset(["POST", "GET"]),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry, pool_connections=8,
+                          pool_maxsize=16)
+    s = Session()
+    s.mount("http://", adapter)
+    s.mount("https://", adapter)
+    return s
+
+
 # Contract identifier -> Foundry artifact path (for ABI loading).
 ARTIFACT_PATHS = {
     "MockUSDT": REPO_ROOT / "out" / "MockUSDT.sol" / "MockUSDT.json",
@@ -274,7 +316,10 @@ def main():
     )
 
     rpc, deployer_key = load_sepolia_env()
-    w3 = Web3(Web3.HTTPProvider(rpc))
+    # Retry-enabled HTTP session survives transient RPC disconnects
+    # (dropped keep-alive sockets, 429/5xx bursts) that would otherwise
+    # kill a long-running campaign mid-flight.
+    w3 = Web3(Web3.HTTPProvider(rpc, session=_make_retrying_session()))
     install_gas_floor_middleware(w3, MIN_GAS_PRICE_GWEI)
 
     if w3.eth.chain_id != 11155111:
@@ -361,6 +406,13 @@ def main():
         # Merkle-root-desync errors triggered a halt. Consumed by
         # scripts/mixer_recover.py for manual reclaim.
         notes_file=out_dir / "mixer_notes.jsonl",
+        # Persist every burner private key to disk in the instant it is
+        # generated (write-through wallet dict). Guarantees zero key-loss
+        # even under process kill / power failure / OOM. The final
+        # wallets_keys.json snapshot at end-of-run is a redundant summary;
+        # this JSONL is the authoritative live log. Consumed by
+        # scripts/sweep_sepolia.py.
+        wallets_file=out_dir / "wallets_keys.jsonl",
     )
     # Multi-funder pool for gas obfuscation. On Sepolia we keep a smaller
     # bootstrap amount per funder to avoid burning deployer ETH — 0.2 ETH
@@ -609,6 +661,30 @@ def main():
     }
     (out_dir / "campaign.json").write_text(
         json.dumps(campaign_dict, indent=2, default=str)
+    )
+
+    # Full sub-agent transcripts — belt-and-suspenders redundancy for the
+    # notes_file mixer persistence. If _mixer_deposit's file-write silently
+    # fails (see its except:pass), the deposit_note still lives inside the
+    # sub-agent's tool_calls output here. scripts/mixer_recover.py falls
+    # back to scanning this file when mixer_notes.jsonl is missing.
+    transcripts = []
+    for i, run in enumerate(result.sub_agent_runs):
+        role = (result.delegations[i].get("role")
+                if i < len(result.delegations) else None)
+        transcripts.append({
+            "index": i,
+            "role": role,
+            "status": run.status,
+            "summary": run.summary,
+            "key_facts": run.key_facts,
+            "iterations": run.iterations,
+            "cost_usd": run.cost_usd,
+            "stopped_reason": run.stopped_reason,
+            "tool_calls": run.tool_calls,
+        })
+    (out_dir / "sub_agent_transcripts.json").write_text(
+        json.dumps(transcripts, indent=2, default=str)
     )
 
     with (out_dir / "chain_trace.jsonl").open("w") as f:

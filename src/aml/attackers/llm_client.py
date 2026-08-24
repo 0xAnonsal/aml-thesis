@@ -33,10 +33,13 @@ no-op — no error, just cache_creation_tokens=0):
 """
 from __future__ import annotations
 
+import sys
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
 import anthropic
+import httpx
 
 
 # Alias → (model_id, input $/M, output $/M)
@@ -100,22 +103,47 @@ class LLMClient:
     agent's spend. The underlying SDK client is created in __init__ and reused;
     the SDK handles HTTP retries (429, 5xx) automatically with exponential
     backoff.
+
+    Timeout hardening (post 2026-08-23 seed 503 hang incident):
+    - Explicit per-phase httpx.Timeout: 10s connect, 180s read, 30s write, 10s pool.
+      Prevents the observed failure where the previous single `timeout=600.0`
+      collapsed all phases into one and the process hung for 55+ minutes on
+      what should have been a fast call. Anthropic's typical p99 for a single
+      Sonnet response is <90s even with heavy context, so 180s is generous.
+    - `max_retries=3` (was 2) → up to 4 total attempts on transient failures.
+    - Every `complete()` call prints a timestamp + duration to stderr so
+      future hangs are visible in the log stream rather than silently
+      swallowed.
     """
 
     def __init__(
         self,
         *,
         api_key: str | None = None,
-        max_retries: int = 2,
-        timeout: float = 600.0,
+        max_retries: int = 3,
+        timeout: float | httpx.Timeout | None = None,
+        verbose: bool = True,
     ):
         # api_key=None → SDK reads ANTHROPIC_API_KEY env var
+        if timeout is None:
+            # Per-phase timeout — connect/read/write/pool. A single-number
+            # timeout in httpx applies to ALL phases identically, which
+            # under some server conditions produced a hang the SDK never
+            # recovered from. Explicit phases let each drop independently.
+            timeout = httpx.Timeout(connect=10.0, read=180.0,
+                                    write=30.0, pool=10.0)
         self._client = anthropic.Anthropic(
             api_key=api_key,
             max_retries=max_retries,
             timeout=timeout,
         )
         self.usage = UsageSummary()
+        self._verbose = verbose
+
+    def _log(self, msg: str) -> None:
+        if self._verbose:
+            print(f"[llm {time.strftime('%H:%M:%S')}] {msg}", file=sys.stderr,
+                  flush=True)
 
     @staticmethod
     def resolve_model(alias_or_id: str) -> str:
@@ -208,7 +236,19 @@ class LLMClient:
         if extra:
             kwargs.update(extra)
 
-        response = self._client.messages.create(**kwargs)
+        self._log(f"→ {model_id} max_tokens={max_tokens} "
+                  f"messages={len(msg_list)} tools={len(tools) if tools else 0}")
+        _t0 = time.time()
+        try:
+            response = self._client.messages.create(**kwargs)
+        except (anthropic.APITimeoutError, httpx.TimeoutException) as e:
+            self._log(f"✗ TIMEOUT after {time.time()-_t0:.1f}s ({type(e).__name__})")
+            raise
+        except anthropic.APIStatusError as e:
+            self._log(f"✗ API error status={e.status_code} after {time.time()-_t0:.1f}s")
+            raise
+        self._log(f"← {model_id} {time.time()-_t0:.1f}s "
+                  f"stop={getattr(response, 'stop_reason', '?')}")
 
         # Concatenate text blocks; tool_use / thinking blocks live in `raw`.
         text = "".join(block.text for block in response.content if block.type == "text")

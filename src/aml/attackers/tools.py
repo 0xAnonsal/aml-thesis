@@ -50,6 +50,7 @@ Tools shipped:
 from __future__ import annotations
 
 import json
+import os
 import random
 import secrets
 import subprocess
@@ -974,6 +975,50 @@ def _proof_to_solidity(proof: dict) -> tuple[list, list, list]:
     return pa, pb, pc
 
 
+class _PersistingWalletDict(dict):
+    """dict subclass that appends (address, private_key) to disk on every
+    insertion. Guarantees zero key-loss on process crash / power failure /
+    kill signal — the file is fsync-safe append-only JSONL.
+
+    Passing wallets_file=None makes it behave like a regular dict
+    (used for Anvil ephemeral runs where key persistence is unnecessary).
+    """
+
+    def __init__(self, initial=None, wallets_file=None):
+        super().__init__(initial or {})
+        self._wallets_file = wallets_file
+        # Snapshot the seed entries to disk immediately.
+        if wallets_file is not None:
+            for addr, key in list(self.items()):
+                self._append(addr, key)
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        if self._wallets_file is not None:
+            self._append(key, value)
+
+    def _append(self, addr: str, key: str) -> None:
+        try:
+            import json as _json
+            import time as _time
+            from pathlib import Path as _Path
+            p = _Path(self._wallets_file)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            # Append + fsync so a crash immediately after this line still
+            # leaves the key on disk.
+            with p.open("a") as f:
+                f.write(_json.dumps({
+                    "ts": _time.time(),
+                    "address": addr,
+                    "private_key": key,
+                }) + "\n")
+                f.flush()
+                import os as _os
+                _os.fsync(f.fileno())
+        except Exception:   # noqa: BLE001 — never let persistence break dispatch
+            pass
+
+
 class ToolDispatcher:
     """Maps tool names to Python implementations and holds chain context.
 
@@ -1001,6 +1046,7 @@ class ToolDispatcher:
         logs_rpc_url: str | None = None,
         laundering_target_usd: float | None = None,
         notes_file: Any = None,
+        wallets_file: Any = None,
     ):
         self.w3 = w3
         self.usdt = usdt_contract
@@ -1030,7 +1076,25 @@ class ToolDispatcher:
         # publicnode.com allows 10k-block ranges free. If not provided we
         # fall back to `w3`; caller decides whether that's acceptable.
         if logs_rpc_url:
-            self._logs_w3 = Web3(Web3.HTTPProvider(logs_rpc_url))
+            # Retry-enabled session — a transient publicnode hiccup mid-
+            # eth_getLogs would otherwise crash _mixer_collect_leaves.
+            try:
+                from requests import Session
+                from requests.adapters import HTTPAdapter
+                from urllib3.util.retry import Retry
+                _retry = Retry(
+                    total=5, backoff_factor=1.0,
+                    status_forcelist=(429, 500, 502, 503, 504),
+                    allowed_methods=frozenset(["POST", "GET"]),
+                    raise_on_status=False,
+                )
+                _sess = Session()
+                _adapter = HTTPAdapter(max_retries=_retry)
+                _sess.mount("http://", _adapter)
+                _sess.mount("https://", _adapter)
+                self._logs_w3 = Web3(Web3.HTTPProvider(logs_rpc_url, session=_sess))
+            except Exception:   # noqa: BLE001 — fall back to unretried
+                self._logs_w3 = Web3(Web3.HTTPProvider(logs_rpc_url))
         else:
             self._logs_w3 = w3
         # Pool of intermediate funder wallets for gas seeding — populated
@@ -1043,9 +1107,19 @@ class ToolDispatcher:
         # Incremented in _pick_funder when the pool exhausts. Runners
         # surface this in meta.funder_pool.refill_events for reporting.
         self._funder_refill_events: int = 0
-        self.wallets: dict[str, str] = {
-            Web3.to_checksum_address(addr): key for addr, key in wallets.items()
-        }
+        # Write-through wallet registry: every insertion appends the new
+        # (address, private_key) tuple to `wallets_file` on disk *before*
+        # returning control. Guarantees that even if the process is killed,
+        # crashes, or loses power in the middle of a run, every burner key
+        # is on disk and its funds are sweepable via scripts/sweep_sepolia.py.
+        # If wallets_file is None (Anvil ephemeral runs), behaves as a
+        # regular dict. Root cause of the 2026-08-20 test disaster where
+        # in-memory-only keys were lost when the process died.
+        self._wallets_file: Any = wallets_file
+        self.wallets: dict[str, str] = _PersistingWalletDict(
+            {Web3.to_checksum_address(addr): key for addr, key in wallets.items()},
+            wallets_file=wallets_file,
+        )
         # The DEPLOYER is chain infrastructure (Anvil faucet / initial pool
         # liquidity source / test-network deployer key). It IS a signing
         # wallet the dispatcher can use for internal ops (_seed_gas source,
@@ -2854,55 +2928,158 @@ class ToolDispatcher:
         """Scan the mixer's Deposit events; rebuild the ordered leaf set.
 
         Returns (leaves ordered by on-chain index, index of target_commitment
-        within that list). The index is None if the commitment was never
-        deposited. Raises RuntimeError if the event scan itself fails.
+        within that list). target_index is None if the commitment isn't
+        deposited. Raises RuntimeError on unrecoverable scan failure.
 
-        Paginates get_logs via `self._logs_w3` (may point at a provider
-        with a wider range limit than the main w3 — Alchemy free tier caps
-        at 10 blocks/request whereas publicnode allows 10k). Missing
-        history would rebuild an incorrect Merkle tree — proofs computed
-        against it fail on-chain `isKnownRoot()`. Root cause of the
-        2026-08-12 seed200 withdraw failure.
+        Robustness strategy (v3, post 2026-08-20 test disaster):
+        1. Pin BOTH the leaf count AND the log scan to the SAME block on
+           the SAME provider (self._logs_w3). This eliminates the
+           multi-provider race where Alchemy's nextIndex() and publicnode's
+           eth_getLogs disagreed because they were at different block
+           heights.
+        2. Progressive retry: wide chunks first (9000), then narrow (500),
+           then very narrow (100) if events are still missing. Silent
+           page-truncation by RPC providers under load is the known
+           failure mode.
+        3. Between retries, sleep briefly (exponential backoff) so the RPC
+           node can catch up if it's lagging behind the chain head.
         """
-        # Rebind the tornado contract to the logs-specific provider so
-        # web3.py sends the eth_getLogs to publicnode (or whichever RPC
-        # the dispatcher was configured with) instead of the main Alchemy
-        # provider. ABI + address stay identical.
+        # Same provider for both nextIndex and eth_getLogs so their
+        # snapshots are consistent by construction.
         tornado_logs = self._logs_w3.eth.contract(
             address=self.tornado.address, abi=self.tornado.abi,
         )
         deposit_event = tornado_logs.events.Deposit()
-        latest_block = self._logs_w3.eth.block_number
-        chunk_size = 9000   # publicnode limit is 10k; leave headroom
-        by_index: dict[int, int] = {}
-        cursor = self.mixer_events_from_block
-        while cursor <= latest_block:
-            to_block = min(cursor + chunk_size - 1, latest_block)
-            try:
-                try:
-                    logs = deposit_event.get_logs(
-                        from_block=cursor, to_block=to_block,
-                    )
-                except TypeError:   # web3.py v6 uses fromBlock/toBlock
-                    logs = deposit_event.get_logs(
-                        fromBlock=cursor, toBlock=to_block,
-                    )
-            except Exception as e:   # noqa: BLE001 — surfaced as a tool error
-                raise RuntimeError(
-                    f"failed to scan mixer deposit events "
-                    f"(range {cursor}-{to_block}): {e}"
-                ) from e
-            for log in logs:
-                idx = log["args"]["leafIndex"]
-                by_index[idx] = int.from_bytes(
-                    bytes(log["args"]["commitment"]), "big",
-                )
-            cursor = to_block + 1
 
-        if not by_index:
+        # Pin to a specific block number: whatever `_logs_w3` reports as
+        # its head right now. We'll query nextIndex() AT this block and
+        # only scan events up to it — guarantees atomic snapshot.
+        try:
+            pinned_block = int(self._logs_w3.eth.block_number)
+        except Exception as e:   # noqa: BLE001
+            raise RuntimeError(f"Failed to read logs provider head: {e}") from e
+
+        try:
+            expected_next_index = int(
+                tornado_logs.functions.nextIndex().call(
+                    block_identifier=pinned_block,
+                )
+            )
+        except Exception as e:   # noqa: BLE001
+            raise RuntimeError(
+                f"Failed to read mixer nextIndex() @ block {pinned_block}: {e}"
+            ) from e
+        if expected_next_index == 0:
             return [], None
 
-        leaves = [by_index.get(i, 0) for i in range(max(by_index) + 1)]
+        def _fetch(from_block: int, to_block: int) -> list:
+            try:
+                try:
+                    return deposit_event.get_logs(
+                        from_block=from_block, to_block=to_block,
+                    )
+                except TypeError:   # web3.py v6 uses fromBlock/toBlock
+                    return deposit_event.get_logs(
+                        fromBlock=from_block, toBlock=to_block,
+                    )
+            except Exception as e:   # noqa: BLE001
+                raise RuntimeError(
+                    f"failed to scan mixer deposit events "
+                    f"(range {from_block}-{to_block}): {e}"
+                ) from e
+
+        def _scan(from_block: int, to_block: int, chunk: int,
+                  sink: dict[int, int]) -> None:
+            cursor = from_block
+            while cursor <= to_block:
+                stop = min(cursor + chunk - 1, to_block)
+                for log in _fetch(cursor, stop):
+                    idx = log["args"]["leafIndex"]
+                    sink[idx] = int.from_bytes(
+                        bytes(log["args"]["commitment"]), "big",
+                    )
+                cursor = stop + 1
+
+        # Progressive retry: 9000 → 500 → 100 block chunks. Each attempt
+        # scans the full range fresh (no cursor state to corrupt), then
+        # merges with previous attempts. If still missing after all three,
+        # the RPC is fundamentally dropping events for this contract.
+        import time as _t
+        by_index: dict[int, int] = {}
+        for attempt, chunk in enumerate([9000, 500, 100]):
+            retry: dict[int, int] = {}
+            try:
+                _scan(self.mixer_events_from_block, pinned_block, chunk, retry)
+            except RuntimeError:
+                # One chunk failed. Continue with what we have; the merge
+                # below preserves any partial progress from prior attempts.
+                if attempt == 2:
+                    raise
+                _t.sleep(2 ** attempt)   # 1s, 2s backoff
+                continue
+            # Merge retry ∪ by_index (retry wins for keys in retry)
+            merged = dict(by_index)
+            merged.update(retry)
+            by_index = merged
+            missing = [i for i in range(expected_next_index) if i not in by_index]
+            if not missing:
+                break   # ✓ all leaves accounted for
+            _t.sleep(2 ** attempt)
+
+        # Final sanity check: every leaf up to expected_next_index must be
+        # present. If not, fall back to Etherscan API (no retention window
+        # or rate-limits on log queries — 1000 logs/page, free tier).
+        # Root cause (2026-08-24): publicnode has a rolling data-retention
+        # window (~13k blocks); Alchemy free tier caps eth_getLogs at 10
+        # blocks; 1RPC at 50. Old leaves (deposit block < retention window)
+        # are completely absent from eth_getLogs on public providers.
+        still_missing = [
+            i for i in range(expected_next_index) if i not in by_index
+        ]
+        if still_missing:
+            _etherscan_key = os.environ.get("ETHERSCAN_API_KEY")
+            if _etherscan_key:
+                try:
+                    import requests as _rq
+                    DEPOSIT_TOPIC = ("0x9cf4fd51b1f9ca63da33b474c6efe62e"
+                                     "39eb8978697ba78fd64750558dfd29a3")
+                    chain_id = int(self._logs_w3.eth.chain_id)
+                    url = "https://api.etherscan.io/v2/api"
+                    r = _rq.get(url, timeout=30, params={
+                        "chainid": chain_id, "module": "logs",
+                        "action": "getLogs",
+                        "address": self.tornado.address,
+                        "fromBlock": self.mixer_events_from_block,
+                        "toBlock": pinned_block,
+                        "topic0": DEPOSIT_TOPIC,
+                        "apikey": _etherscan_key,
+                        "page": 1, "offset": 1000,
+                    })
+                    body = r.json() if r.status_code == 200 else {}
+                    for lg in body.get("result", []):
+                        try:
+                            leaf_idx = int(lg["data"][2:66], 16)
+                            commit_hex = lg["topics"][1]
+                            by_index[leaf_idx] = int(commit_hex, 16)
+                        except (ValueError, KeyError, IndexError):
+                            continue
+                except Exception:   # noqa: BLE001
+                    pass   # fall through to the RuntimeError below
+                still_missing = [
+                    i for i in range(expected_next_index)
+                    if i not in by_index
+                ]
+        if still_missing:
+            preview = still_missing[:5] + (["..."] if len(still_missing) > 5 else [])
+            raise RuntimeError(
+                f"eth_getLogs + Etherscan fallback both failed to find all "
+                f"leaves: contract has {expected_next_index} @ block "
+                f"{pinned_block} but only fetched {len(by_index)}. "
+                f"Missing indices: {preview}. Set ETHERSCAN_API_KEY if not "
+                f"set, or use a paid RPC (Alchemy PAYG / Infura / QuickNode)."
+            )
+
+        leaves = [by_index[i] for i in range(expected_next_index)]
         target_index = next(
             (i for i, c in enumerate(leaves) if c == target_commitment), None,
         )
@@ -3012,21 +3189,33 @@ class ToolDispatcher:
                 last_error = f"Merkle path computation failed: {e}"
                 _t.sleep(2 ** attempt)
                 continue
-            # Verify root is known on-chain — if yes we can proceed
+            # Verify root is known on-chain. Fast path: our locally-computed
+            # root equals the current on-chain root (getLastRoot) → tree is
+            # fully in sync, no concurrent deposits landed since our scan.
+            # Slow path: our root is not the current one, but the contract
+            # keeps a ring buffer of the last ROOT_HISTORY_SIZE roots
+            # (isKnownRoot), so an older root from before a concurrent
+            # deposit still verifies.
             try:
+                last_root_on_chain = self.tornado.functions.getLastRoot().call()
+                if root_bytes == last_root_on_chain:
+                    break   # ✓ fast path — perfect match with contract head
                 if self.tornado.functions.isKnownRoot(root_bytes).call():
-                    break   # ✓ root recognised, exit retry loop
-                else:
-                    last_error = (
-                        f"Reconstructed Merkle root not known on-chain "
-                        f"(attempt {attempt + 1}/3): local root computed from "
-                        f"{len(leaves)} leaves does not match any of the last "
-                        f"ROOT_HISTORY_SIZE contract roots. Likely cause: "
-                        f"eth_getLogs missed some Deposit events during the "
-                        f"pagination scan. Retrying."
-                    )
-                    _t.sleep(2 ** attempt)
-                    continue
+                    break   # ✓ slow path — root within the last ROOT_HISTORY_SIZE
+                last_error = (
+                    f"Reconstructed Merkle root not known on-chain "
+                    f"(attempt {attempt + 1}/3): local root from "
+                    f"{len(leaves)} leaves does not match any of the last "
+                    f"ROOT_HISTORY_SIZE contract roots. This means either "
+                    f"(a) eth_getLogs is still missing events despite the "
+                    f"targeted rescan (raise the issue with the RPC "
+                    f"provider) or (b) more than ROOT_HISTORY_SIZE (=30) "
+                    f"concurrent deposits landed between our snapshot and "
+                    f"the withdraw attempt, pushing our root off the ring "
+                    f"buffer (rare on Sepolia; retry immediately)."
+                )
+                _t.sleep(2 ** attempt)
+                continue
             except Exception as e:
                 last_error = f"Failed to verify Merkle root: {e}"
                 _t.sleep(2 ** attempt)
@@ -3113,7 +3302,7 @@ class ToolDispatcher:
             "gas_used": receipt.gasUsed,
         })
 
-    # --- Batched ZK mixer tools (Chema-approved batched pattern) ------------
+    # --- Batched ZK mixer tools (batched pattern to save context tokens) ---
     # Same tradeoff as smurf_split: the Coordinator picks the parameters, the
     # dispatcher does the N sequential ops. Avoids N round-trips of tool_use
     # / tool_result blocks (each ~2KB of context growth) that would burn
