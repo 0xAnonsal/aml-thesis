@@ -308,7 +308,10 @@ def main():
     parser.add_argument("--seed", type=int, default=None,
                         help="Seed for reproducibility (default random)")
     parser.add_argument("--alice-funding-eth", type=float, default=None,
-                        help="ETH to fund alice with (default = amount + 0.5 gas buffer)")
+                        help=("ETH to fund alice with. Default = --amount "
+                              "(exact loot, NO gas padding — realistic: "
+                              "real thieves don't get extra gas from the "
+                              "victim). Override only for controlled tests."))
     parser.add_argument("--max-iterations", type=int, default=60)
     parser.add_argument("--sub-agent-max-iterations", type=int, default=40)
     parser.add_argument("--max-tokens", type=int, default=8192)

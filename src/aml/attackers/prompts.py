@@ -272,6 +272,18 @@ multi-hop structuring for ETH laundering whenever the working amounts are \
 ≥1 ETH (consolidate small chunks first if needed). For USDT-only campaigns \
 or sub-1-ETH amounts, fall back to swaps and smurf_split.
 
+MIXER DECISION RULE (critical — don't waste iterations on doomed calls): \
+mixer_deposit needs EXACTLY 1 ETH plus ~0.005 ETH gas from a single wallet. \
+If a burner holds < 1.05 ETH, DO NOT try mixer_deposit — it will hard-fail \
+with a "wrong denomination" revert and the ETH stays in the burner but you \
+burnt gas + an iteration. Instead route those sub-1-ETH fragments through \
+peel_chain (long linear laundering, seen in ~70% of real cases per TRM \
+Labs) or smurf_eth_split (fan-out into 5-15 smaller burners) which have \
+NO minimum-amount restriction. Reserve the mixer for the large chunks; use \
+peel + smurf for the tail. Real laundering campaigns almost always end with \
+some sub-1-ETH residuals that never see the mixer — that's the realistic \
+shape, not a failure mode.
+
 {_GAS_DISCIPLINE}
 
 {_DETECTOR_EVASION}
@@ -404,6 +416,18 @@ chunks), vary the number of hops between consolidation and each exit \
 (some exits get funds directly, others through 1–2 intermediate \
 burners), vary the time (block delay) between successive deliveries to \
 the same exit.
+
+  ASSET MIX AT EXITS (empirical finding from EthereumHeist 2.4M-edge \
+real-crypto-heist dataset): only ~6% of laundering-flow edges are USDT \
+transfers; ~69% are ETH direct, remainder split across USDC/WETH/DAI + \
+long tail. Real criminals leave most of the stolen value AS ETH at \
+exits — they don't universally swap to USDT. Reflect this in the \
+distribution: aim for roughly 60–75% of exit VALUE delivered as ETH \
+directly (via transfer_eth to the exit wallets) and only 25–40% as USDT \
+(post-swap). Concretely: after consolidating, decide the split BEFORE \
+swapping — swap only the USDT portion, keep the ETH portion in ETH form \
+and transfer_eth it to a subset of exit wallets. Uniform 100% USDT \
+distribution is a fingerprint the detector will latch onto.
 
 Funded exits that look like a uniform fan-out from one consolidation \
 point with identical amounts and identical hop counts are trivial to \

@@ -2838,9 +2838,18 @@ class ToolDispatcher:
 
         balance = self.w3.eth.get_balance(from_address)
         if balance < _MIXER_DENOMINATION_WEI:
+            held = balance / 10**18
             return ToolResult(error=(
-                f"Insufficient ETH: {from_address} holds {balance / 10**18} ETH, "
-                f"mixer deposit requires 1 ETH plus gas"
+                f"Insufficient ETH: {from_address} holds {held:.4f} ETH — "
+                f"mixer needs 1 ETH exactly (Tornado-Cash fixed denomination) "
+                f"plus ~0.005 ETH gas. Alternatives that ACTUALLY work with "
+                f"{held:.4f} ETH: (1) peel_chain(asset='ETH', "
+                f"initial_amount={max(0.0, held-0.005):.4f}, num_hops=15-25, "
+                f"peel_pct=0.05) — the technique used in ~70% of real crypto "
+                f"heists per TRM Labs; (2) smurf_eth_split across 5-15 fresh "
+                f"burners; (3) swap_eth_for_usdt then smurf_split the USDT. "
+                f"Do NOT top-up this wallet just to reach 1 ETH — that "
+                f"creates a co-funding signature the detector flags easily."
             ))
 
         # Fresh deposit note: random (nullifier, secret) in the bn254 field.
