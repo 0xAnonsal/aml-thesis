@@ -63,27 +63,71 @@ DEPLOYMENTS_JSON = REPO_ROOT / "deployments" / "sepolia.json"
 MIN_GAS_PRICE_GWEI = 3
 
 
+class _TokenBucket:
+    """Simple client-side rate limiter (token bucket algorithm).
+
+    Blocks callers when the token bucket is empty so we NEVER exceed
+    `rate` requests-per-second on our side. Alchemy free tier is
+    300 req/s; we self-throttle to ~200 to leave headroom.
+
+    Root cause (2026-08-24 seed 504 Alchemy overage): the previous
+    RetryingHTTPProvider had no client-side throttling. Under Integration
+    phase burst (~200 req/s legitimate + retries on 429), effective load
+    hit 518 req/s on Alchemy — the retry loop AMPLIFIED the overage
+    because 429 responses triggered 5 more retries each. Now we
+    self-throttle BEFORE hitting the network so 429s become rare, and
+    we no longer retry on 429 specifically (see _make_retrying_session).
+    """
+
+    def __init__(self, rate: float, capacity: float | None = None):
+        import threading
+        import time as _time
+        self._rate = float(rate)
+        self._capacity = float(capacity if capacity is not None else rate)
+        self._tokens = self._capacity
+        self._last = _time.monotonic()
+        self._lock = threading.Lock()
+
+    def acquire(self, tokens: float = 1.0) -> None:
+        """Block until `tokens` are available in the bucket."""
+        import time as _time
+        while True:
+            with self._lock:
+                now = _time.monotonic()
+                elapsed = now - self._last
+                self._last = now
+                self._tokens = min(
+                    self._capacity, self._tokens + elapsed * self._rate,
+                )
+                if self._tokens >= tokens:
+                    self._tokens -= tokens
+                    return
+                shortfall = tokens - self._tokens
+                sleep_for = shortfall / self._rate
+            _time.sleep(sleep_for)
+
+
+# Global rate limiter shared across all Web3 provider instances in the
+# campaign. Sized for Alchemy free tier (300 req/s) with 30% headroom.
+# capacity=20 means we allow small legitimate bursts (e.g. 20 balance
+# reads back-to-back) but sustained rate stays under 200 req/s.
+_RPC_RATE_LIMITER = _TokenBucket(rate=200.0, capacity=20.0)
+
+
 def _make_retrying_session():
-    """requests.Session with urllib3 transport-layer retry.
+    """requests.Session with client-side rate limiting + selective retry.
 
-    Handles the two ways an RPC hiccup manifests over HTTP:
-      - `RemoteDisconnected` when Alchemy closes an idle keep-alive
-        socket while the LLM is thinking between tool calls (~30-60s
-        pauses).
-      - HTTP 429 / 502 / 503 / 504 under rate-limit burst or transient
-        edge issues.
+    Handles transient RPC failures without amplifying rate-limit overages:
+      - Rate limit ourselves to ~200 req/s (Alchemy free tier is 300;
+        keeps 30% headroom for LLM/Etherscan/other traffic).
+      - Retry ONLY on ConnectionError + 5xx (server-side transient),
+        NOT on 429 (rate limit). If Alchemy says slow down we respect
+        it instead of hammering.
+      - Preserves `RemoteDisconnected` recovery from seed 502.
 
-    Retries: 5 total, exponential backoff starting at 1s (1, 2, 4, 8, 16).
-    Idempotency: JSON-RPC POST is technically not idempotent, but
-    read-only eth_* calls (block_number, get_balance, nextIndex, etc.)
-    are safe to retry, and web3.py's send_raw_transaction already
-    handles double-broadcast gracefully (the second attempt returns the
-    same tx hash if the first landed). Allowing POST here is the right
-    tradeoff.
-
-    Root cause: 2026-08-23 seed 502 crash on Sepolia — Alchemy closed
-    the connection mid-run and a single dropped `eth_blockNumber` call
-    killed the whole campaign.
+    Root cause of the 2026-08-24 seed 504 Alchemy overage (518/300 req/s):
+    aggressive retry on 429 turned normal rate-limit pushback into a
+    snowball. Fix: throttle client-side + don't retry 429s.
     """
     from requests import Session
     from requests.adapters import HTTPAdapter
@@ -92,7 +136,9 @@ def _make_retrying_session():
     retry = Retry(
         total=5,
         backoff_factor=1.0,             # 1s, 2s, 4s, 8s, 16s
-        status_forcelist=(429, 500, 502, 503, 504),
+        # Removed 429 — respect explicit rate-limit signals instead
+        # of retrying and amplifying the overage.
+        status_forcelist=(500, 502, 503, 504),
         allowed_methods=frozenset(["POST", "GET"]),
         raise_on_status=False,
     )
@@ -101,6 +147,17 @@ def _make_retrying_session():
     s = Session()
     s.mount("http://", adapter)
     s.mount("https://", adapter)
+
+    # Client-side rate limit: hook every request through the token bucket
+    # BEFORE it hits the wire. Blocking sleep in the calling thread —
+    # simple, no async needed.
+    _orig_send = s.send
+
+    def _throttled_send(request, **kw):
+        _RPC_RATE_LIMITER.acquire()
+        return _orig_send(request, **kw)
+
+    s.send = _throttled_send
     return s
 
 
