@@ -676,6 +676,41 @@ def main():
     # sweep (documented separately) or mock-pool artifact.
     honest_recovery_pct_capped = min(honest_recovery_pct, 100.0)
 
+    # FULL ETH RECONCILIATION — every wei accounted for.
+    # Query on-chain balances of every campaign wallet NOW to see where
+    # the ETH physically sits post-run. This is the ground truth for
+    # "how much of alice_funding is where" and complements the
+    # honest_recovery cap by exposing gas cost + burner residuals.
+    def _bal_eth(addr: str) -> float:
+        try:
+            return w3.eth.get_balance(addr) / 1e18
+        except Exception:
+            return 0.0
+
+    reconc_alice_now = _bal_eth(alice)
+    reconc_exits_eth_now = sum(_bal_eth(a) for a in clean_exit_addrs)
+    # Sum of ETH still sitting in ANY wallet the dispatcher registered
+    # EXCEPT the deployer (chain infra) and alice/exits (counted above).
+    campaign_wallets = set(dispatcher.wallets.keys())
+    campaign_wallets.discard(deployer)
+    campaign_wallets.discard(alice)
+    for a in clean_exit_addrs:
+        campaign_wallets.discard(a)
+    reconc_burners_eth_now = sum(_bal_eth(a) for a in campaign_wallets)
+    # ETH physically inside MockTornado + MockUniswapV2Pool contracts
+    # attributable to THIS campaign: hard to attribute precisely without
+    # tracing every deposit/withdraw, so we report the delta only via
+    # accounting: alice_in - (alice_now + exits_eth_now + burners_now
+    # + gas_burned + honest_recovery_eth).
+    reconc_alice_in = float(alice_funding)
+    reconc_accounted = (
+        reconc_alice_now + reconc_exits_eth_now + reconc_burners_eth_now
+    )
+    # Gas burned = alice_funding - (still-recoverable ETH + honest_recovery)
+    # The residual "went somewhere": mixer contract (recoverable via
+    # mixer_recover.py), pool contract (via reverse-swap), or gas (lost).
+    reconc_residual = reconc_alice_in - reconc_accounted - honest_recovery_eth
+
     meta = {
         "run_name": run_name,
         "scenario": scenario.name,
@@ -722,6 +757,24 @@ def main():
                 "honest_recovery_eth": honest_recovery_eth,
                 "honest_recovery_usd": honest_recovery_usd,
                 "honest_recovery_pct": honest_recovery_pct,
+            },
+            # FULL ETH reconciliation from on-chain balances.
+            "eth_reconciliation": {
+                "alice_funded_in": reconc_alice_in,
+                "alice_balance_now": reconc_alice_now,
+                "exits_eth_now": reconc_exits_eth_now,
+                "burners_eth_now_recoverable": reconc_burners_eth_now,
+                "honest_recovery_eth": honest_recovery_eth,
+                "residual_eth_locked_or_burned": reconc_residual,
+                "note": (
+                    "residual = alice_in - (alice_now + exits_now + "
+                    "burners_now) - honest_recovery. Splits between: (a) "
+                    "ETH stuck in MockTornado contract (recoverable via "
+                    "scripts/mixer_recover.py using persisted notes), "
+                    "(b) ETH pushed to MockUniswapV2Pool via swap "
+                    "(recoverable via reverse-swap in sweep_sepolia.py), "
+                    "and (c) gas paid to validators (permanently lost)."
+                ),
             },
         },
         "args": vars(args),
@@ -829,6 +882,17 @@ def main():
         f"= ${honest_recovery_usd:,.2f}",
         f"  Honest recovery %:         {honest_recovery_pct:.1f}%  "
         f"(capped display: {honest_recovery_pct_capped:.1f}%)",
+        f"",
+        f"ETH reconciliation (on-chain balances NOW, every wei accounted for):",
+        f"  IN — alice funded from deployer:  {reconc_alice_in:.4f} ETH",
+        f"  OUT — honest_recovery (at exits): {honest_recovery_eth:.4f} ETH",
+        f"  OUT — alice residual:             {reconc_alice_now:.4f} ETH  (recoverable)",
+        f"  OUT — exit wallets ETH dust:      {reconc_exits_eth_now:.4f} ETH  (recoverable)",
+        f"  OUT — burners residual:           {reconc_burners_eth_now:.4f} ETH  (recoverable via sweep_sepolia.py)",
+        f"  OUT — locked/burned (mixer+pool+gas): {reconc_residual:.4f} ETH",
+        f"          - mixer: recoverable via mixer_recover.py",
+        f"          - pool:  recoverable via sweep_sepolia.py --reverse-swap",
+        f"          - gas:   PERMANENTLY LOST to validators",
         f"Coordinator stopped: {result.stopped_reason}",
         f"",
         f"Etherscan links:",
