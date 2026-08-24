@@ -2088,9 +2088,15 @@ class ToolDispatcher:
                 # Live chain: block progression is set by the network,
                 # not by us. Only choose a bounded random wall-clock
                 # jitter to break deterministic timing signatures.
+                # Rango reducido 2026-08-24 (post seed 504): era
+                # [10, 360] pero producía campañas Sepolia de 2-3h con
+                # muchos advance_blocks encadenados (seed 504 tardó
+                # 104 min). 10-60s da variabilidad suficiente para
+                # evasión de timing correlation sin extender la
+                # wall-clock más allá de lo razonable.
                 import time as _time
                 interval_s = 12  # real ethereum
-                wall_clock_s = random.uniform(10, 360)
+                wall_clock_s = random.uniform(10, 60)
                 _time.sleep(wall_clock_s)
         except Exception as e:   # noqa: BLE001
             return ToolResult(error=f"advance_blocks failed: {e}")
