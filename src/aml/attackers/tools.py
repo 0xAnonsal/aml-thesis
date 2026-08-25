@@ -1379,7 +1379,7 @@ class ToolDispatcher:
         try:
             tx = self.usdt.functions.transfer(to_address, amount_base).build_transaction({
                 "from": from_address,
-                "nonce": self.w3.eth.get_transaction_count(from_address),
+                "nonce": self.w3.eth.get_transaction_count(from_address, "pending"),
                 "gas": 200_000,
                 "gasPrice": self.w3.eth.gas_price,
             })
@@ -1678,7 +1678,7 @@ class ToolDispatcher:
             tx = {
                 "from": faucet, "to": recipient,
                 "value": int(amount_eth * 10**18),
-                "nonce": self.w3.eth.get_transaction_count(faucet),
+                "nonce": self.w3.eth.get_transaction_count(faucet, "pending"),
                 "gas": _ETH_TRANSFER_GAS,
                 "gasPrice": self.w3.eth.gas_price,
                 "chainId": self.w3.eth.chain_id,
@@ -1689,7 +1689,7 @@ class ToolDispatcher:
             tx = {
                 "from": faucet, "to": recipient,
                 "value": int(amount_eth * 10**18),
-                "nonce": self.w3.eth.get_transaction_count(faucet),
+                "nonce": self.w3.eth.get_transaction_count(faucet, "pending"),
                 "gas": _ETH_TRANSFER_GAS,
                 "maxFeePerGas": max_fee,
                 "maxPriorityFeePerGas": priority,
@@ -1977,7 +1977,7 @@ class ToolDispatcher:
                     "from": funder,
                     "to": destination,
                     "value": send_amount_wei,
-                    "nonce": self.w3.eth.get_transaction_count(funder),
+                    "nonce": self.w3.eth.get_transaction_count(funder, "pending"),
                     "gas": _ETH_TRANSFER_GAS,
                     "gasPrice": gas_price,
                     "chainId": self.w3.eth.chain_id,
@@ -2127,18 +2127,22 @@ class ToolDispatcher:
             cont_amount = current_amount - peel_amount
 
             # Send peel-off + continuation. Both fail-fast on error.
+            # Local nonce tracking per hop: two txs from the same sender
+            # in tight succession will race on `get_transaction_count`
+            # (even with "pending", Alchemy's eventual consistency across
+            # backend nodes can return the same value twice). Read once,
+            # increment locally.
             if asset == "ETH":
-                # Need sender to have enough ETH minus gas reserve.
-                # Simplified: skip gas-reserve check per-tx here; if the
-                # sender doesn't have enough for continuation the tx
-                # will just revert and we'll surface the error.
                 sender_key = self.wallets[current_sender]
+                local_nonce = self.w3.eth.get_transaction_count(
+                    current_sender, "pending"
+                )
                 for target_addr, amt in ((peel_addr, peel_amount), (cont_addr, cont_amount)):
                     tx = {
                         "from": current_sender,
                         "to": target_addr,
                         "value": int(amt * 10**18),
-                        "nonce": self.w3.eth.get_transaction_count(current_sender),
+                        "nonce": local_nonce,
                         "gas": _ETH_TRANSFER_GAS,
                         "gasPrice": self.w3.eth.gas_price,
                         "chainId": self.w3.eth.chain_id,
@@ -2146,17 +2150,21 @@ class ToolDispatcher:
                     signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
                     tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
                     receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+                    local_nonce += 1
                     if receipt.status != 1:
                         return ToolResult(error=(
                             f"peel chain hop {hop_index} reverted (tx {tx_hash.hex()})"
                         ))
             else:  # USDT
                 sender_key = self.wallets[current_sender]
+                local_nonce = self.w3.eth.get_transaction_count(
+                    current_sender, "pending"
+                )
                 for target_addr, amt in ((peel_addr, peel_amount), (cont_addr, cont_amount)):
                     base = int(amt * 10**6)
                     tx = self.usdt.functions.transfer(target_addr, base).build_transaction({
                         "from": current_sender,
-                        "nonce": self.w3.eth.get_transaction_count(current_sender),
+                        "nonce": local_nonce,
                         "gas": 100_000,
                         "gasPrice": self.w3.eth.gas_price,
                         "chainId": self.w3.eth.chain_id,
@@ -2164,6 +2172,7 @@ class ToolDispatcher:
                     signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
                     tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
                     receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+                    local_nonce += 1
                     if receipt.status != 1:
                         return ToolResult(error=(
                             f"peel chain hop {hop_index} USDT transfer reverted "
@@ -2292,7 +2301,7 @@ class ToolDispatcher:
         try:
             tx = self.usdt.functions.mint(to_address, amount_base).build_transaction({
                 "from": gas_payer,
-                "nonce": self.w3.eth.get_transaction_count(gas_payer),
+                "nonce": self.w3.eth.get_transaction_count(gas_payer, "pending"),
                 "gas": 200_000,
                 "gasPrice": self.w3.eth.gas_price,
             })
@@ -2423,7 +2432,7 @@ class ToolDispatcher:
 
         # Execute transfers sequentially (Anvil mines on demand; ~5ms per tx)
         sender_key = self.wallets[from_address]
-        nonce = self.w3.eth.get_transaction_count(from_address)
+        nonce = self.w3.eth.get_transaction_count(from_address, "pending")
         gas_price = self.w3.eth.gas_price
 
         total_gas_used = 0
@@ -2529,7 +2538,7 @@ class ToolDispatcher:
                 "from": from_address,
                 "to": to_address,
                 "value": wei_amount,
-                "nonce": self.w3.eth.get_transaction_count(from_address),
+                "nonce": self.w3.eth.get_transaction_count(from_address, "pending"),
                 "gas": _ETH_TRANSFER_GAS,
                 "gasPrice": gas_price,
                 "chainId": self.w3.eth.chain_id,
@@ -2656,7 +2665,7 @@ class ToolDispatcher:
 
         # Execute the laundering transfers from `from_address`.
         sender_key = self.wallets[from_address]
-        nonce = self.w3.eth.get_transaction_count(from_address)
+        nonce = self.w3.eth.get_transaction_count(from_address, "pending")
         total_gas_used = 0
         successful = 0
         failures: list[dict] = []
@@ -2855,7 +2864,7 @@ class ToolDispatcher:
         try:
             tx = self.pool.functions.swapETHForUSDT(min_out_base).build_transaction({
                 "from": from_address,
-                "nonce": self.w3.eth.get_transaction_count(from_address),
+                "nonce": self.w3.eth.get_transaction_count(from_address, "pending"),
                 "gas": 200_000,
                 "gasPrice": gas_price,
                 "value": wei_in,
@@ -2929,7 +2938,7 @@ class ToolDispatcher:
 
         # Two transactions: approve, then swap. Build sequential nonces.
         try:
-            nonce = self.w3.eth.get_transaction_count(from_address)
+            nonce = self.w3.eth.get_transaction_count(from_address, "pending")
             # 1. approve
             approve_tx = self.usdt.functions.approve(self.pool.address, amount_base).build_transaction({
                 "from": from_address,
@@ -3064,7 +3073,7 @@ class ToolDispatcher:
         try:
             tx = pool.functions.deposit(commitment_bytes).build_transaction({
                 "from": from_address,
-                "nonce": self.w3.eth.get_transaction_count(from_address),
+                "nonce": self.w3.eth.get_transaction_count(from_address, "pending"),
                 "gas": 3_000_000,   # MiMC insert re-hashes the full tree path
                 "gasPrice": self.w3.eth.gas_price,
                 "value": denom_wei,
@@ -3502,7 +3511,7 @@ class ToolDispatcher:
                 pa, pb, pc, root_bytes, nullifier_hash_bytes, recipient, 0, 0,
             ).build_transaction({
                 "from": gas_payer,
-                "nonce": self.w3.eth.get_transaction_count(gas_payer),
+                "nonce": self.w3.eth.get_transaction_count(gas_payer, "pending"),
                 "gas": 2_000_000,
                 "gasPrice": self.w3.eth.gas_price,
             })

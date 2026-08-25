@@ -446,7 +446,16 @@ def main():
     print(f"  gas floor:    {MIN_GAS_PRICE_GWEI} gwei", file=sys.stderr)
     print(f"  contracts:", file=sys.stderr)
     for k, v in contracts.items():
-        print(f"    {k:8s} {v.address}", file=sys.stderr)
+        if hasattr(v, "address"):
+            print(f"    {k:8s} {v.address}", file=sys.stderr)
+        elif isinstance(v, dict):
+            # tornado_pools: {denomination_wei: contract}
+            for denom_wei, ct in sorted(v.items()):
+                denom_eth = denom_wei / 1e18
+                print(
+                    f"    {k}[{denom_eth:g} ETH]  {ct.address}",
+                    file=sys.stderr,
+                )
     print(f"=" * 70, file=sys.stderr)
 
     start_wall = time.time()
