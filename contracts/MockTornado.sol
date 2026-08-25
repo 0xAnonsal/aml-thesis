@@ -46,7 +46,13 @@ import {MerkleTreeWithHistory} from "./MerkleTreeWithHistory.sol";
 ///
 /// @dev    Local fork only. Tornado Cash is OFAC-sanctioned in the US.
 contract MockTornado is MerkleTreeWithHistory {
-    uint256 public constant DENOMINATION = 1 ether;
+    /// @notice Fixed deposit / withdrawal amount for this pool. Set at
+    ///         construction — each denomination requires a separate pool
+    ///         instance, same as real Tornado Cash (0.1/1/10/100 ETH each
+    ///         had their own contract on mainnet). Multi-denomination is
+    ///         the industry-standard design because a variable amount
+    ///         would leak into the anonymity set and defeat the mixer.
+    uint256 public immutable DENOMINATION;
 
     IVerifier public immutable verifier;
 
@@ -69,11 +75,18 @@ contract MockTornado is MerkleTreeWithHistory {
         uint256 timestamp
     );
 
-    constructor(IVerifier _verifier, IHasher _hasher, uint32 _levels)
+    constructor(
+        IVerifier _verifier,
+        IHasher _hasher,
+        uint32 _levels,
+        uint256 _denomination
+    )
         MerkleTreeWithHistory(_levels, _hasher)
     {
         require(address(_verifier) != address(0), "MockTornado: zero verifier");
+        require(_denomination > 0, "MockTornado: zero denomination");
         verifier = _verifier;
+        DENOMINATION = _denomination;
     }
 
     /// @notice Deposit DENOMINATION ETH and register `_commitment` as a leaf.

@@ -172,7 +172,7 @@ def _deploy_tornado(w3, deployer, deployer_key):
     t_factory = w3.eth.contract(abi=tornado_abi, bytecode=tornado_bytecode)
     tornado = w3.eth.contract(
         address=_send(
-            w3, t_factory.constructor(verifier.address, mimc.address, MERKLE_DEPTH),
+            w3, t_factory.constructor(verifier.address, mimc.address, MERKLE_DEPTH, 10**18),
             deployer, deployer_key,
             gas=10_000_000,
         ).contractAddress,

@@ -158,7 +158,7 @@ def main():
         tornado = w3.eth.contract(
             address=_send(
                 w3, w3.eth.contract(abi=tornado_abi, bytecode=tornado_bytecode).constructor(
-                    verifier.address, mimc.address, MERKLE_DEPTH,
+                    verifier.address, mimc.address, MERKLE_DEPTH, 10**18,
                 ),
                 deployer, key, gas=10_000_000,
             ).contractAddress,

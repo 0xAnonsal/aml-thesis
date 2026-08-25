@@ -255,15 +255,33 @@ def main() -> None:
     addresses["Verifier"] = verifier.address
     print(f"  Verifier (Groth16): {verifier.address}")
 
-    print("\n=== Deploying MockTornado ===")
+    print("\n=== Deploying MockTornado (1 ETH default, backward-compat) ===")
     r = _send(w3, w3.eth.contract(abi=tornado_abi, bytecode=tornado_bytecode)
-              .constructor(verifier.address, mimc.address, MERKLE_DEPTH),
+              .constructor(verifier.address, mimc.address, MERKLE_DEPTH,
+                           TORNADO_DENOMINATION_WEI),
               deployer, key, gas=10_000_000)
     tornado = w3.eth.contract(address=r.contractAddress, abi=tornado_abi)
     addresses["MockTornado"] = tornado.address
     print(f"  MockTornado (ZK):   {tornado.address}")
     print(f"  depth:              {MERKLE_DEPTH} (capacity 2^{MERKLE_DEPTH} = {1 << MERKLE_DEPTH})")
     print(f"  denomination:       {tornado.functions.DENOMINATION().call() / 10**18} ETH")
+
+    # Multi-denomination family (0.1 ETH + 10 ETH) sharing MiMC + Verifier.
+    # Real Tornado Cash mainnet had separate contracts for each denom
+    # (0.1/1/10/100 ETH). Our 1 ETH pool is already deployed above; add
+    # 0.1 and 10 to give the attacker three routing options.
+    extra_denoms_wei = [10**17, 10 * 10**18]   # 0.1 ETH, 10 ETH
+    for denom_wei in extra_denoms_wei:
+        label = f"MockTornado_{denom_wei / 10**18:g}ETH"
+        print(f"\n=== Deploying {label} ===")
+        r = _send(w3, w3.eth.contract(abi=tornado_abi, bytecode=tornado_bytecode)
+                  .constructor(verifier.address, mimc.address, MERKLE_DEPTH,
+                               denom_wei),
+                  deployer, key, gas=10_000_000)
+        extra_t = w3.eth.contract(address=r.contractAddress, abi=tornado_abi)
+        addresses[label] = extra_t.address
+        print(f"  {label}: {extra_t.address}")
+        print(f"  denomination:   {extra_t.functions.DENOMINATION().call() / 10**18} ETH")
 
     print("\n=== Deploying MockBridge ===")
     r = _send(w3, w3.eth.contract(abi=bridge_abi, bytecode=bridge_bytecode)

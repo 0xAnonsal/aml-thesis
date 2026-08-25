@@ -104,26 +104,72 @@ def deploy_pool(
 
 
 def deploy_tornado(
-    w3, deployer: str, deployer_key: str, *, depth: int = MERKLE_DEPTH,
+    w3, deployer: str, deployer_key: str, *,
+    depth: int = MERKLE_DEPTH,
+    denomination_wei: int = 10**18,
+    _reuse_mimc: Any | None = None,
+    _reuse_verifier_addr: str | None = None,
 ) -> Any:
     """Deploy MiMC + Verifier + MockTornado; return the tornado handle.
 
-    The mixer's denomination is hard-wired in MockTornado.sol (1 ETH).
-    `depth` must match circuits/withdraw.circom's `Withdraw(N)` parameter
-    or proofs will fail to verify on-chain.
+    `denomination_wei` sets the fixed deposit amount for THIS pool
+    instance (Tornado-style multi-denomination is one contract per
+    denomination). Default 1 ETH for backward-compat.
+
+    `_reuse_mimc` / `_reuse_verifier_addr`: when deploying a family of
+    pools that share cryptography (same MiMC + same Verifier), pass the
+    already-deployed instances to save ~2M gas per extra pool.
+    """
+    mimc = _reuse_mimc if _reuse_mimc is not None else deploy_mimc(
+        w3, deployer, deployer_key,
+    )
+
+    if _reuse_verifier_addr is not None:
+        verifier_addr = _reuse_verifier_addr
+    else:
+        verifier_abi, verifier_bytecode = load_artifact(VERIFIER_ARTIFACT)
+        v_factory = w3.eth.contract(abi=verifier_abi, bytecode=verifier_bytecode)
+        verifier_addr = send_tx(
+            w3, v_factory.constructor(), deployer, deployer_key,
+        ).contractAddress
+
+    tornado_abi, tornado_bytecode = load_artifact(TORNADO_ARTIFACT)
+    t_factory = w3.eth.contract(abi=tornado_abi, bytecode=tornado_bytecode)
+    tornado_addr = send_tx(
+        w3, t_factory.constructor(
+            verifier_addr, mimc.address, depth, int(denomination_wei),
+        ),
+        deployer, deployer_key, gas=10_000_000,
+    ).contractAddress
+    return w3.eth.contract(address=tornado_addr, abi=tornado_abi)
+
+
+def deploy_tornado_family(
+    w3, deployer: str, deployer_key: str,
+    denominations_wei: list[int],
+    *, depth: int = MERKLE_DEPTH,
+) -> dict[int, Any]:
+    """Deploy N MockTornado pools sharing one MiMC + one Verifier.
+
+    Returns a dict {denomination_wei -> tornado_contract}. Matches the
+    real Tornado Cash mainnet architecture (0.1/1/10/100 ETH each a
+    separate pool). Sharing MiMC + Verifier is safe — they are pure
+    cryptographic primitives with no per-pool state.
     """
     mimc = deploy_mimc(w3, deployer, deployer_key)
-
     verifier_abi, verifier_bytecode = load_artifact(VERIFIER_ARTIFACT)
     v_factory = w3.eth.contract(abi=verifier_abi, bytecode=verifier_bytecode)
     verifier_addr = send_tx(
         w3, v_factory.constructor(), deployer, deployer_key,
     ).contractAddress
 
-    tornado_abi, tornado_bytecode = load_artifact(TORNADO_ARTIFACT)
-    t_factory = w3.eth.contract(abi=tornado_abi, bytecode=tornado_bytecode)
-    tornado_addr = send_tx(
-        w3, t_factory.constructor(verifier_addr, mimc.address, depth),
-        deployer, deployer_key, gas=10_000_000,
-    ).contractAddress
-    return w3.eth.contract(address=tornado_addr, abi=tornado_abi)
+    pools: dict[int, Any] = {}
+    for denom in denominations_wei:
+        pools[int(denom)] = deploy_tornado(
+            w3, deployer, deployer_key,
+            depth=depth,
+            denomination_wei=int(denom),
+            _reuse_mimc=mimc,
+            _reuse_verifier_addr=verifier_addr,
+        )
+    return pools
