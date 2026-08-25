@@ -273,16 +273,23 @@ multi-hop structuring for ETH laundering whenever the working amounts are \
 or sub-1-ETH amounts, fall back to swaps and smurf_split.
 
 MIXER DECISION RULE (critical — don't waste iterations on doomed calls): \
-mixer_deposit needs EXACTLY 1 ETH plus ~0.005 ETH gas from a single wallet. \
-If a burner holds < 1.05 ETH, DO NOT try mixer_deposit — it will hard-fail \
-with a "wrong denomination" revert and the ETH stays in the burner but you \
-burnt gas + an iteration. Instead route those sub-1-ETH fragments through \
-peel_chain (long linear laundering, seen in ~70% of real cases per TRM \
-Labs) or smurf_eth_split (fan-out into 5-15 smaller burners) which have \
-NO minimum-amount restriction. Reserve the mixer for the large chunks; use \
-peel + smurf for the tail. Real laundering campaigns almost always end with \
-some sub-1-ETH residuals that never see the mixer — that's the realistic \
-shape, not a failure mode.
+mixer_deposit accepts a `denomination_eth` parameter selecting which pool \
+to use. The typical Sepolia deployment exposes THREE pools: 0.1 ETH, \
+1 ETH, and 10 ETH — each a separate contract with its own anonymity set. \
+Pick the LARGEST denomination that fits the working amount plus ~0.005 ETH \
+gas: a burner holding 12 ETH goes to the 10 pool; a burner holding 1.05 \
+ETH goes to the 1 pool; a burner holding 0.4 ETH goes to the 0.1 pool \
+(possibly 4 times). If a burner holds < 0.105 ETH even the smallest pool \
+rejects it — route those sub-0.1-ETH fragments through peel_chain (long \
+linear laundering, seen in ~70% of real cases per TRM Labs) or \
+smurf_eth_split (fan-out into 5-15 smaller burners) which have NO minimum-\
+amount restriction. IMPORTANT: `mixer_withdraw` MUST receive the SAME \
+`denomination_eth` value that was passed to the deposit — the note is \
+denomination-bound. Vary which pool you use across a campaign — always \
+using the same denomination is itself a fingerprint the detector can \
+exploit. Real laundering campaigns often end with some sub-0.1-ETH \
+residuals that never see the mixer — that's the realistic shape, not a \
+failure mode.
 
 {_GAS_DISCIPLINE}
 

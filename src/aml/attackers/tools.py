@@ -662,17 +662,19 @@ _TOOL_SCHEMAS: list[dict] = [
     {
         "name": "mixer_deposit",
         "description": (
-            "Deposit exactly 1 ETH into the ZK mixer (Tornado-Cash-style). "
-            "Generates a fresh secret deposit note, commits its hash on-chain, "
-            "and sends 1 ETH from `from_address` (which must be in the wallet "
-            "registry and hold at least 1 ETH plus gas). Returns a "
-            "`deposit_note` string — this is the ONLY way to later withdraw "
-            "the ETH, so it must be remembered and kept secret. The mixer "
-            "breaks the on-chain link between the depositing wallet and "
-            "whatever address later withdraws: a withdrawal cannot be tied to "
-            "this deposit beyond the anonymity set of all deposits. The "
-            "denomination is fixed at 1 ETH — to mix a different amount, make "
-            "multiple deposits."
+            "Deposit into a ZK mixer pool (Tornado-Cash-style, multi-"
+            "denomination). Pick `denomination_eth` from the deployed pool "
+            "family — typical Sepolia setup: [0.1, 1, 10] ETH, one pool "
+            "per denomination. The deposited amount MUST equal the pool's "
+            "denomination exactly; call inspect_chain first if you're not "
+            "sure which pools are live. Generates a fresh secret note, "
+            "commits its hash on-chain, and sends DENOMINATION ETH from "
+            "`from_address`. Returns a `deposit_note` string — this is "
+            "the ONLY way to later withdraw the ETH, so it must be "
+            "remembered and kept secret. The mixer breaks the on-chain "
+            "link between depositor and withdrawer beyond the anonymity "
+            "set of all deposits in THAT pool (each denomination has its "
+            "own separate anonymity set — bigger pools = better mixing)."
         ),
         "input_schema": {
             "type": "object",
@@ -680,9 +682,18 @@ _TOOL_SCHEMAS: list[dict] = [
                 "from_address": {
                     "type": "string",
                     "description": (
-                        "Wallet making the deposit. Must be in the registry "
-                        "and hold >= 1 ETH plus gas."
+                        "Wallet making the deposit. Must be in the "
+                        "registry and hold >= denomination_eth plus gas."
                     ),
+                },
+                "denomination_eth": {
+                    "type": "number",
+                    "description": (
+                        "Pool denomination in ETH. Must match a deployed "
+                        "pool. Typical values 0.1, 1, or 10. Defaults to "
+                        "1.0 for backward compatibility."
+                    ),
+                    "default": 1.0,
                 },
             },
             "required": ["from_address"],
@@ -691,19 +702,18 @@ _TOOL_SCHEMAS: list[dict] = [
     {
         "name": "mixer_withdraw",
         "description": (
-            "Withdraw 1 ETH from the ZK mixer using a `deposit_note` returned "
-            "by an earlier mixer_deposit call. The 1 ETH is paid to "
-            "`recipient` (any address — does NOT need to be in the registry, "
-            "and a fresh unrelated address gives the best unlinkability). A "
-            "Groth16 zero-knowledge proof is generated internally proving the "
-            "note's commitment is in the mixer's Merkle tree, without "
-            "revealing which deposit it was. Pass `gas_payer` to choose which "
-            "registered wallet submits and pays gas for the withdrawal tx — "
-            "for unlinkability this should be a wallet unrelated to both the "
-            "depositor and the recipient; if omitted, the first registered "
-            "wallet pays. Fails cleanly if the note is malformed, was never "
-            "deposited, or was already withdrawn. Proof generation takes a "
-            "few seconds."
+            "Withdraw DENOMINATION ETH from a ZK mixer pool using a "
+            "`deposit_note` returned by an earlier mixer_deposit call. "
+            "`denomination_eth` MUST match the pool the note was "
+            "deposited into (mixer_deposit's output includes the exact "
+            "value — pass it back). The ETH is paid to `recipient` (any "
+            "address — a fresh unrelated address gives the best "
+            "unlinkability). A Groth16 zero-knowledge proof is generated "
+            "internally proving the note's commitment is in the mixer's "
+            "Merkle tree, without revealing which deposit it was. Pass "
+            "`gas_payer` to choose which registered wallet submits and "
+            "pays gas — for unlinkability this should be unrelated to "
+            "both the depositor and the recipient."
         ),
         "input_schema": {
             "type": "object",
@@ -715,18 +725,28 @@ _TOOL_SCHEMAS: list[dict] = [
                 "recipient": {
                     "type": "string",
                     "description": (
-                        "Address that receives the 1 ETH. Any address; need "
-                        "not be in the registry."
+                        "Address that receives the DENOMINATION ETH. Any "
+                        "address; need not be in the registry."
                     ),
                 },
                 "gas_payer": {
                     "type": "string",
                     "description": (
-                        "Optional. Registered wallet that submits the withdraw "
-                        "tx and pays its gas. Defaults to the first registered "
-                        "wallet. For unlinkability, use a wallet unrelated to "
-                        "the deposit and the recipient."
+                        "Optional. Registered wallet that submits the "
+                        "withdraw tx and pays its gas. Defaults to the "
+                        "first registered wallet. For unlinkability, use "
+                        "a wallet unrelated to deposit and recipient."
                     ),
+                },
+                "denomination_eth": {
+                    "type": "number",
+                    "description": (
+                        "Pool denomination the note belongs to. MUST "
+                        "match what was passed to mixer_deposit. Defaults "
+                        "to 1.0 for backward compat with pre-multi-denom "
+                        "notes."
+                    ),
+                    "default": 1.0,
                 },
             },
             "required": ["deposit_note", "recipient"],
@@ -1042,6 +1062,7 @@ class ToolDispatcher:
         wallets: dict[str, str],
         pool_contract: Any = None,
         tornado_contract: Any = None,
+        tornado_pools: dict | None = None,
         mixer_events_from_block: int = 0,
         logs_rpc_url: str | None = None,
         laundering_target_usd: float | None = None,
@@ -1051,7 +1072,34 @@ class ToolDispatcher:
         self.w3 = w3
         self.usdt = usdt_contract
         self.pool = pool_contract
-        self.tornado = tornado_contract
+        # Multi-denomination mixer support. `tornado_pools` is the
+        # authoritative dict {DENOMINATION_wei -> contract_handle} —
+        # matches real Tornado Cash mainnet (0.1/1/10/100 ETH each a
+        # separate pool). `tornado_contract` (singular) is kept for
+        # backward compat: if only the singular is passed, we auto-
+        # populate the dict with its on-chain DENOMINATION as the key.
+        # `self.tornado` remains the "default" (1 ETH if present, else
+        # the smallest available denom, else None) so existing code
+        # paths keep working unchanged.
+        self.tornado_pools: dict[int, Any] = {}
+        if tornado_pools:
+            for denom, ct in tornado_pools.items():
+                self.tornado_pools[int(denom)] = ct
+        if tornado_contract is not None and not tornado_pools:
+            try:
+                denom = int(tornado_contract.functions.DENOMINATION().call())
+            except Exception:
+                denom = 10**18   # legacy assumption
+            self.tornado_pools[denom] = tornado_contract
+        # Default pool for legacy code paths: 1 ETH if available, else
+        # the smallest, else None.
+        if self.tornado_pools:
+            self.tornado = (
+                self.tornado_pools.get(10**18)
+                or self.tornado_pools[min(self.tornado_pools.keys())]
+            )
+        else:
+            self.tornado = None
         # Path to a JSONL file where every mixer deposit note is appended
         # as {ts, from, tx_hash, leaf_index, commitment, note}. Safety net:
         # if the sub-agent's memory is lost (crash, halt, LLM context
@@ -2825,10 +2873,41 @@ class ToolDispatcher:
 
     # --- ZK mixer tools (PR 5.6) --------------------------------------------
 
-    def _mixer_deposit(self, from_address: str) -> ToolResult:
-        """Deposit 1 ETH into the ZK Tornado mixer; return a secret note."""
-        if self.tornado is None:
-            return ToolResult(error="Tornado mixer contract not set on dispatcher")
+    def _resolve_mixer_pool(self, denomination_eth: float = 1.0):
+        """Look up the pool contract for a requested denomination.
+
+        Returns (pool_contract, denomination_wei) or (None, error_msg).
+        """
+        if not self.tornado_pools:
+            return None, "Tornado mixer contract(s) not set on dispatcher"
+        denom_wei = int(round(float(denomination_eth) * 10**18))
+        pool = self.tornado_pools.get(denom_wei)
+        if pool is None:
+            available = sorted(
+                d / 10**18 for d in self.tornado_pools.keys()
+            )
+            return None, (
+                f"Denomination {denomination_eth} ETH has no deployed pool. "
+                f"Available pools: {available} ETH. Pick the largest that "
+                f"fits your working amount, or split across multiple deposits."
+            )
+        return pool, denom_wei
+
+    def _mixer_deposit(
+        self, from_address: str, denomination_eth: float = 1.0,
+    ) -> ToolResult:
+        """Deposit DENOMINATION ETH into a ZK Tornado mixer pool.
+
+        `denomination_eth` selects which pool (Tornado-style multi-
+        denomination). Default 1 ETH for backward compatibility with
+        callers that predate the multi-pool refactor. Available pools
+        depend on deployment — see dispatcher.tornado_pools keys.
+        """
+        pool, denom_wei_or_err = self._resolve_mixer_pool(denomination_eth)
+        if pool is None:
+            return ToolResult(error=denom_wei_or_err)
+        denom_wei = denom_wei_or_err
+
         try:
             from_address = Web3.to_checksum_address(from_address)
         except ValueError as e:
@@ -2837,19 +2916,27 @@ class ToolDispatcher:
             return ToolResult(error=f"No private key registered for {from_address}")
 
         balance = self.w3.eth.get_balance(from_address)
-        if balance < _MIXER_DENOMINATION_WEI:
+        if balance < denom_wei:
             held = balance / 10**18
+            denom_eth = denom_wei / 10**18
+            available = sorted(d / 10**18 for d in self.tornado_pools.keys())
+            smaller = [d for d in available if d <= held - 0.005]
+            smaller_hint = (
+                f"USE the {max(smaller):g} ETH pool instead "
+                f"(denomination_eth={max(smaller):g})"
+                if smaller else "no smaller pool fits either"
+            )
             return ToolResult(error=(
                 f"Insufficient ETH: {from_address} holds {held:.4f} ETH — "
-                f"mixer needs 1 ETH exactly (Tornado-Cash fixed denomination) "
-                f"plus ~0.005 ETH gas. Alternatives that ACTUALLY work with "
-                f"{held:.4f} ETH: (1) peel_chain(asset='ETH', "
+                f"the {denom_eth:g} ETH pool needs exactly {denom_eth:g} ETH "
+                f"plus ~0.005 ETH gas. Alternatives with {held:.4f} ETH: "
+                f"(a) {smaller_hint}; (b) peel_chain(asset='ETH', "
                 f"initial_amount={max(0.0, held-0.005):.4f}, num_hops=15-25, "
-                f"peel_pct=0.05) — the technique used in ~70% of real crypto "
-                f"heists per TRM Labs; (2) smurf_eth_split across 5-15 fresh "
-                f"burners; (3) swap_eth_for_usdt then smurf_split the USDT. "
-                f"Do NOT top-up this wallet just to reach 1 ETH — that "
-                f"creates a co-funding signature the detector flags easily."
+                f"peel_pct=0.05) — used in ~70% of real crypto heists per "
+                f"TRM Labs; (c) smurf_eth_split across 5-15 fresh burners; "
+                f"(d) swap_eth_for_usdt then smurf_split the USDT. "
+                f"Do NOT top-up this wallet to reach {denom_eth:g} ETH — "
+                f"that creates a co-funding signature the detector catches."
             ))
 
         # Fresh deposit note: random (nullifier, secret) in the bn254 field.
@@ -2864,12 +2951,12 @@ class ToolDispatcher:
         commitment_bytes = commitment_int.to_bytes(32, "big")
 
         try:
-            tx = self.tornado.functions.deposit(commitment_bytes).build_transaction({
+            tx = pool.functions.deposit(commitment_bytes).build_transaction({
                 "from": from_address,
                 "nonce": self.w3.eth.get_transaction_count(from_address),
                 "gas": 3_000_000,   # MiMC insert re-hashes the full tree path
                 "gasPrice": self.w3.eth.gas_price,
-                "value": _MIXER_DENOMINATION_WEI,
+                "value": denom_wei,
             })
             signed = self.w3.eth.account.sign_transaction(
                 tx, private_key=self.wallets[from_address],
@@ -2886,12 +2973,9 @@ class ToolDispatcher:
 
         # Leaf index is a nice-to-have (handy for the agent's bookkeeping);
         # if event parsing fails for any reason, ship the result without it.
-        # `deposit` emits both LeafInserted (from MerkleTreeWithHistory) and
-        # Deposit; errors=DISCARD silently skips the non-matching LeafInserted
-        # log instead of logging a MismatchedABI warning for it.
         leaf_index = None
         try:
-            events = self.tornado.events.Deposit().process_receipt(
+            events = pool.events.Deposit().process_receipt(
                 receipt, errors=DISCARD,
             )
             if events:
@@ -2929,16 +3013,21 @@ class ToolDispatcher:
             "deposit_note": note,
             "commitment": "0x" + commitment_bytes.hex(),
             "leaf_index": leaf_index,
-            "amount_eth": _MIXER_DENOMINATION_WEI / 10**18,
+            "amount_eth": denom_wei / 10**18,
+            "denomination_eth": denom_wei / 10**18,
+            "pool_address": pool.address,
             "gas_used": receipt.gasUsed,
             "warning": (
-                "SAVE the deposit_note — it is the only way to withdraw, and "
-                "anyone holding it can withdraw the 1 ETH to any recipient."
+                f"SAVE the deposit_note — it is the only way to withdraw, "
+                f"and anyone holding it can withdraw {denom_wei / 10**18} "
+                f"ETH from pool {pool.address} to any recipient. The note "
+                f"is denomination-bound: pass denomination_eth="
+                f"{denom_wei / 10**18} to mixer_withdraw when redeeming."
             ),
         })
 
     def _mixer_collect_leaves(
-        self, target_commitment: int,
+        self, target_commitment: int, pool=None,
     ) -> tuple[list[int], int | None]:
         """Scan the mixer's Deposit events; rebuild the ordered leaf set.
 
@@ -2959,10 +3048,13 @@ class ToolDispatcher:
         3. Between retries, sleep briefly (exponential backoff) so the RPC
            node can catch up if it's lagging behind the chain head.
         """
+        # Which pool to scan? Default to the primary (self.tornado); the
+        # caller can pass a specific pool for multi-denom lookups.
+        target_pool = pool if pool is not None else self.tornado
         # Same provider for both nextIndex and eth_getLogs so their
         # snapshots are consistent by construction.
         tornado_logs = self._logs_w3.eth.contract(
-            address=self.tornado.address, abi=self.tornado.abi,
+            address=target_pool.address, abi=target_pool.abi,
         )
         deposit_event = tornado_logs.events.Deposit()
 
@@ -3105,10 +3197,17 @@ class ToolDispatcher:
         deposit_note: str,
         recipient: str,
         gas_payer: str | None = None,
+        denomination_eth: float = 1.0,
     ) -> ToolResult:
-        """Withdraw 1 ETH from the mixer to `recipient` via a Groth16 proof."""
-        if self.tornado is None:
-            return ToolResult(error="Tornado mixer contract not set on dispatcher")
+        """Withdraw DENOMINATION ETH from a mixer pool via Groth16 proof.
+
+        `denomination_eth` MUST match the pool the note was deposited to
+        (mixer_deposit's output includes `denomination_eth` — pass the
+        same value back). Default 1 ETH for back-compat with legacy notes.
+        """
+        pool, denom_wei_or_err = self._resolve_mixer_pool(denomination_eth)
+        if pool is None:
+            return ToolResult(error=denom_wei_or_err)
 
         try:
             nullifier, secret = _decode_note(deposit_note)
@@ -3150,7 +3249,7 @@ class ToolDispatcher:
 
         # Already spent?
         try:
-            if self.tornado.functions.nullifierHashes(nullifier_hash_bytes).call():
+            if pool.functions.nullifierHashes(nullifier_hash_bytes).call():
                 return ToolResult(
                     error="This note has already been withdrawn (nullifier spent)"
                 )
@@ -3173,7 +3272,9 @@ class ToolDispatcher:
         last_error = None
         for attempt in range(3):
             try:
-                leaves, leaf_index = self._mixer_collect_leaves(commitment_int)
+                leaves, leaf_index = self._mixer_collect_leaves(
+                    commitment_int, pool=pool,
+                )
             except RuntimeError as e:
                 last_error = str(e)
                 _t.sleep(2 ** attempt)  # 1s, 2s, 4s backoff
@@ -3212,10 +3313,10 @@ class ToolDispatcher:
             # (isKnownRoot), so an older root from before a concurrent
             # deposit still verifies.
             try:
-                last_root_on_chain = self.tornado.functions.getLastRoot().call()
+                last_root_on_chain = pool.functions.getLastRoot().call()
                 if root_bytes == last_root_on_chain:
                     break   # ✓ fast path — perfect match with contract head
-                if self.tornado.functions.isKnownRoot(root_bytes).call():
+                if pool.functions.isKnownRoot(root_bytes).call():
                     break   # ✓ slow path — root within the last ROOT_HISTORY_SIZE
                 last_error = (
                     f"Reconstructed Merkle root not known on-chain "
@@ -3286,7 +3387,7 @@ class ToolDispatcher:
 
         # Submit the withdraw tx.
         try:
-            tx = self.tornado.functions.withdraw(
+            tx = pool.functions.withdraw(
                 pa, pb, pc, root_bytes, nullifier_hash_bytes, recipient, 0, 0,
             ).build_transaction({
                 "from": gas_payer,
