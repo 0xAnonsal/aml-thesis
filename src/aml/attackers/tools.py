@@ -304,20 +304,49 @@ _TOOL_SCHEMAS: list[dict] = [
                 "num_hops": {
                     "type": "integer",
                     "description": (
-                        "Number of hops in the chain (default 15, typical "
-                        "real-case range 10-30). Longer chains obscure "
-                        "the trail more but cost more gas."
+                        "Number of hops in the chain (default 6, typical "
+                        "real-case range 6-15 for professional operations; "
+                        "10-30 for extended dormancy). Longer chains obscure "
+                        "the trail more but cost more gas and lock more "
+                        "capital in sinks."
                     ),
-                    "default": 15,
+                    "default": 6,
                 },
                 "peel_pct": {
                     "type": "number",
                     "description": (
-                        "Percentage peeled off at each hop, in [0.01, 0.20]. "
-                        "Default 0.07 (7%). Lower percentages preserve more "
-                        "value at the tail but leak less traceable structure."
+                        "Target average percentage peeled off at each hop, "
+                        "in [0.01, 0.20]. Default 0.02 (2%). Empirical "
+                        "range: large hacks (Lazarus/Bybit, HTX Bridge, "
+                        "Ronin — $50M+) use 1-3% (preserving 60-80% at "
+                        "tail); small retail scams use 5-10% (more "
+                        "fragmentation, less preservation). The linear "
+                        "topology is the detection signature — magnitude "
+                        "of the peel is secondary — so LOWER peels keep "
+                        "more capital under attacker control without "
+                        "losing evasion value."
                     ),
-                    "default": 0.07,
+                    "default": 0.02,
+                },
+                "peel_jitter": {
+                    "type": "number",
+                    "description": (
+                        "Fractional jitter around peel_pct sampled uniformly "
+                        "per hop, in [0, 1]. Default 0 (deterministic). "
+                        "Recommend 0.5 for realistic per-hop variation: "
+                        "with peel_pct=0.02 and jitter=0.5, per-hop peels "
+                        "vary in [1%, 3%]. Random peels prevent the "
+                        "detector from spotting a fixed-ratio fingerprint "
+                        "across hops."
+                    ),
+                    "default": 0.0,
+                },
+                "seed": {
+                    "type": "integer",
+                    "description": (
+                        "Optional seed for the per-hop jitter RNG "
+                        "(reproducibility). Omit for non-deterministic."
+                    ),
                 },
             },
             "required": ["from_address", "asset", "initial_amount"],
@@ -1068,6 +1097,7 @@ class ToolDispatcher:
         laundering_target_usd: float | None = None,
         notes_file: Any = None,
         wallets_file: Any = None,
+        peel_budget_eth: float | None = None,
     ):
         self.w3 = w3
         self.usdt = usdt_contract
@@ -1119,6 +1149,15 @@ class ToolDispatcher:
         # missing history rebuilds a stale local Merkle tree and withdraw
         # proofs fail on-chain `isKnownRoot()`.
         self.mixer_events_from_block = int(mixer_events_from_block)
+        # Campaign-level cap on cumulative ETH locked in peel-chain sink
+        # wallets. When set, `_peel_chain` refuses calls whose worst-case
+        # projected loss would push `self._peel_locked_eth` past this
+        # budget — guaranteeing the total sink lock stays under a policy
+        # bound (typical: 5% of the campaign's laundering amount) even if
+        # the LLM issues multiple peel_chain calls. `None` disables the
+        # cap (legacy Anvil tests). Runners set this to 0.05 × amount.
+        self._peel_budget_eth: float | None = peel_budget_eth
+        self._peel_locked_eth: float = 0.0
         # Separate RPC for eth_getLogs. Alchemy free tier caps range at
         # 10 blocks — unusable for scanning ~10k blocks of mixer history.
         # publicnode.com allows 10k-block ranges free. If not provided we
@@ -1967,14 +2006,27 @@ class ToolDispatcher:
 
     def _peel_chain(
         self, from_address: str, asset: str, initial_amount: float,
-        num_hops: int = 15, peel_pct: float = 0.07,
+        num_hops: int = 6, peel_pct: float = 0.02,
+        peel_jitter: float = 0.0, seed: int | None = None,
     ) -> ToolResult:
         """Execute a peel chain — canonical laundering technique.
 
         At each of `num_hops` steps, generates two fresh burner wallets:
-        one 'sink' that receives `peel_pct` of current amount (dormant
-        peeled-off value), and one 'continuation' that receives the rest
-        and becomes the sender for the next hop.
+        one 'sink' that receives a jittered fraction of the current amount
+        (dormant peeled-off value) and one 'continuation' that receives
+        the rest and becomes the sender for the next hop.
+
+        With `peel_jitter > 0`, each per-hop peel is sampled uniformly
+        from `[peel_pct*(1-jitter), peel_pct*(1+jitter)]`. jitter=0 keeps
+        the legacy deterministic behavior (all peels equal to peel_pct).
+        `seed` makes the jitter reproducible for testing; None uses the
+        module's default RNG.
+
+        A dispatcher-level `peel_budget_eth` cap (set at construction)
+        rejects the call if the projected total sink loss would push the
+        campaign's cumulative peel-locked ETH past the budget — this
+        guarantees the campaign-wide constraint even if the LLM issues
+        multiple peel_chain calls.
         """
         # Validation
         if asset not in ("ETH", "USDT"):
@@ -1983,12 +2035,37 @@ class ToolDispatcher:
             return ToolResult(error=f"num_hops must be in [1, 100], got {num_hops}")
         if peel_pct < 0.01 or peel_pct > 0.20:
             return ToolResult(error=f"peel_pct must be in [0.01, 0.20], got {peel_pct}")
+        if peel_jitter < 0.0 or peel_jitter > 1.0:
+            return ToolResult(error=f"peel_jitter must be in [0, 1], got {peel_jitter}")
         try:
             from_address = Web3.to_checksum_address(from_address)
         except ValueError:
             return ToolResult(error=f"Invalid from_address: {from_address}")
         if from_address not in self.wallets:
             return ToolResult(error=f"from_address {from_address} not in wallet registry")
+
+        # Campaign-level cap FIRST — before any chain reads. If the
+        # projected sink loss would push cumulative peel-locked ETH past
+        # the dispatcher's budget, refuse fast so the LLM gets a clear
+        # actionable error before we even query the sender's balance. We
+        # project using peel_pct * (1+jitter) as the per-hop upper bound
+        # to be conservative (worst-case draw sequence).
+        if self._peel_budget_eth is not None and asset == "ETH":
+            worst_peel = peel_pct * (1.0 + peel_jitter)
+            projected_loss_eth = initial_amount * (
+                1.0 - (1.0 - worst_peel) ** num_hops
+            )
+            projected_total = self._peel_locked_eth + projected_loss_eth
+            if projected_total > self._peel_budget_eth:
+                return ToolResult(error=(
+                    f"peel_chain would exceed campaign peel budget: "
+                    f"already locked {self._peel_locked_eth:.4f} ETH in "
+                    f"sinks; this call could add up to "
+                    f"{projected_loss_eth:.4f} ETH (worst case), pushing "
+                    f"total to {projected_total:.4f} ETH; cap is "
+                    f"{self._peel_budget_eth:.4f} ETH (5% of campaign). "
+                    f"Reduce initial_amount, num_hops, or peel_pct."
+                ))
 
         # Verify sender has the initial amount
         if asset == "ETH":
@@ -2003,9 +2080,14 @@ class ToolDispatcher:
                 f"needs {initial_amount:.6f}"
             ))
 
+        # RNG for per-hop jitter — module-random by default; seedable for
+        # tests. peel_jitter=0 reproduces the legacy deterministic path.
+        jitter_rng = random.Random(seed) if seed is not None else random
+
         # Execute the chain
         hops: list[str] = []            # continuation wallets (main flow)
         peels: list[dict] = []          # peel-off wallets + amounts
+        peel_pcts: list[float] = []     # actual jittered pct used per hop
         current_sender = from_address
         current_amount = initial_amount
 
@@ -2032,7 +2114,16 @@ class ToolDispatcher:
             except Exception:   # noqa: BLE001
                 pass
 
-            peel_amount = current_amount * peel_pct
+            # Sample this hop's peel pct with optional jitter around the
+            # target mean. peel_jitter=0 → deterministic (legacy path).
+            if peel_jitter > 0.0:
+                lo = peel_pct * (1.0 - peel_jitter)
+                hi = peel_pct * (1.0 + peel_jitter)
+                actual_peel_pct = jitter_rng.uniform(lo, hi)
+            else:
+                actual_peel_pct = peel_pct
+            peel_pcts.append(actual_peel_pct)
+            peel_amount = current_amount * actual_peel_pct
             cont_amount = current_amount - peel_amount
 
             # Send peel-off + continuation. Both fail-fast on error.
@@ -2084,16 +2175,28 @@ class ToolDispatcher:
             current_sender = cont_addr
             current_amount = cont_amount
 
+        total_peeled = sum(p["amount"] for p in peels)
+        # Track campaign-level peel locking (ETH only — the budget is
+        # denominated in ETH; USDT peels aren't currently budgeted).
+        if asset == "ETH":
+            self._peel_locked_eth += total_peeled
+
         return ToolResult(output={
             "asset": asset,
             "initial_amount": initial_amount,
             "num_hops": num_hops,
-            "peel_pct": peel_pct,
+            "peel_pct_target": peel_pct,
+            "peel_jitter": peel_jitter,
+            "peel_pcts_actual": [round(p, 4) for p in peel_pcts],
             "tail_wallet": current_sender,
             "tail_amount": round(current_amount, 6),
             "hop_wallets": hops,
             "peel_wallets": peels,
-            "total_peeled": round(sum(p["amount"] for p in peels), 6),
+            "total_peeled": round(total_peeled, 6),
+            "campaign_peel_locked_eth": (
+                round(self._peel_locked_eth, 6) if asset == "ETH" else None
+            ),
+            "campaign_peel_budget_eth": self._peel_budget_eth,
         })
 
     def _advance_blocks(self, num_blocks: int) -> ToolResult:
@@ -2108,13 +2211,21 @@ class ToolDispatcher:
         sleep in [10s, 360s] regardless of num_blocks — bounded so a
         campaign never blocks on any single call.
         """
-        is_anvil = self.w3.eth.chain_id == 31337
+        # Chain-id lookup may fail if the dispatcher was built with a
+        # provider-less Web3() (test fixtures); default to strict Anvil
+        # semantics so validation errors surface as clear ToolResult
+        # errors instead of raw web3 exceptions.
+        try:
+            chain_id = int(self.w3.eth.chain_id)
+        except Exception:  # noqa: BLE001
+            chain_id = 31337
+        is_anvil = chain_id == 31337
         max_blocks = 1_000_000 if is_anvil else 30
         min_blocks = 100 if is_anvil else 5
         if num_blocks < min_blocks or num_blocks > max_blocks:
             return ToolResult(error=(
                 f"num_blocks must be in [{min_blocks}, {max_blocks}] "
-                f"on this chain (chain_id={self.w3.eth.chain_id}), got {num_blocks}"
+                f"on this chain (chain_id={chain_id}), got {num_blocks}"
             ))
         block_before = self.w3.eth.block_number
         try:

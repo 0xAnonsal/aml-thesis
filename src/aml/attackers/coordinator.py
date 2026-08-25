@@ -29,6 +29,7 @@ delegation's `context`.
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import dataclass, field
 
 from .llm_client import LLMClient
@@ -245,12 +246,19 @@ class Coordinator:
         system: str | None = None,
         max_tokens: int = 4096,
         sub_agent_max_tokens: int = 4096,
+        on_sub_agent_complete=None,
     ) -> CampaignResult:
         """Run the orchestration loop until the Coordinator stops delegating.
 
         Returns when the Coordinator LLM responds with `end_turn` (campaign
         complete), another stop reason (refusal, max_tokens, ...), or the
         max_iterations cap is hit.
+
+        If `on_sub_agent_complete` is provided it's called after each
+        sub-agent delegation returns, with a dict payload of the same shape
+        the final `sub_agent_transcripts.json` uses. The runner uses this
+        to append to an incremental JSONL so crashes mid-campaign don't lose
+        the transcripts of already-completed phases.
         """
         if system is None:
             system = COORDINATOR_SYSTEM
@@ -314,6 +322,25 @@ class Coordinator:
                         "objective": objective,
                         "status": sub_result.status,
                     })
+                    if on_sub_agent_complete is not None:
+                        try:
+                            on_sub_agent_complete({
+                                "index": len(sub_agent_runs) - 1,
+                                "role": role,
+                                "status": sub_result.status,
+                                "summary": sub_result.summary,
+                                "key_facts": sub_result.key_facts,
+                                "iterations": sub_result.iterations,
+                                "cost_usd": sub_result.cost_usd,
+                                "stopped_reason": sub_result.stopped_reason,
+                                "tool_calls": sub_result.tool_calls,
+                            })
+                        except Exception as exc:
+                            print(
+                                f"[coordinator] on_sub_agent_complete "
+                                f"callback failed: {exc}",
+                                file=sys.stderr,
+                            )
                     content = json.dumps(sub_result.to_delegation_report())
                     # Flag failed / incomplete delegations as tool errors so
                     # the Coordinator notices and can react; the report's

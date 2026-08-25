@@ -136,6 +136,50 @@ randomise amounts, mix transaction kinds, prefer the mixer for ETH ≥1. \
 Each sub-agent only sees what you put in their delegation; if you don't \
 tell them to vary, they may produce uniform patterns that get flagged.
 
+MANDATORY TOPOLOGY MIX FOR LAYERING — do NOT route the whole campaign \
+through a single technique. Real professional operations (Lazarus, HTX \
+Bridge, Ronin) combine at least THREE distinct laundering topologies in \
+parallel because any single-technique flow is a fingerprint the detector \
+learns first. In every Layering delegation you MUST explicitly instruct \
+the sub-agent to use all three of the following, with the indicated \
+value split:
+
+  ROUTE A — ZK Tornado mixer cycles (30-50% of the layered value). \
+For working amounts ≥ 1 ETH (use the multi-denom pool that fits: 0.1 / \
+1 / 10 ETH). Each mixer_withdraw MUST pass gas_payer set to an \
+unrelated wallet. This is the strongest unlinkability primitive but is \
+also the most-scrutinised on-chain — never the sole technique.
+
+  ROUTE B — `peel_chain` linear topology (20-40% of the layered value). \
+The peel-chain is what real analysts see MOST often (~70% of TRM Labs \
+cases). Use `asset="ETH"`, `peel_pct=0.02`, `peel_jitter=0.5`, \
+`num_hops=6-8`. The dispatcher enforces a hard 5%-of-campaign cap on \
+cumulative peel-sink lock; the sub-agent will get a clear error if the \
+budget would be exceeded, and can adjust `initial_amount` or `num_hops` \
+downward. The `peel_jitter=0.5` sample makes per-hop peels vary in \
+[1%, 3%] instead of a fixed ratio — deterministic ratios are themselves \
+a fingerprint.
+
+  ROUTE C — recycled-burner cycles + swap asset-switching (remaining \
+value). Send a portion BACK to burners that appeared in Placement or \
+earlier Layering hops (creates cycles that break Louvain modularity); \
+run a fraction through swap_eth_for_usdt → swap_usdt_for_eth to break \
+token-level tracing.
+
+For the Integration structuring phase, when the USDT chunk count is \
+large (>10 sub-$999 outputs to different burner destinations), instruct \
+Integration to consider `smurf_split` (the batched USDT structuring \
+mega-tool) rather than emitting many individual `transfer_usdt` calls. \
+`smurf_split` distributes to freshly-generated burners in one call — \
+saves iterations and LLM cost. Note that `smurf_split` creates NEW \
+random burners; if Integration must route to specific pre-registered \
+clean exits, `transfer_usdt` is still the correct tool for that step.
+
+The topology mix above is the MINIMUM viable evasion in defi-exploit \
+and ransomware-cashout scenarios. Stablecoin-scam skips ROUTE A (no \
+mixer) but still requires B (peel_chain with `asset="USDT"`) and C \
+(cycles + asset-switching).
+
 CLEAN EXIT PLANNING — the campaign's clean exit wallets (the labeled \
 off-ramp destinations where laundered USDT lands) are NOT pre-allocated. \
 The Integration specialist creates them on demand via `register_clean_exit`. \
