@@ -400,10 +400,18 @@ def main():
         file=sys.stderr,
     )
 
-    alice_funding = (
-        args.alice_funding_eth if args.alice_funding_eth is not None
-        else amount   # exact loot amount — gas comes OUT of it (realistic)
-    )
+    # Alice funding = stolen amount + gas overhead margin so she can pay
+    # for her own outbound gas AND the gas-seed dust of every burner
+    # created during the campaign (typically 10-25 wallets @ 0.005 ETH
+    # each). Only `amount` counts as "stolen" for honest_recovery; the
+    # margin is separately accounted as gas overhead in reconciliation.
+    # The +max(0.1, 5% of amount) covers the observed 0.065 ETH gas-
+    # seed cost from seed 508 with headroom for bigger campaigns.
+    if args.alice_funding_eth is not None:
+        alice_funding = args.alice_funding_eth
+    else:
+        gas_margin = max(0.1, amount * 0.05)
+        alice_funding = amount + gas_margin
 
     rpc, deployer_key = load_sepolia_env()
     # Retry-enabled HTTP session survives transient RPC disconnects
@@ -531,6 +539,11 @@ def main():
         # even across multiple peel_chain invocations. Only applied when
         # the stolen asset is ETH (peel-budget is ETH-denominated).
         peel_budget_eth=(0.05 * amount) if scenario.asset == "eth" else None,
+        # Alice pays for every internal gas-seed tx (realistic mode) so
+        # honest_recovery reflects the true economic cost of laundering
+        # from the criminal's own budget rather than a subsidised
+        # infrastructure. Funder pool still exists as legacy fallback.
+        gas_payer_address=alice,
     )
     # Multi-funder pool for gas obfuscation. On Sepolia we keep a smaller
     # bootstrap amount per funder to avoid burning deployer ETH — 0.2 ETH

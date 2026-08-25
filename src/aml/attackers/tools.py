@@ -1098,6 +1098,7 @@ class ToolDispatcher:
         notes_file: Any = None,
         wallets_file: Any = None,
         peel_budget_eth: float | None = None,
+        gas_payer_address: str | None = None,
     ):
         self.w3 = w3
         self.usdt = usdt_contract
@@ -1158,6 +1159,25 @@ class ToolDispatcher:
         # cap (legacy Anvil tests). Runners set this to 0.05 × amount.
         self._peel_budget_eth: float | None = peel_budget_eth
         self._peel_locked_eth: float = 0.0
+        # Explicit gas-payer address (typically Alice) — when set, ALL
+        # internal gas-seed txs pull ETH from this wallet instead of
+        # the funder pool. Realism: a real laundering operation pays
+        # every satoshi of gas out of its own stolen budget; there is
+        # no benevolent deployer subsidising infrastructure. The
+        # funder pool infrastructure stays in place as a fallback and
+        # for future obfuscation experiments — if gas_payer_address
+        # is None, _gas_source() returns _pick_funder() (legacy).
+        if gas_payer_address is not None:
+            gas_payer_address = Web3.to_checksum_address(gas_payer_address)
+            if gas_payer_address not in wallets:
+                raise ValueError(
+                    f"gas_payer_address {gas_payer_address} must be in "
+                    "wallets registry before dispatcher construction"
+                )
+        self._gas_payer_address: str | None = gas_payer_address
+        # Running total of gas-seed ETH sourced from Alice (for
+        # reconciliation reports).
+        self._gas_paid_by_alice_wei: int = 0
         # Separate RPC for eth_getLogs. Alchemy free tier caps range at
         # 10 blocks — unusable for scanning ~10k blocks of mixer history.
         # publicnode.com allows 10k-block ranges free. If not provided we
@@ -1478,7 +1498,7 @@ class ToolDispatcher:
         # can react.
         try:
             self._seed_gas(address, _DEFAULT_GAS_RESERVE_ETH,
-                           source=self._pick_funder())
+                           source=self._gas_source())
             return ToolResult(output={
                 "address": address,
                 "gas_seed_eth": _DEFAULT_GAS_RESERVE_ETH,
@@ -1523,7 +1543,7 @@ class ToolDispatcher:
         # is still registered and the agent gets a warning.
         try:
             self._seed_gas(address, _DEFAULT_GAS_RESERVE_ETH,
-                           source=self._pick_funder())
+                           source=self._gas_source())
             return ToolResult(output={
                 "address": address,
                 "exchange_platform": platform,
@@ -1641,6 +1661,19 @@ class ToolDispatcher:
                 pass
         return funder
 
+    def _gas_source(self) -> str | None:
+        """Address that pays for internal gas-seed txs.
+
+        If `gas_payer_address` was set at construction (typical for
+        Sepolia campaigns: Alice), every _seed_gas call pulls ETH from
+        that wallet — the realistic mode where the attacker eats gas
+        out of the stolen budget. When None, falls back to the funder
+        pool (legacy obfuscation mode / Anvil tests).
+        """
+        if self._gas_payer_address is not None:
+            return self._gas_payer_address
+        return self._pick_funder()
+
     def _seed_gas(
         self, recipient: str, amount_eth: float, source: str | None = None,
     ) -> str:
@@ -1735,7 +1768,7 @@ class ToolDispatcher:
         try:
             # Random funder from pool if bootstrapped; else fallback to
             # deployer. `source=None` means _seed_gas uses the deployer.
-            self._seed_gas(address, top_up_eth, source=self._pick_funder())
+            self._seed_gas(address, top_up_eth, source=self._gas_source())
         except Exception:   # noqa: BLE001 — best-effort
             pass
 
@@ -2105,12 +2138,12 @@ class ToolDispatcher:
             # that is acceptable since they are dormant by design).
             try:
                 self._seed_gas(cont_addr, _DEFAULT_GAS_RESERVE_ETH,
-                               source=self._pick_funder())
+                               source=self._gas_source())
             except Exception:   # noqa: BLE001
                 pass
             try:
                 self._seed_gas(peel_addr, _DEFAULT_GAS_RESERVE_ETH,
-                               source=self._pick_funder())
+                               source=self._gas_source())
             except Exception:   # noqa: BLE001
                 pass
 
@@ -2426,7 +2459,7 @@ class ToolDispatcher:
         for burner in burner_addresses:
             try:
                 self._seed_gas(burner, _DEFAULT_GAS_RESERVE_ETH,
-                               source=self._pick_funder())
+                               source=self._gas_source())
             except Exception:   # noqa: BLE001 — count and continue
                 seed_failures += 1
 
@@ -2659,7 +2692,7 @@ class ToolDispatcher:
         for burner in burner_addresses:
             try:
                 self._seed_gas(burner, _DEFAULT_GAS_RESERVE_ETH,
-                               source=self._pick_funder())
+                               source=self._gas_source())
             except Exception:   # noqa: BLE001 — count and continue
                 seed_failures += 1
 

@@ -113,18 +113,14 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
         deployer, deployer_key = node.accounts[0], node.private_keys[0]
         alice, alice_key = node.accounts[1], node.private_keys[1]
 
-        # Anvil pre-funds every account with 10_000 ETH by default. Alice
-        # is meant to hold EXACTLY `amount` ETH — the "stolen loot" she
-        # will launder. Real hackers only have what they stole; any gas
-        # they pay for onward transfers comes OUT of the loot, not from
-        # magic side-funds. Without this drain, the Coordinator could
-        # route more than `amount` ETH from Alice's Anvil-inherited 10K
-        # into laundering and inflate the recovery metric past 100%.
-        #
-        # Alice's own tx gas will come from `amount` (the tools respect
-        # a reserve_eth=0.01 default so she never bricks herself; the
-        # last-mile drain can pass reserve_eth=0 to sweep the residual).
-        alice_target_wei = int(amount * 10**18)
+        # Anvil pre-funds every account with 10_000 ETH by default. We
+        # drain Alice to `amount + gas_margin` where gas_margin covers
+        # the burner-seed dust she must pay for (Alice is the
+        # gas_payer_address for the dispatcher). Only `amount` counts
+        # as stolen for honest_recovery — the margin is separately
+        # accounted as gas overhead in reconciliation.
+        gas_margin = max(0.1, amount * 0.05)
+        alice_target_wei = int((amount + gas_margin) * 10**18)
         alice_balance_wei = w3.eth.get_balance(alice)
         if alice_balance_wei > alice_target_wei:
             gas_price = w3.eth.gas_price
@@ -177,6 +173,9 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
             # capital-preserving, but keeping it consistent means the
             # sub-agent sees the same tool-side behavior in both envs.
             peel_budget_eth=(0.05 * amount) if scenario.asset == "eth" else None,
+            # Alice pays every gas-seed tx even on Anvil so the two
+            # environments produce comparable honest_recovery numbers.
+            gas_payer_address=alice,
         )
         # Multi-funder pool: k intermediate funders (each seeded once from
         # deployer) that then randomly fund every new burner/exit. Breaks
