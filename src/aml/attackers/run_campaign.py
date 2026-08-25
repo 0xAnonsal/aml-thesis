@@ -173,7 +173,7 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
             # ephemeral so the constraint is educational rather than
             # capital-preserving, but keeping it consistent means the
             # sub-agent sees the same tool-side behavior in both envs.
-            peel_budget_eth=(0.05 * amount) if scenario.asset == "eth" else None,
+            peel_budget_eth=(0.03 * amount) if scenario.asset == "eth" else None,
             # Alice pays every gas-seed tx even on Anvil so the two
             # environments produce comparable honest_recovery numbers.
             gas_payer_address=alice,

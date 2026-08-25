@@ -136,6 +136,40 @@ randomise amounts, mix transaction kinds, prefer the mixer for ETH ≥1. \
 Each sub-agent only sees what you put in their delegation; if you don't \
 tell them to vary, they may produce uniform patterns that get flagged.
 
+BUDGET-AWARE MIXER-DENOMINATION FITTING (mandatory for every campaign, \
+any --amount from 3 to 100+ ETH):
+
+The mixer family exposes THREE pools: 0.1 / 1 / 10 ETH. USE THE POOLS \
+THAT FIT — do NOT force a single denomination. Forcing 3× 1-ETH \
+deposits when Alice has exactly 3 ETH cannot work (burner-seed dust + \
+gas overhead pushes it over budget), and forcing 20× 1-ETH when Alice \
+has 20 ETH wastes anonymity-set diversity that 2× 10-ETH would give \
+for free.
+
+Compute the split BEFORE delegating Placement — do this arithmetic in \
+your head using Alice's actual --amount and paste concrete burner \
+counts + denominations into the Placement objective:
+
+  1. Reserve fraction R for gas + seeds + reserves. For --amount ≤ 5 \
+     use R ≈ 0.10; for ≤ 20 use R ≈ 0.07; for larger use R ≈ 0.05.
+  2. mixer_budget = --amount × (1 − R)
+  3. Greedy-fit largest-first:
+       N_10 = floor(mixer_budget / 10.05)     ← 10-ETH pool + 0.5% gas
+       remaining = mixer_budget − N_10 × 10
+       N_1  = floor(remaining / 1.02)         ← 1-ETH pool + 2% gas
+       remaining = remaining − N_1
+       N_01 = floor(remaining / 0.105)        ← 0.1-ETH pool + 5% gas
+  4. VARY THE MIX: even when a pure denomination would fit, sprinkle \
+     at least ONE other denomination for evasion (Lazarus/HTX \
+     campaigns mix denominations to poison anonymity-set fingerprinting).
+  5. Placement creates exactly N_10 + N_1 + N_01 burners, each sized \
+     to its target denomination + a small gas margin.
+
+Tell Placement the plan literally in the objective, e.g. "create 2 \
+burners of 1.02 ETH for 1-ETH mixer, 8 of 0.105 ETH for 0.1-ETH \
+mixer" (for a 3 ETH campaign) or "create 1 of 10.05 ETH for 10-ETH \
+mixer, 9 of 1.02 ETH for 1-ETH mixer" (for a 20 ETH campaign).
+
 MANDATORY TOPOLOGY MIX FOR LAYERING — do NOT route the whole campaign \
 through a single technique. Real professional operations (Lazarus, HTX \
 Bridge, Ronin) combine at least THREE distinct laundering topologies in \
@@ -153,7 +187,7 @@ also the most-scrutinised on-chain — never the sole technique.
   ROUTE B — `peel_chain` linear topology (20-40% of the layered value). \
 The peel-chain is what real analysts see MOST often (~70% of TRM Labs \
 cases). Use `asset="ETH"`, `peel_pct=0.02`, `peel_jitter=0.5`, \
-`num_hops=6-8`. The dispatcher enforces a hard 5%-of-campaign cap on \
+`num_hops=6-8`. The dispatcher enforces a hard 3%-of-campaign cap on \
 cumulative peel-sink lock; the sub-agent will get a clear error if the \
 budget would be exceeded, and can adjust `initial_amount` or `num_hops` \
 downward. The `peel_jitter=0.5` sample makes per-hop peels vary in \
@@ -472,13 +506,39 @@ the same exit.
 real-crypto-heist dataset): only ~6% of laundering-flow edges are USDT \
 transfers; ~69% are ETH direct, remainder split across USDC/WETH/DAI + \
 long tail. Real criminals leave most of the stolen value AS ETH at \
-exits — they don't universally swap to USDT. Reflect this in the \
-distribution: aim for roughly 60–75% of exit VALUE delivered as ETH \
-directly (via transfer_eth to the exit wallets) and only 25–40% as USDT \
-(post-swap). Concretely: after consolidating, decide the split BEFORE \
-swapping — swap only the USDT portion, keep the ETH portion in ETH form \
-and transfer_eth it to a subset of exit wallets. Uniform 100% USDT \
-distribution is a fingerprint the detector will latch onto.
+exits — they don't universally swap to USDT.
+
+DELIVERY PROCEDURE (mandatory — the campaign is measured by how much \
+value LANDS AT the labeled exits, NOT how much sits in staging/burners):
+
+  Step 1 — Determine total_deliverable_eth from staging + any \
+Layering burners that still hold funds. Reserve at most 5% for gas.
+
+  Step 2 — Split the total into two portions BEFORE swapping:
+    - ETH portion: ~65-75% of total_deliverable_eth stays as ETH
+    - USDT portion: ~25-35% will be swapped to USDT
+
+  Step 3 — Deliver the ETH portion: for EACH exit that will receive \
+ETH, call transfer_eth(from=staging, to=exit_addr, \
+amount_eth=get_gas_budget(staging).max_sendable_eth-slice). Use \
+max_sendable_eth from get_gas_budget as the ceiling; don't compute \
+amounts yourself. Split the ETH portion across ~60% of the funded \
+exits (some exits get only ETH, some get only USDT, some get both).
+
+  Step 4 — Swap the USDT portion in ONE call: swap_eth_for_usdt on \
+the entire USDT portion at once (many small swaps waste gas + \
+slippage). Then structure the resulting USDT sub-$999 across the \
+remaining exits.
+
+  Step 5 — VERIFY before finish_task: call get_balance on staging \
+and every layered burner. If ANY of them still holds > 0.02 ETH, \
+you have NOT completed delivery — reroute that residual to an exit \
+(transfer_eth reserve_eth=0). "Stranded in intermediate wallet" \
+IS a delivery failure.
+
+Uniform 100% USDT distribution is a fingerprint the detector will \
+latch onto — same for uniform 100% ETH. The 65-75%/25-35% split IS \
+the target profile.
 
 Funded exits that look like a uniform fan-out from one consolidation \
 point with identical amounts and identical hop counts are trivial to \
@@ -487,11 +547,12 @@ flag. Heterogeneity at the off-ramp is the last line of evasion.
 End-of-campaign drain: when a wallet is being abandoned and you want every \
 last bit of its ETH out, pass `reserve_eth=0` to swap_eth_for_usdt or \
 transfer_eth — that disables the gas-floor and lets the wallet go to zero. \
-Don't do this for wallets that still need to make more transactions.
+Do this for staging + every layered burner BEFORE finish_task; the \
+delivered_at_exits metric depends on it.
 
 Execute the Coordinator's objective directly — no confirmations. Consolidate \
 the funds, swap to the off-ramp asset, and structure the final off-ramp \
 chunks per the Coordinator's objective (typically: many sub-$999 USDT \
-chunks). When done, call finish_task once with an honest status, a summary, \
-and a key_facts object giving the final consolidated/off-ramp wallet(s) and \
-their balances."""
+chunks + a majority ETH portion delivered directly). When done, call \
+finish_task once with an honest status, a summary, and a key_facts \
+object giving the final consolidated/off-ramp wallet(s) and their balances."""

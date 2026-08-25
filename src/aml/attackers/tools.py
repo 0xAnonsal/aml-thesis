@@ -77,7 +77,7 @@ _MAX_BURNERS_PER_SMURF = 5000
 # must keep it at or above floor unless explicitly told to drain. Matches
 # real-world launderer OPSEC where the operator drips fixed gas dust into
 # each disposable wallet and never strands one mid-campaign.
-_DEFAULT_GAS_RESERVE_ETH = 0.01
+_DEFAULT_GAS_RESERVE_ETH = 0.005
 
 # Gas-cost multiplier used in the "would-breach-reserve" preflight
 # check. Padding above the observed gas_price guards against a base_fee
@@ -2126,7 +2126,7 @@ class ToolDispatcher:
                     f"sinks; this call could add up to "
                     f"{projected_loss_eth:.4f} ETH (worst case), pushing "
                     f"total to {projected_total:.4f} ETH; cap is "
-                    f"{self._peel_budget_eth:.4f} ETH (5% of campaign). "
+                    f"{self._peel_budget_eth:.4f} ETH (3% of campaign). "
                     f"Reduce initial_amount, num_hops, or peel_pct."
                 ))
 

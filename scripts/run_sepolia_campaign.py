@@ -539,7 +539,7 @@ def main():
         # so the LLM cannot accidentally strand more than 5% in sinks
         # even across multiple peel_chain invocations. Only applied when
         # the stolen asset is ETH (peel-budget is ETH-denominated).
-        peel_budget_eth=(0.05 * amount) if scenario.asset == "eth" else None,
+        peel_budget_eth=(0.03 * amount) if scenario.asset == "eth" else None,
         # Alice pays for every internal gas-seed tx (realistic mode) so
         # honest_recovery reflects the true economic cost of laundering
         # from the criminal's own budget rather than a subsidised
@@ -986,6 +986,16 @@ def main():
         f"          - mixer: recoverable via mixer_recover.py",
         f"          - pool:  recoverable via sweep_sepolia.py --reverse-swap",
         f"          - gas:   PERMANENTLY LOST to validators",
+        f"",
+        f"ECONOMIC EFFICIENCY (real hacker perspective — what stays under attacker control):",
+        f"  delivered_to_exits_pct:        {honest_recovery_pct:.1f}%  "
+        f"(immediate cash-out via CEX gateways)",
+        f"  total_attacker_controlled_pct: "
+        f"{100.0 * (honest_recovery_eth + reconc_alice_now + reconc_exits_eth_now + reconc_burners_eth_now) / max(reconc_alice_in, 1e-9):.1f}%  "
+        f"(delivered + recoverable — matches real ops like Lazarus 86%, Wormhole 93%)",
+        f"  economically_lost_pct:         "
+        f"{100.0 * max(0.0, reconc_residual) / max(reconc_alice_in, 1e-9):.1f}%  "
+        f"(gas + pool slippage — permanent economic loss)",
         f"Coordinator stopped: {result.stopped_reason}",
         f"",
         f"Etherscan links:",
