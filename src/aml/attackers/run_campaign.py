@@ -114,13 +114,14 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
         alice, alice_key = node.accounts[1], node.private_keys[1]
 
         # Anvil pre-funds every account with 10_000 ETH by default. We
-        # drain Alice to `amount + gas_margin` where gas_margin covers
-        # the burner-seed dust she must pay for (Alice is the
-        # gas_payer_address for the dispatcher). Only `amount` counts
-        # as stolen for honest_recovery — the margin is separately
-        # accounted as gas overhead in reconciliation.
-        gas_margin = max(0.1, amount * 0.05)
-        alice_target_wei = int((amount + gas_margin) * 10**18)
+        # drain Alice down to EXACTLY `amount` — the "stolen loot".
+        # Every ETH of gas she spends (own outbound txs AND burner-seed
+        # dust as the dispatcher's gas_payer_address) comes out of this
+        # same budget, matching real hacks where the criminal has only
+        # what they stole. honest_recovery is denominated against this
+        # amount and therefore reflects LAUNDERING efficiency + GAS
+        # overhead combined, which is the true economic figure.
+        alice_target_wei = int(amount * 10**18)
         alice_balance_wei = w3.eth.get_balance(alice)
         if alice_balance_wei > alice_target_wei:
             gas_price = w3.eth.gas_price
