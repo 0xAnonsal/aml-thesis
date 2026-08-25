@@ -51,7 +51,10 @@ from aml.attackers.scenarios import SCENARIOS
 from aml.attackers.funder_sizing import allocate_funder_amounts
 from aml.attackers.tools import _DEFAULT_GAS_RESERVE_ETH
 from aml.chains.trace import extract_chain_trace, jsonable
-from aml.env import PriceOracle, build_market_context, resolve_campaign_ts
+from aml.env import (
+    PriceOracle, build_market_context,
+    ensure_fresh_prices, resolve_campaign_ts,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PRICE_CACHE = REPO_ROOT / "data" / "prices"
@@ -378,23 +381,17 @@ def main():
     seed = args.seed if args.seed is not None else random.randint(1, 10**9)
     random.seed(seed)
 
-    oracle = PriceOracle(cache_dir=PRICE_CACHE)
-    # Sepolia is wall-clock real: warn if the price cache lags the current
-    # date by >24h, otherwise campaign_ts silently clamps to the last
-    # cached day and the "market context" is actually stale. This is
-    # advisory only — do NOT auto-refresh (network dependency mid-run
-    # would trade a stale-price warning for a hard RPC failure risk).
-    _, last_cached = oracle.loaded_range("eth")
-    cache_age = datetime.now(timezone.utc) - last_cached
-    if args.campaign_ts is None and cache_age.total_seconds() > 24 * 3600:
-        print(
-            f"[runner] WARNING: price cache is {cache_age.days} day(s) stale "
-            f"(last day = {last_cached.date().isoformat()}). "
-            f"Sepolia runs use wall-clock time — run "
-            f"`python scripts/download_prices.py` to refresh before this "
-            f"campaign, or pass --campaign-ts to acknowledge the stale anchor.",
-            file=sys.stderr,
-        )
+    # Auto-refresh the CoinGecko cache at start-up so every Sepolia
+    # campaign uses today's spot price. On refresh failure the helper
+    # falls back to the stale cache with a warning (never crashes the
+    # run). Sepolia is wall-clock real — running under stale prices
+    # would corrupt the market_context anchor passed to the LLM.
+    if args.campaign_ts is None:
+        oracle = ensure_fresh_prices(PRICE_CACHE)
+    else:
+        # Explicit --campaign-ts means the user wants a reproducible
+        # anchor; don't touch the cache in that case.
+        oracle = PriceOracle(cache_dir=PRICE_CACHE)
     campaign_ts = resolve_campaign_ts(oracle, args.campaign_ts)
     print(
         f"[runner] oracle: campaign_ts={campaign_ts.isoformat()} "

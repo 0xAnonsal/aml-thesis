@@ -43,7 +43,10 @@ from aml.attackers.scenarios import SCENARIOS, Scenario
 from aml.chains import AnvilNode
 from aml.chains.eth_stack import deploy_pool, deploy_tornado, deploy_usdt
 from aml.chains.trace import extract_chain_trace, jsonable
-from aml.env import PriceOracle, build_market_context, resolve_campaign_ts
+from aml.env import (
+    PriceOracle, build_market_context,
+    ensure_fresh_prices, resolve_campaign_ts,
+)
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -66,8 +69,15 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
     print(f"[runner] starting {run_name} → {out_dir}", file=sys.stderr)
     start_wall = time.time()
 
-    oracle = PriceOracle(cache_dir=_PRICE_CACHE)
-    campaign_ts = resolve_campaign_ts(oracle, getattr(args, "campaign_ts", None))
+    # Auto-refresh the CoinGecko cache if it is stale (>24h old) so
+    # Anvil campaigns also get today's spot price. Skipped when the
+    # user pins a specific --campaign-ts for reproducibility.
+    override = getattr(args, "campaign_ts", None)
+    if override is None:
+        oracle = ensure_fresh_prices(_PRICE_CACHE)
+    else:
+        oracle = PriceOracle(cache_dir=_PRICE_CACHE)
+    campaign_ts = resolve_campaign_ts(oracle, override)
     print(
         f"[runner] oracle: campaign_ts={campaign_ts.isoformat()} "
         f"eth=${oracle.price('eth', campaign_ts):,.2f} "
