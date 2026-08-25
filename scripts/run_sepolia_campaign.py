@@ -223,7 +223,14 @@ def load_sepolia_env() -> tuple[str, str]:
 
 
 def load_deployed_contracts(w3: Web3):
-    """Load pre-deployed Sepolia contracts as web3 handles."""
+    """Load pre-deployed Sepolia contracts as web3 handles.
+
+    Returns the classic dict plus a `tornado_pools` sub-dict keyed by
+    denomination_wei. The multi-denom family (0.1 / 1 / 10 ETH pools)
+    is auto-detected from any deployment key matching MockTornado*.
+    Falls back to just the singular MockTornado if no _NETH suffixed
+    entries are present (legacy pre-multi-denom deployments).
+    """
     if not DEPLOYMENTS_JSON.exists():
         raise SystemExit(
             f"Missing {DEPLOYMENTS_JSON}. Run scripts/deploy_eth_mocks_sepolia.py first."
@@ -231,17 +238,43 @@ def load_deployed_contracts(w3: Web3):
     deployment = json.loads(DEPLOYMENTS_JSON.read_text())
     addrs = deployment["contracts"]
 
+    # Load ABIs once
+    with ARTIFACT_PATHS["MockTornado"].open() as f:
+        tornado_abi = json.load(f)["abi"]
+
     def load(name):
         with ARTIFACT_PATHS[name].open() as f:
             abi = json.load(f)["abi"]
         return w3.eth.contract(address=addrs[name], abi=abi)
 
-    return {
+    # Auto-discover ALL MockTornado* deployed contracts (main + multi-denom).
+    # Each is keyed on-chain by its DENOMINATION() constant, which we read
+    # with an eth_call to avoid having to parse the deployment key names.
+    tornado_pools: dict[int, "web3.contract.Contract"] = {}
+    for key, addr in addrs.items():
+        if not key.startswith("MockTornado"):
+            continue
+        ct = w3.eth.contract(address=addr, abi=tornado_abi)
+        try:
+            denom = int(ct.functions.DENOMINATION().call())
+        except Exception as e:   # noqa: BLE001
+            print(f"[runner] WARNING: {key} ({addr}) has no DENOMINATION(): {e}",
+                  file=sys.stderr)
+            continue
+        tornado_pools[denom] = ct
+
+    contracts = {
         "usdt": load("MockUSDT"),
         "pool": load("MockUniswapV2Pool"),
-        "tornado": load("MockTornado"),
+        "tornado": load("MockTornado"),   # default / 1 ETH — legacy alias
         "bridge": load("MockBridge"),
+        "tornado_pools": tornado_pools,
     }
+    if tornado_pools:
+        denoms_eth = sorted(d / 1e18 for d in tornado_pools.keys())
+        print(f"[runner] tornado pools discovered: {denoms_eth} ETH",
+              file=sys.stderr)
+    return contracts
 
 
 def load_tornado_deploy_block() -> int | None:
@@ -450,12 +483,24 @@ def main():
         "https://ethereum-sepolia-rpc.publicnode.com",
     )
     usd_stolen_preview = oracle.usd_value(amount, scenario.asset, campaign_ts)
+    # Multi-denom mixer wiring: pass the full pool dict if the scenario
+    # uses the tornado mixer and deployments has multiple pools. Falls
+    # back to the singular tornado_contract if only the 1 ETH pool
+    # exists (legacy Sepolia deployments pre-multi-denom).
+    tornado_kwargs = {}
+    if scenario.needs_tornado:
+        pools_dict = contracts.get("tornado_pools") or {}
+        if len(pools_dict) >= 2:
+            tornado_kwargs["tornado_pools"] = pools_dict
+        else:
+            tornado_kwargs["tornado_contract"] = contracts["tornado"]
+
     dispatcher = ToolDispatcher(
         w3=w3,
         usdt_contract=contracts["usdt"],
         wallets={deployer: deployer_key, alice: alice_key},
         pool_contract=contracts["pool"],
-        tornado_contract=contracts["tornado"] if scenario.needs_tornado else None,
+        **tornado_kwargs,
         mixer_events_from_block=tornado_deploy_block,
         logs_rpc_url=logs_rpc_url,
         laundering_target_usd=usd_stolen_preview,

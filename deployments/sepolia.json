@@ -9,7 +9,9 @@
     "MiMCSponge": "0x615FD17d605325eb05d784Aa8189518FeE5f0Ce6",
     "Verifier": "0x2FDceD2D3C9c3A9322d04afc1e6A243a98a68f46",
     "MockTornado": "0x199181F8a480A61520Ca3Eb2Ae6BF5dbBc6550C5",
-    "MockBridge": "0x99DFe4eEAbbA728CE1271d0Ba6a0959883986600"
+    "MockBridge": "0x99DFe4eEAbbA728CE1271d0Ba6a0959883986600",
+    "MockTornado_0.1ETH": "0x31f00A2660285c99F382e4ac84DB6035bFb611cb",
+    "MockTornado_10ETH": "0x865CF07098b0C142Ae8db9cC7b341305AF9d21e6"
   },
   "constants": {
     "merkle_depth": 10,
@@ -17,5 +19,6 @@
     "bootstrap_usdt_micro": 100000000000,
     "bootstrap_eth_wei": 500000000000000000
   },
-  "notes": "Deploy completado en 2 fases: USDT+Pool en primer run (scripts/deploy_eth_mocks_sepolia.py), MiMC+Verifier+Tornado+Bridge en fase resume (deploy_sepolia_resume.py) tras cancelar tx MiMC pendiente por gas legacy underpriced."
+  "notes": "Deploy completado en 2 fases: USDT+Pool en primer run (scripts/deploy_eth_mocks_sepolia.py), MiMC+Verifier+Tornado+Bridge en fase resume (deploy_sepolia_resume.py) tras cancelar tx MiMC pendiente por gas legacy underpriced.",
+  "multidenom_deployed_at_utc": "2026-08-25T07:18:14.562728+00:00"
 }
