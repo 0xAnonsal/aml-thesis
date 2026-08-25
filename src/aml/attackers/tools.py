@@ -1667,17 +1667,38 @@ class ToolDispatcher:
                 pass
         return funder
 
-    def _gas_source(self) -> str | None:
+    def _gas_source(self, min_eth_needed: float = 0.005) -> str | None:
         """Address that pays for internal gas-seed txs.
 
-        If `gas_payer_address` was set at construction (typical for
-        Sepolia campaigns: Alice), every _seed_gas call pulls ETH from
-        that wallet — the realistic mode where the attacker eats gas
-        out of the stolen budget. When None, falls back to the funder
-        pool (legacy obfuscation mode / Anvil tests).
+        Preferred: `gas_payer_address` (typically Alice) — every
+        _seed_gas call pulls ETH from that wallet, matching the
+        realistic model where the attacker eats gas out of the stolen
+        budget.
+
+        Fallback: if Alice's balance drops below what's needed to
+        cover this seed plus her own gas-reserve floor, fall through
+        to the funder pool. This mirrors real laundering operations
+        where the hacker maintains cold/sleeping wallets they can
+        drain when the primary hot wallet runs low. `min_eth_needed`
+        is the exact seed amount plus a 3× headroom for the seed's
+        own gas cost.
+
+        If neither Alice nor the funder pool can cover, returns None
+        (caller decides whether to raise or degrade gracefully).
         """
+        min_wei = int(min_eth_needed * 10**18)
+        # 3x headroom over the seed amount for tx-gas + base_fee tick.
+        alice_wei_needed = min_wei * 3
+
         if self._gas_payer_address is not None:
-            return self._gas_payer_address
+            try:
+                alice_balance = self.w3.eth.get_balance(self._gas_payer_address)
+            except Exception:   # noqa: BLE001 — degrade gracefully
+                alice_balance = 0
+            if alice_balance >= alice_wei_needed:
+                return self._gas_payer_address
+            # Alice can't cover — fall through to funder pool as
+            # rainy-day / sleeping-wallet fund.
         return self._pick_funder()
 
     def _seed_gas(
