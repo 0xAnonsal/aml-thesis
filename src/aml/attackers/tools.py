@@ -81,9 +81,12 @@ _DEFAULT_GAS_RESERVE_ETH = 0.01
 
 # Gas-cost multiplier used in the "would-breach-reserve" preflight
 # check. Padding above the observed gas_price guards against a base_fee
-# tick between the check and the actual send (seed 508 retry crashed
-# on a 126 gwei delta = wallet short by ~0.0001 ETH on a small burner).
-_GAS_COST_SAFETY_MULT = 1.5
+# tick between the check and the actual send. 1.2 gives 20% cushion
+# (~1 gwei bump on a 5 gwei price = plenty for Sepolia) while leaving
+# room for the LLM to compute a workable amount via get_gas_budget's
+# max_sendable_eth without hitting spurious "would breach reserve"
+# errors like seed 509 saw at 1.5x.
+_GAS_COST_SAFETY_MULT = 1.2
 
 # Gwei budget for a standard ETH transfer (21k gas baseline).
 _ETH_TRANSFER_GAS = 21_000
@@ -2811,14 +2814,33 @@ class ToolDispatcher:
         per_tx_wei = 100_000 * gas_price
         per_tx_eth = per_tx_wei / 10**18
         txs_remaining = int(spendable * 10**18 / per_tx_wei) if per_tx_wei > 0 else 0
+        # Max ETH the wallet can send in ONE transfer_eth call while
+        # still leaving reserve_eth behind. Accounts for the same
+        # padded gas cost that _transfer_eth's preflight check applies,
+        # so the LLM can size a transfer that will actually pass. Use
+        # this value directly as amount_eth to drain safely.
+        transfer_gas_wei = int(
+            _ETH_TRANSFER_GAS * gas_price * _GAS_COST_SAFETY_MULT
+        )
+        max_sendable_wei = max(
+            0, eth_balance_wei - int(reserve_eth * 10**18) - transfer_gas_wei
+        )
+        max_sendable_eth = max_sendable_wei / 10**18
         return ToolResult(output={
             "address": address,
             "eth_balance": eth_balance,
             "reserve_eth": reserve_eth,
             "spendable_eth": spendable,
+            "max_sendable_eth": max_sendable_eth,
             "gas_price_gwei": gas_price / 10**9,
             "est_cost_per_tx_eth": per_tx_eth,
             "est_txs_remaining": txs_remaining,
+            "hint": (
+                "Use max_sendable_eth as amount_eth in transfer_eth to "
+                f"send as much as possible while keeping reserve_eth "
+                f"({reserve_eth}) protected. Pass reserve_eth=0 to fully "
+                "drain at end-of-campaign."
+            ),
         })
 
     # --- Swap tools (PR 5.5) ------------------------------------------------
