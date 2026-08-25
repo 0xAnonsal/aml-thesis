@@ -77,7 +77,13 @@ _MAX_BURNERS_PER_SMURF = 5000
 # must keep it at or above floor unless explicitly told to drain. Matches
 # real-world launderer OPSEC where the operator drips fixed gas dust into
 # each disposable wallet and never strands one mid-campaign.
-_DEFAULT_GAS_RESERVE_ETH = 0.005
+_DEFAULT_GAS_RESERVE_ETH = 0.01
+
+# Gas-cost multiplier used in the "would-breach-reserve" preflight
+# check. Padding above the observed gas_price guards against a base_fee
+# tick between the check and the actual send (seed 508 retry crashed
+# on a 126 gwei delta = wallet short by ~0.0001 ETH on a small burner).
+_GAS_COST_SAFETY_MULT = 1.5
 
 # Gwei budget for a standard ETH transfer (21k gas baseline).
 _ETH_TRANSFER_GAS = 21_000
@@ -2552,7 +2558,11 @@ class ToolDispatcher:
             return ToolResult(error=f"reserve_eth cannot be negative, got {reserve_eth}")
 
         gas_price = self.w3.eth.gas_price
-        gas_cost_wei = _ETH_TRANSFER_GAS * gas_price
+        # Preflight uses padded gas cost so a base_fee tick between
+        # check-time and send-time cannot push the tx into insufficient-
+        # funds. The tx itself is built with the un-padded gas_price so
+        # the wallet only actually pays the true fee.
+        gas_cost_wei = int(_ETH_TRANSFER_GAS * gas_price * _GAS_COST_SAFETY_MULT)
         wei_amount = int(amount_eth * 10**18)
         reserve_wei = int(reserve_eth * 10**18)
         eth_balance_wei = self.w3.eth.get_balance(from_address)
@@ -2561,9 +2571,10 @@ class ToolDispatcher:
             return ToolResult(error=(
                 f"Transfer would breach gas reserve: wallet holds "
                 f"{eth_balance_wei / 10**18:.6f} ETH, transfer needs "
-                f"{amount_eth} + {gas_cost_wei / 10**18:.6f} gas, "
+                f"{amount_eth} + {gas_cost_wei / 10**18:.6f} gas (padded "
+                f"{_GAS_COST_SAFETY_MULT}x for base_fee volatility), "
                 f"reserve_eth={reserve_eth}. Pass reserve_eth=0 to drain at "
-                "end-of-campaign."
+                "end-of-campaign — or send a smaller amount."
             ))
 
         try:
