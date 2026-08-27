@@ -263,6 +263,7 @@ def main() -> None:
         tx_hash = entry.get("tx_hash")
         pool_ct = tornado
         pool_dispatcher = dispatchers_by_pool[list(tornado_pools_by_addr.keys())[0]]
+        denom_eth = 1.0   # default for legacy notes without tx_hash lookup
         if tx_hash:
             try:
                 tx = w3.eth.get_transaction("0x" + tx_hash if not tx_hash.startswith("0x") else tx_hash)
@@ -270,8 +271,8 @@ def main() -> None:
                 if pool_key in tornado_pools_by_addr:
                     pool_ct = tornado_pools_by_addr[pool_key]
                     pool_dispatcher = dispatchers_by_pool[pool_key]
-                    denom = tx["value"] / 1e18
-                    print(f"[{i}] note routes to pool {denom} ETH ({pool_key[:12]}...)")
+                    denom_eth = tx["value"] / 1e18
+                    print(f"[{i}] note routes to pool {denom_eth} ETH ({pool_key[:12]}...)")
             except Exception as _e:
                 print(f"[{i}] pool-routing lookup failed ({_e}); using default")
 
@@ -300,7 +301,8 @@ def main() -> None:
         result = pool_dispatcher.dispatch(
             "mixer_withdraw",
             {"deposit_note": note, "recipient": recipient,
-             "gas_payer": gas_payer},
+             "gas_payer": gas_payer,
+             "denomination_eth": denom_eth},
         )
         if result.error:
             print(f"    FAILED: {result.error[:200]}")
