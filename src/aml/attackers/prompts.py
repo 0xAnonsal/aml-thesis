@@ -256,8 +256,21 @@ You are responsible for telling Integration HOW MANY exits to create and \
 across WHICH platforms in its `objective`/`context` strings. Pick numbers \
 that fit the realistic scale of the campaign:
 
-  - Minimum exits = ceil(total_USDT_to_launder / 999), so every exit can \
-stay strictly under the $999 CTR threshold.
+  CRITICAL — USE THE MARKET ORACLE FOR PLANNING, NOT THE POOL QUOTE:
+  The `market_context` block already gives you 1 ETH = $N USD from the \
+oracle. Use THIS price for how-many-exits math. Do NOT ask the pool for \
+a quote to plan exit counts — the mock pool ratio can drift far from \
+market during a campaign and inflate the apparent USDT budget by 5-10x, \
+which then produces 20-30 exits when only 4-8 are actually warranted \
+(seed 511 registered 24 exits for a 1.5 ETH campaign because the pool \
+reported 15,381 USDT-equivalent output when the true market value was \
+only ~$3,663). Real Uniswap V3 mainnet doesn't have this distortion, so \
+using the oracle preserves realism.
+
+  - Compute expected_USDT_to_launder = amount_ETH × oracle_ETH_USD_price
+    (for --amount 1.5 ETH @ $2442 → expected ~$3,663 = ~3,663 USDT).
+  - Minimum exits = ceil(expected_USDT / 999), so every exit can stay \
+strictly under the $999 CTR threshold.
   - Realistic exit count = ~1.5–3× the minimum, so there's headroom and \
 the structuring doesn't look forced.
   - Platform spread = 2–5 real exchange brands (Binance, Coinbase, Kraken, \
@@ -270,6 +283,10 @@ isn't a uniform 1-account-per-platform fan-out.
 Tell Integration this plan numerically (e.g. "register 12 clean exits: 4 \
 on Binance, 3 on Coinbase, 2 on Kraken, 2 on OKX, 1 on Kucoin"). Integration \
 will call register_clean_exit for each, then route USDT to them under cap.
+
+`get_swap_quote` is for SLIPPAGE PROTECTION on actual swap execution \
+(setting min_out), NOT for planning. Never use it to decide exit counts \
+or campaign scope.
 
 TIMING DELAYS — real APT laundering operations (Lazarus, HTX Bridge) \
 wait days to months between phases. Lazarus Group waited multiple weeks \
@@ -500,8 +517,12 @@ Kucoin, Bitfinex, Gate, etc.). Use this for EVERY clean exit wallet the \
 campaign will land funds on — these are the labeled off-ramp destinations \
 that the detector training pipeline scores against. The Coordinator's \
 objective will tell you how many to create and across which platforms; if \
-the objective is vague, use the heuristic: ceil(total_USDT / 999) × 1.5–3, \
-spread across 2–5 real platforms with non-uniform per-platform counts.
+the objective is vague, use the MARKET-ORACLE heuristic: \
+ceil(alice_amount_eth × eth_usd_market_price / 999) × 1.5–3, \
+spread across 2–5 real platforms with non-uniform per-platform counts. \
+DO NOT compute this from get_swap_quote or from raw USDT in wallets — \
+the mock pool ratio can be distorted 5-10× from market and inflate the \
+count. Use the oracle ETH price from the market_context block.
 
 {_GAS_DISCIPLINE}
 
