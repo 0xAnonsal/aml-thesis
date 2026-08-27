@@ -352,6 +352,19 @@ def main():
     parser.add_argument("--sub-agent-max-iterations", type=int, default=40)
     parser.add_argument("--max-tokens", type=int, default=8192)
     parser.add_argument(
+        "--resume", type=str, default=None,
+        help=(
+            "Resume a crashed campaign from its checkpoint. Pass the "
+            "existing run_dir path (e.g. "
+            "results/sepolia_campaign/2026-...T...-seed514_sepolia). "
+            "The runner will reuse the same Alice/wallets from that dir, "
+            "load the Coordinator checkpoint + dispatcher state, and "
+            "continue from the last completed iteration. Skips oracle "
+            "refresh, contract discovery, alice bootstrap — everything "
+            "already-done is preserved."
+        ),
+    )
+    parser.add_argument(
         "--num-funders", type=int, default=5,
         help="Intermediate funder pool size. 0 disables (deployer fund directly).",
     )
@@ -435,10 +448,30 @@ def main():
 
     contracts = load_deployed_contracts(w3)
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
-    run_name = f"{timestamp}_{scenario.name}_seed{seed}_sepolia"
-    out_dir = Path(args.out) / run_name
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if args.resume:
+        # Reuse the crashed run's dir instead of creating a fresh one so
+        # wallets_keys.jsonl + dispatcher_state.json + coordinator_checkpoint.json
+        # + mixer_notes.jsonl all remain in place and get appended to.
+        out_dir = Path(args.resume)
+        if not out_dir.exists():
+            raise SystemExit(f"--resume dir not found: {out_dir}")
+        if not (out_dir / "wallets_keys.jsonl").exists():
+            raise SystemExit(
+                f"--resume dir {out_dir} has no wallets_keys.jsonl — "
+                "cannot resume, no signing keys."
+            )
+        if (out_dir / "summary.txt").exists():
+            raise SystemExit(
+                f"--resume dir {out_dir} already has summary.txt — "
+                "campaign already completed."
+            )
+        run_name = out_dir.name
+        print(f"[runner] RESUMING run {run_name}", file=sys.stderr)
+    else:
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+        run_name = f"{timestamp}_{scenario.name}_seed{seed}_sepolia"
+        out_dir = Path(args.out) / run_name
+        out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"=" * 70, file=sys.stderr)
     print(f"[runner] SEPOLIA CAMPAIGN — {run_name}", file=sys.stderr)
@@ -471,9 +504,23 @@ def main():
     start_block = w3.eth.block_number
     print(f"[runner] campaign starting at block {start_block}", file=sys.stderr)
 
-    # Fund alice
-    alice, alice_key = fund_alice_from_deployer(w3, deployer, deployer_key, alice_funding)
-    print(f"[runner] alice funded, starting Coordinator...", file=sys.stderr)
+    # Fund alice (skipped on --resume: Alice already exists with her ETH
+    # from the crashed run, reload her from wallets_keys.jsonl).
+    if args.resume:
+        # Second entry in wallets_keys.jsonl is Alice (deployer is first).
+        _wallets_lines = list(open(out_dir / "wallets_keys.jsonl"))
+        _alice_entry = json.loads(_wallets_lines[1])
+        alice = _alice_entry["address"]
+        alice_key = _alice_entry["private_key"]
+        alice_bal = w3.eth.get_balance(alice) / 1e18
+        print(
+            f"[runner] RESUME: reloaded Alice {alice} "
+            f"(balance {alice_bal:.4f} ETH from crashed run)",
+            file=sys.stderr,
+        )
+    else:
+        alice, alice_key = fund_alice_from_deployer(w3, deployer, deployer_key, alice_funding)
+        print(f"[runner] alice funded, starting Coordinator...", file=sys.stderr)
 
     # Build dispatcher with pre-deployed contracts. mixer_events_from_block
     # MUST cover the full history since tornado deploy — the mixer contract
@@ -546,12 +593,44 @@ def main():
         # infrastructure. Funder pool still exists as legacy fallback.
         gas_payer_address=alice,
     )
+    # Wire dispatcher state persistence (registered_clean_exits +
+    # peel_locked_eth) — persisted atomically on every mutation for
+    # --resume support.
+    dispatcher.state_file = out_dir / "dispatcher_state.json"
+
+    # On --resume: reload dispatcher state + register the persisted
+    # wallets from the crashed run so the sub-agents can sign for them.
+    if args.resume:
+        dispatcher.load_dispatcher_state(out_dir / "dispatcher_state.json")
+        # Load ALL persisted wallets into the dispatcher (skip alice and
+        # deployer which are already there via the wallets={} kwarg).
+        with (out_dir / "wallets_keys.jsonl").open() as _wf:
+            for _line in _wf:
+                _e = json.loads(_line)
+                _addr = _e["address"]
+                if _addr not in dispatcher.wallets:
+                    dispatcher.wallets[_addr] = _e["private_key"]
+        print(
+            f"[runner] RESUME: loaded {len(dispatcher.wallets)} wallets "
+            f"total from wallets_keys.jsonl",
+            file=sys.stderr,
+        )
+
     # Multi-funder pool for gas obfuscation. On Sepolia we keep a smaller
     # bootstrap amount per funder to avoid burning deployer ETH — 0.2 ETH
     # Funder-pool sizing: tier-based lookup (aml.attackers.funder_sizing)
     # picks count and per-funder amounts from --amount. Legacy override:
     # --funder-eth + --num-funders (matches pre-2026-08-14 tests).
-    if args.funder_eth is not None:
+    if args.resume:
+        # Funders were already bootstrapped in the crashed run — they
+        # exist on-chain with balances, and their keys were loaded from
+        # wallets_keys.jsonl above. We skip the bootstrap here. The
+        # dispatcher._funder_pool list stays empty, which means _pick_funder
+        # returns None → _gas_source falls back to alice as gas_payer
+        # (which is what we want post-resume anyway; the funder-pool
+        # obfuscation layer was already exercised during the crashed run).
+        funder_amounts = []
+    elif args.funder_eth is not None:
         funder_amounts = [args.funder_eth] * args.num_funders
     else:
         funder_amounts = allocate_funder_amounts(amount)
@@ -632,11 +711,30 @@ def main():
             except OSError:
                 pass
 
+    # Coordinator checkpoint — dumped atomically after every iteration.
+    # On --resume the loader reads this file and picks up from the last
+    # completed iteration without re-paying LLM cost for prior work.
+    checkpoint_path = out_dir / "coordinator_checkpoint.json"
+    resume_state = None
+    if args.resume:
+        from aml.attackers.coordinator import load_checkpoint
+        resume_state = load_checkpoint(checkpoint_path)
+        if resume_state is None:
+            print(
+                f"[runner] WARNING: --resume {out_dir} has no "
+                f"coordinator_checkpoint.json; starting Coordinator fresh "
+                "with a NEW user_prompt (delegations from the crashed run "
+                "are lost, but on-chain state + wallets persist).",
+                file=sys.stderr,
+            )
+
     result = coordinator.run(
         prompt,
         max_tokens=args.max_tokens,
         sub_agent_max_tokens=args.max_tokens,
         on_sub_agent_complete=_flush_sub_agent,
+        checkpoint_path=checkpoint_path,
+        resume_state=resume_state,
     )
 
     end_block = w3.eth.block_number

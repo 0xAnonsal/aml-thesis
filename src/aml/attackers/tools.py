@@ -1332,6 +1332,64 @@ class ToolDispatcher:
         # because the SAME address is in both — clean exits ARE wallets the
         # dispatcher can sign for, they just carry extra label metadata.
         self.registered_clean_exits: list[dict] = []
+        # Optional path for atomic dispatcher-state persistence. When set,
+        # every register_clean_exit and every peel_chain that mutates
+        # _peel_locked_eth writes the full state to this file (JSON dump,
+        # atomic rename). Runners set this to
+        # `<out_dir>/dispatcher_state.json` so a crashed campaign's
+        # non-wallet state can be reconstructed on --resume alongside the
+        # Coordinator checkpoint.
+        self.state_file: Any = None
+
+    def _write_dispatcher_state(self) -> None:
+        """Persist mutable non-wallet state atomically. No-op if not enabled."""
+        if self.state_file is None:
+            return
+        from pathlib import Path as _Path
+        try:
+            path = _Path(str(self.state_file))
+            tmp = path.with_suffix(path.suffix + ".tmp")
+            payload = {
+                "registered_clean_exits": self.registered_clean_exits,
+                "peel_locked_eth": self._peel_locked_eth,
+            }
+            import json as _json
+            with tmp.open("w", encoding="utf-8") as fh:
+                _json.dump(payload, fh)
+                fh.flush()
+                try:
+                    os.fsync(fh.fileno())
+                except OSError:
+                    pass
+            tmp.replace(path)
+        except Exception as exc:   # noqa: BLE001
+            print(
+                f"[dispatcher] state_file write failed: {exc}",
+                file=sys.stderr,
+            )
+
+    def load_dispatcher_state(self, state_file_path: Any) -> None:
+        """Restore registered_clean_exits + peel_locked_eth from a checkpoint.
+
+        Called by the Sepolia runner on --resume before Coordinator.run()
+        starts, so the sub-agents' tool_calls see the same registered
+        exits + peel budget consumption as the crashed run had.
+        """
+        from pathlib import Path as _Path
+        path = _Path(str(state_file_path))
+        if not path.exists():
+            return
+        import json as _json
+        with path.open("r", encoding="utf-8") as fh:
+            payload = _json.load(fh)
+        self.registered_clean_exits = list(payload.get("registered_clean_exits", []))
+        self._peel_locked_eth = float(payload.get("peel_locked_eth", 0.0))
+        print(
+            f"[dispatcher] state restored: "
+            f"{len(self.registered_clean_exits)} exits, "
+            f"peel_locked = {self._peel_locked_eth:.4f} ETH",
+            file=sys.stderr,
+        )
 
     @property
     def tool_definitions(self) -> list[dict]:
@@ -1674,6 +1732,7 @@ class ToolDispatcher:
             if note_str:
                 entry["note"] = note_str[:200]   # cap to keep artifacts tidy
         self.registered_clean_exits.append(entry)
+        self._write_dispatcher_state()
 
         # Auto-seed gas dust — same as burners. If seeding fails the exit
         # is still registered and the agent gets a warning.
@@ -2379,6 +2438,7 @@ class ToolDispatcher:
         # denominated in ETH; USDT peels aren't currently budgeted).
         if asset == "ETH":
             self._peel_locked_eth += total_peeled
+            self._write_dispatcher_state()
 
         return ToolResult(output={
             "asset": asset,

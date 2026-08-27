@@ -29,8 +29,10 @@ delegation's `context`.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from dataclasses import dataclass, field
+from typing import Any
 
 from .llm_client import LLMClient
 from .prompts import (
@@ -169,6 +171,88 @@ class CampaignResult:
         return sum(len(r.tool_calls) for r in self.sub_agent_runs)
 
 
+def _serialize_messages(messages: list) -> list:
+    """Convert the mixed dict/ContentBlock message stream to plain JSON.
+
+    Assistant messages carry `response.raw.content` which is a list of
+    Anthropic SDK ContentBlock objects (Pydantic models). To checkpoint
+    the conversation we need pure dicts. The Anthropic API accepts these
+    dicts verbatim on the next call, so round-trip works.
+    """
+    result = []
+    for msg in messages:
+        content = msg.get("content")
+        if isinstance(content, str):
+            result.append({"role": msg["role"], "content": content})
+        elif isinstance(content, list):
+            serialized = []
+            for block in content:
+                if isinstance(block, dict):
+                    serialized.append(block)
+                elif hasattr(block, "model_dump"):
+                    serialized.append(block.model_dump())
+                elif hasattr(block, "type"):
+                    d = {"type": block.type}
+                    for field_name in ("text", "id", "name", "input"):
+                        if hasattr(block, field_name):
+                            val = getattr(block, field_name)
+                            d[field_name] = val
+                    serialized.append(d)
+                else:
+                    serialized.append({"type": "unknown", "repr": repr(block)[:200]})
+            result.append({"role": msg["role"], "content": serialized})
+        else:
+            result.append({"role": msg["role"], "content": content})
+    return result
+
+
+def _serialize_sub_agent_run(r: SubAgentResult) -> dict:
+    """Freeze a SubAgentResult into a checkpoint-safe dict."""
+    return {
+        "summary": r.summary,
+        "key_facts": r.key_facts,
+        "iterations": r.iterations,
+        "cost_usd": r.cost_usd,
+        "stopped_reason": r.stopped_reason,
+        "status": r.status,
+        "tool_calls": r.tool_calls,
+    }
+
+
+def load_checkpoint(checkpoint_path: Any) -> dict | None:
+    """Load a Coordinator checkpoint. Returns None if the file is absent.
+
+    The returned dict is what Coordinator.run(resume_state=...) accepts.
+    Sub-agent runs come back as dicts, not SubAgentResult objects — the
+    CampaignResult.sub_agent_runs field is only used for the final
+    transcripts JSON which accepts dicts too.
+    """
+    from pathlib import Path as _Path
+    path = _Path(str(checkpoint_path))
+    if not path.exists():
+        return None
+    with path.open("r", encoding="utf-8") as fh:
+        payload = json.load(fh)
+    runs = []
+    for r in payload.get("sub_agent_runs_raw", []):
+        runs.append(SubAgentResult(
+            summary=r["summary"],
+            key_facts=r["key_facts"],
+            iterations=r["iterations"],
+            cost_usd=r["cost_usd"],
+            stopped_reason=r["stopped_reason"],
+            status=r["status"],
+            tool_calls=r["tool_calls"],
+        ))
+    return {
+        "iteration": payload["iteration"],
+        "messages": payload["messages"],
+        "delegations": payload.get("delegations", []),
+        "sub_agent_runs_raw": runs,
+        "cost_usd": payload.get("cost_usd", 0.0),
+    }
+
+
 class Coordinator:
     """Two-level FATF orchestrator: delegates phases to scoped sub-agents.
 
@@ -247,6 +331,8 @@ class Coordinator:
         max_tokens: int = 4096,
         sub_agent_max_tokens: int = 4096,
         on_sub_agent_complete=None,
+        checkpoint_path: Any = None,
+        resume_state: dict | None = None,
     ) -> CampaignResult:
         """Run the orchestration loop until the Coordinator stops delegating.
 
@@ -259,20 +345,75 @@ class Coordinator:
         the final `sub_agent_transcripts.json` uses. The runner uses this
         to append to an incremental JSONL so crashes mid-campaign don't lose
         the transcripts of already-completed phases.
+
+        If `checkpoint_path` is provided, after every completed iteration
+        the Coordinator writes its full state (messages, delegations,
+        sub_agent_runs, cost, iteration counter) atomically to that path.
+        If `resume_state` is provided (loaded from a previous checkpoint)
+        the loop starts from the persisted iteration count, using the
+        persisted messages / delegations / sub_agent_runs / cost. The
+        user_prompt is ignored on resume — the messages list already
+        contains it. This lets a crashed 20+ ETH campaign continue from
+        where it stopped without paying LLM cost for iterations that
+        already completed.
         """
         if system is None:
             system = COORDINATOR_SYSTEM
 
-        messages: list[dict] = [{"role": "user", "content": user_prompt}]
+        if resume_state is not None:
+            messages = list(resume_state["messages"])
+            delegations = list(resume_state.get("delegations", []))
+            sub_agent_runs = list(resume_state.get("sub_agent_runs_raw", []))
+            cost = float(resume_state.get("cost_usd", 0.0))
+            start_iter = int(resume_state.get("iteration", 0)) + 1
+            print(
+                f"[coordinator] RESUMING from iteration {start_iter} "
+                f"(cost so far: ${cost:.3f}, delegations: {len(delegations)})",
+                file=sys.stderr,
+            )
+        else:
+            messages = [{"role": "user", "content": user_prompt}]
+            delegations = []
+            sub_agent_runs = []
+            cost = 0.0
+            start_iter = 1
         tools = self.coordinator_tool_definitions
-        delegations: list[dict] = []
-        sub_agent_runs: list[SubAgentResult] = []
-        cost = 0.0
         stopped = "max_iterations"
         final_text = ""
-        iteration = 0
+        iteration = start_iter - 1
 
-        for iteration in range(1, self.max_iterations + 1):
+        def _write_checkpoint():
+            if checkpoint_path is None:
+                return
+            try:
+                payload = {
+                    "iteration": iteration,
+                    "messages": _serialize_messages(messages),
+                    "delegations": delegations,
+                    "sub_agent_runs_raw": [
+                        _serialize_sub_agent_run(r) for r in sub_agent_runs
+                    ],
+                    "cost_usd": cost,
+                    "stopped_reason": stopped,
+                }
+                from pathlib import Path as _Path
+                path = _Path(str(checkpoint_path))
+                tmp = path.with_suffix(path.suffix + ".tmp")
+                with tmp.open("w", encoding="utf-8") as fh:
+                    json.dump(payload, fh, default=str)
+                    fh.flush()
+                    try:
+                        os.fsync(fh.fileno())
+                    except OSError:
+                        pass
+                tmp.replace(path)
+            except Exception as exc:   # noqa: BLE001
+                print(
+                    f"[coordinator] checkpoint write failed: {exc}",
+                    file=sys.stderr,
+                )
+
+        for iteration in range(start_iter, self.max_iterations + 1):
             response = self.client.complete(
                 messages=messages,
                 system=system,
@@ -367,6 +508,10 @@ class Coordinator:
                 })
 
             messages.append({"role": "user", "content": tool_results})
+
+            # Checkpoint at end of iteration so a crash before the next
+            # LLM response can resume from here without re-paying.
+            _write_checkpoint()
 
         return CampaignResult(
             final_text=final_text,
