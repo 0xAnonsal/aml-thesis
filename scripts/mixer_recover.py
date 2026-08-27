@@ -186,6 +186,25 @@ def main() -> None:
         _acct = _Account.create()
         print(f"[recover] no wallet in run has ≥ 0.002 ETH gas — bootstrapping "
               f"fresh gas_payer {_acct.address} with 0.005 ETH from deployer")
+        # CRITICAL: persist the bootstrapped gas_payer key to
+        # wallets_keys.jsonl IMMEDIATELY, before ANY on-chain action.
+        # Seed 513 lost 1 ETH because this key stayed only in Python
+        # memory; when the process crashed during consolidation the key
+        # was gone and the 1 ETH withdrawn from the mixer became
+        # permanently inaccessible. Now the key survives any crash.
+        import time as _time
+        with wallets_jsonl.open("a") as _wf:
+            _wf.write(json.dumps({
+                "ts": _time.time(),
+                "address": _acct.address,
+                "private_key": _acct.key.hex(),
+                "source": "mixer_recover_bootstrap",
+            }) + "\n")
+            _wf.flush()
+            try:
+                os.fsync(_wf.fileno())
+            except OSError:
+                pass
         tx = {"from": deployer_addr, "to": _acct.address,
               "value": int(5e15),
               "nonce": w3.eth.get_transaction_count(deployer_addr),
