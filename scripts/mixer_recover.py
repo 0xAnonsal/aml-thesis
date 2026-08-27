@@ -73,13 +73,26 @@ def main() -> None:
         raise SystemExit(f"wrong chain: {w3.eth.chain_id}")
 
     deployment = json.loads(DEPLOYMENTS_JSON.read_text())
-    tornado_addr = deployment["contracts"]["MockTornado"]
     usdt_addr = deployment["contracts"]["MockUSDT"]
     tornado_deploy_block = int(deployment.get("tornado_deploy_block", 0))
-    tornado = w3.eth.contract(
-        address=tornado_addr,
-        abi=json.loads(TORNADO_ABI_PATH.read_text())["abi"],
-    )
+    tornado_abi = json.loads(TORNADO_ABI_PATH.read_text())["abi"]
+    # Multi-denom mixer: build a {pool_addr → contract} map so each
+    # note can be routed to the pool it was deposited into. Prior
+    # versions of this script used a single tornado_contract (the
+    # 1 ETH pool), which caused every 0.1 ETH pool note to fail with
+    # "Commitment not found in mixer" — 0.6 ETH stranded across seeds
+    # 512, 513, 514 (see TFM §8.9.14).
+    tornado_pools_by_addr = {}
+    for key, addr in deployment["contracts"].items():
+        if key.startswith("MockTornado"):
+            checksum_addr = Web3.to_checksum_address(addr)
+            tornado_pools_by_addr[checksum_addr.lower()] = w3.eth.contract(
+                address=checksum_addr, abi=tornado_abi,
+            )
+    # Default handle (used for wallet-registry checks that don't depend on pool)
+    tornado = tornado_pools_by_addr[
+        Web3.to_checksum_address(deployment["contracts"]["MockTornado"]).lower()
+    ]
     usdt = w3.eth.contract(
         address=usdt_addr,
         abi=json.loads(USDT_ABI_PATH.read_text())["abi"],
@@ -224,12 +237,18 @@ def main() -> None:
           f"(balance {w3.eth.get_balance(gas_payer)/1e18:.6f} ETH)")
     print(f"[recover] recipient: {recipient[:10]}...")
 
-    dispatcher = ToolDispatcher(
-        w3=w3, usdt_contract=usdt, wallets=wallets,
-        pool_contract=None, tornado_contract=tornado,
-        mixer_events_from_block=tornado_deploy_block,
-        logs_rpc_url=logs_rpc,
-    )
+    # Build a dispatcher per pool so each note routes through the
+    # contract it was deposited to. Same wallets + w3 backing all of
+    # them; only `tornado_contract` differs. This is what fixes the
+    # "commitment not found" cascade on 0.1 ETH pool notes.
+    dispatchers_by_pool: dict[str, ToolDispatcher] = {}
+    for pool_addr_lower, pool_ct in tornado_pools_by_addr.items():
+        dispatchers_by_pool[pool_addr_lower] = ToolDispatcher(
+            w3=w3, usdt_contract=usdt, wallets=wallets,
+            pool_contract=None, tornado_contract=pool_ct,
+            mixer_events_from_block=tornado_deploy_block,
+            logs_rpc_url=logs_rpc,
+        )
 
     ok = 0
     already_spent = 0
@@ -238,6 +257,24 @@ def main() -> None:
         note = entry.get("note")
         if not note:
             continue
+        # Route this note to the pool it was deposited into. The deposit
+        # tx's `to` address identifies the pool. Missing tx_hash falls
+        # back to the default 1-ETH pool (legacy behaviour).
+        tx_hash = entry.get("tx_hash")
+        pool_ct = tornado
+        pool_dispatcher = dispatchers_by_pool[list(tornado_pools_by_addr.keys())[0]]
+        if tx_hash:
+            try:
+                tx = w3.eth.get_transaction("0x" + tx_hash if not tx_hash.startswith("0x") else tx_hash)
+                pool_key = tx["to"].lower()
+                if pool_key in tornado_pools_by_addr:
+                    pool_ct = tornado_pools_by_addr[pool_key]
+                    pool_dispatcher = dispatchers_by_pool[pool_key]
+                    denom = tx["value"] / 1e18
+                    print(f"[{i}] note routes to pool {denom} ETH ({pool_key[:12]}...)")
+            except Exception as _e:
+                print(f"[{i}] pool-routing lookup failed ({_e}); using default")
+
         # Check if nullifier already spent
         try:
             nullifier_int, secret_int = note.split(":", 2)[1:]
@@ -246,7 +283,7 @@ def main() -> None:
             nh_bytes = nh_int.to_bytes(32, "big")
             # Contract exposes `nullifierHashes(bytes32) → bool` via the
             # auto-generated public mapping getter (no explicit isSpent).
-            spent = tornado.functions.nullifierHashes(nh_bytes).call()
+            spent = pool_ct.functions.nullifierHashes(nh_bytes).call()
         except Exception as e:
             print(f"[{i}] {note[:60]}...  ERROR checking spent state: {e}")
             failed += 1
@@ -260,7 +297,7 @@ def main() -> None:
         if args.dry_run:
             continue
 
-        result = dispatcher.dispatch(
+        result = pool_dispatcher.dispatch(
             "mixer_withdraw",
             {"deposit_note": note, "recipient": recipient,
              "gas_payer": gas_payer},

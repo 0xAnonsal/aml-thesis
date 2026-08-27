@@ -1601,7 +1601,7 @@ class ToolDispatcher:
                 tx, private_key=self.wallets[from_address]
             )
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
         except Exception as e:
             return ToolResult(error=f"Transfer raised: {e}")
 
@@ -1946,7 +1946,7 @@ class ToolDispatcher:
             }
         signed = self.w3.eth.account.sign_transaction(tx, private_key=faucet_key)
         tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120, poll_latency=3.0)
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120, poll_latency=1.0)
         if receipt.status != 1:
             raise RuntimeError(f"gas seed tx reverted (tx_hash={tx_hash.hex()})")
         return tx_hash.hex()
@@ -2235,7 +2235,7 @@ class ToolDispatcher:
                     tx, private_key=self.wallets[funder]
                 )
                 tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
+                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
                 if receipt.status == 1:
                     entry["returned_wei"] = send_amount_wei
                     entry["status"] = "swept"
@@ -2398,7 +2398,7 @@ class ToolDispatcher:
                     }
                     signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
                     tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-                    receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
+                    receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
                     local_nonce += 1
                     if receipt.status != 1:
                         return ToolResult(error=(
@@ -2420,7 +2420,7 @@ class ToolDispatcher:
                     })
                     signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
                     tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-                    receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
+                    receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
                     local_nonce += 1
                     if receipt.status != 1:
                         return ToolResult(error=(
@@ -2557,7 +2557,7 @@ class ToolDispatcher:
             })
             signed = self.w3.eth.account.sign_transaction(tx, private_key=gas_key)
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
         except Exception as e:
             return ToolResult(error=f"Mint raised: {e}")
 
@@ -2702,7 +2702,7 @@ class ToolDispatcher:
                 })
                 signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
                 tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
+                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
                 if receipt.status == 1:
                     total_gas_used += receipt.gasUsed
                     successful += 1
@@ -2806,7 +2806,7 @@ class ToolDispatcher:
                 tx, private_key=self.wallets[from_address],
             )
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
         except Exception as e:   # noqa: BLE001 — surface to LLM
             return ToolResult(error=f"Transfer raised: {e}")
 
@@ -2944,7 +2944,7 @@ class ToolDispatcher:
                 }
                 signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
                 tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
+                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
                 if receipt.status == 1:
                     total_gas_used += receipt.gasUsed
                     successful += 1
@@ -3151,7 +3151,7 @@ class ToolDispatcher:
                 tx, private_key=self.wallets[from_address],
             )
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
         except Exception as e:
             return ToolResult(error=f"Swap raised: {e}")
 
@@ -3228,7 +3228,7 @@ class ToolDispatcher:
                 approve_tx, private_key=sender_key,
             )
             approve_hash = self.w3.eth.send_raw_transaction(_raw_tx(approve_signed))
-            approve_receipt = self.w3.eth.wait_for_transaction_receipt(approve_hash, poll_latency=3.0)
+            approve_receipt = self.w3.eth.wait_for_transaction_receipt(approve_hash, poll_latency=1.0)
             if approve_receipt.status != 1:
                 return ToolResult(
                     error=f"Approve reverted (tx_hash={approve_hash.hex()})"
@@ -3245,7 +3245,7 @@ class ToolDispatcher:
                 swap_tx, private_key=sender_key,
             )
             swap_hash = self.w3.eth.send_raw_transaction(_raw_tx(swap_signed))
-            swap_receipt = self.w3.eth.wait_for_transaction_receipt(swap_hash, poll_latency=3.0)
+            swap_receipt = self.w3.eth.wait_for_transaction_receipt(swap_hash, poll_latency=1.0)
         except Exception as e:
             return ToolResult(error=f"Swap raised: {e}")
 
@@ -3360,7 +3360,7 @@ class ToolDispatcher:
                 tx, private_key=self.wallets[from_address],
             )
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
         except Exception as e:
             return ToolResult(error=f"Deposit raised: {e}")
 
@@ -3511,7 +3511,13 @@ class ToolDispatcher:
         # the RPC is fundamentally dropping events for this contract.
         import time as _t
         by_index: dict[int, int] = {}
-        for attempt, chunk in enumerate([9000, 500, 100]):
+        # 2-tier retry instead of 3: 9000 → 1000 blocks. The old 100-block
+        # tier compounded rate-limit slowdowns: a fallback to 90 sequential
+        # eth_getLogs calls per collect_leaves invocation would take
+        # 20-30 min under Alchemy free-tier throttling (documented in
+        # TFM §8.9.14). 1000 block chunks keep 9k of total scan in ≤ 9
+        # calls, still bounded and manageable.
+        for attempt, chunk in enumerate([9000, 1000]):
             retry: dict[int, int] = {}
             try:
                 _scan(self.mixer_events_from_block, pinned_block, chunk, retry)
@@ -3797,7 +3803,7 @@ class ToolDispatcher:
                 tx, private_key=self.wallets[gas_payer],
             )
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
         except Exception as e:
             return ToolResult(error=f"Withdraw raised: {e}")
 
