@@ -998,19 +998,34 @@ def _decode_note(note: str) -> tuple[int, int]:
         raise ValueError("deposit note hex components are not valid hex") from None
 
 
+_ZK_SUBPROCESS_TIMEOUT_S = 120
+
+
 def _run_zk_helper(*args: str) -> str:
     """Run `node scripts/zk_helpers.js <args...>`, return stripped stdout.
 
-    Raises RuntimeError if node is missing or the helper exits non-zero.
+    Raises RuntimeError if node is missing, the helper exits non-zero,
+    or the process hangs longer than _ZK_SUBPROCESS_TIMEOUT_S. Seed 513
+    froze for 30 min likely because a subprocess (either this helper or
+    _run_snarkjs) got stuck without a timeout — the whole campaign
+    blocked with no signal. The timeout kills the child and surfaces
+    the failure as a normal ToolResult error the sub-agent can handle.
     """
     try:
         proc = subprocess.run(
             ["node", str(_ZK_HELPER_JS), *args],
             capture_output=True, text=True,
+            timeout=_ZK_SUBPROCESS_TIMEOUT_S,
         )
     except FileNotFoundError:
         raise RuntimeError(
             "`node` not found on PATH — ZK mixer tools need Node.js"
+        ) from None
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"zk_helpers.js {args[0]} hung longer than "
+            f"{_ZK_SUBPROCESS_TIMEOUT_S}s and was killed. Rerun the "
+            "tool or investigate the Node process."
         ) from None
     if proc.returncode != 0:
         detail = proc.stderr.strip() or proc.stdout.strip() or "no output"
@@ -1050,13 +1065,27 @@ def _find_snarkjs() -> str:
 
 
 def _run_snarkjs(*args: str) -> None:
-    """Run `snarkjs <args...>`. Raises RuntimeError on missing binary or failure."""
+    """Run `snarkjs <args...>`. Raises RuntimeError on missing binary or failure.
+
+    Timeout applied to prevent the seed 513 freeze pattern where a stuck
+    snarkjs process blocked the whole campaign silently. Groth16 fullprove
+    on a depth-10 tree typically takes 10-30s; 120s is a generous ceiling.
+    """
     binary = _find_snarkjs()
     try:
-        proc = subprocess.run([binary, *args], capture_output=True, text=True)
+        proc = subprocess.run(
+            [binary, *args], capture_output=True, text=True,
+            timeout=_ZK_SUBPROCESS_TIMEOUT_S,
+        )
     except FileNotFoundError:
         raise RuntimeError(
             f"`snarkjs` binary vanished between lookup and exec: {binary}"
+        ) from None
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"snarkjs {' '.join(args[:2])} hung longer than "
+            f"{_ZK_SUBPROCESS_TIMEOUT_S}s and was killed. Rerun the tool "
+            "or investigate the snarkjs / Groth16 witness."
         ) from None
     if proc.returncode != 0:
         detail = proc.stderr.strip() or proc.stdout.strip() or "no output"
