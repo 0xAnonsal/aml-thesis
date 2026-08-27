@@ -475,6 +475,11 @@ def main():
                 "campaign already completed."
             )
         run_name = out_dir.name
+        # P0-2 fix: define `timestamp` in resume branch too so the
+        # meta.json / summary writeout at end-of-run doesn't crash with
+        # NameError. Extract the original launch timestamp from
+        # the run_name prefix (format YYYY-MM-DDTHH-MM-SS_...).
+        timestamp = run_name.split("_")[0]
         print(f"[runner] RESUMING run {run_name}", file=sys.stderr)
     else:
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")

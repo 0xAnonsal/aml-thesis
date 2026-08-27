@@ -83,12 +83,32 @@ def main() -> None:
     # "Commitment not found in mixer" — 0.6 ETH stranded across seeds
     # 512, 513, 514 (see TFM §8.9.14).
     tornado_pools_by_addr = {}
-    for key, addr in deployment["contracts"].items():
+    # Per-pool scan-start block. Fresh pools use the current
+    # tornado_deploy_block; ARCHIVED (_OLD) pools existed BEFORE that
+    # block so we must scan from earlier — collect_leaves would
+    # otherwise fetch only the ~1-2 deposits post-redeploy and fail
+    # with "off-chain leaf set out of sync". Use a conservative floor
+    # for old pools (well before the original deploy in mid-August).
+    pool_scan_from_block: dict[str, int] = {}
+    default_scan_block = int(deployment.get("tornado_deploy_block", 0))
+    OLD_POOL_SCAN_FLOOR = 11_400_000  # ~2 weeks before any of our deploys
+    # Active contracts
+    for key, addr in deployment.get("contracts", {}).items():
         if key.startswith("MockTornado"):
-            checksum_addr = Web3.to_checksum_address(addr)
-            tornado_pools_by_addr[checksum_addr.lower()] = w3.eth.contract(
-                address=checksum_addr, abi=tornado_abi,
+            ca = Web3.to_checksum_address(addr)
+            tornado_pools_by_addr[ca.lower()] = w3.eth.contract(
+                address=ca, abi=tornado_abi,
             )
+            pool_scan_from_block[ca.lower()] = default_scan_block
+    # Archived contracts (need earlier scan block since they predate
+    # the current tornado_deploy_block)
+    for key, addr in deployment.get("deprecated_contracts_archive", {}).items():
+        if key.startswith("MockTornado"):
+            ca = Web3.to_checksum_address(addr)
+            tornado_pools_by_addr[ca.lower()] = w3.eth.contract(
+                address=ca, abi=tornado_abi,
+            )
+            pool_scan_from_block[ca.lower()] = OLD_POOL_SCAN_FLOOR
     # Default handle (used for wallet-registry checks that don't depend on pool)
     tornado = tornado_pools_by_addr[
         Web3.to_checksum_address(deployment["contracts"]["MockTornado"]).lower()
@@ -218,10 +238,14 @@ def main() -> None:
                 os.fsync(_wf.fileno())
             except OSError:
                 pass
+        # P1-5 fix: pad gas_price 2x for base_fee tick protection +
+        # use "pending" nonce for concurrent-tx safety (same pattern as
+        # tools.py). Prior code stuck in mempool on Sepolia spikes,
+        # blocking the whole mixer_recover flow.
         tx = {"from": deployer_addr, "to": _acct.address,
               "value": int(5e15),
-              "nonce": w3.eth.get_transaction_count(deployer_addr),
-              "gas": 21000, "gasPrice": w3.eth.gas_price,
+              "nonce": w3.eth.get_transaction_count(deployer_addr, "pending"),
+              "gas": 21000, "gasPrice": int(w3.eth.gas_price * 2),
               "chainId": 11155111}
         signed = w3.eth.account.sign_transaction(tx, private_key=deployer_key)
         raw = getattr(signed, "raw_transaction", None) or signed.rawTransaction
@@ -239,18 +263,22 @@ def main() -> None:
 
     # Build a dispatcher per pool so each note routes through the
     # contract it was deposited to. Same wallets + w3 backing all of
-    # them; only `tornado_contract` differs. This is what fixes the
-    # "commitment not found" cascade on 0.1 ETH pool notes.
+    # them; only `tornado_contract` + `mixer_events_from_block` differ.
+    # Active pools scan from the current tornado_deploy_block; archived
+    # (_OLD) pools scan from the OLD_POOL_SCAN_FLOOR because their
+    # deposits predate the new deploy.
     dispatchers_by_pool: dict[str, ToolDispatcher] = {}
     for pool_addr_lower, pool_ct in tornado_pools_by_addr.items():
+        scan_block = pool_scan_from_block.get(pool_addr_lower, tornado_deploy_block)
         dispatchers_by_pool[pool_addr_lower] = ToolDispatcher(
             w3=w3, usdt_contract=usdt, wallets=wallets,
             pool_contract=None, tornado_contract=pool_ct,
-            mixer_events_from_block=tornado_deploy_block,
+            mixer_events_from_block=scan_block,
             logs_rpc_url=logs_rpc,
         )
 
     ok = 0
+    total_recovered_eth = 0.0   # P1-6: track actual ETH per denom
     already_spent = 0
     failed = 0
     for i, entry in enumerate(notes, 1):
@@ -310,13 +338,14 @@ def main() -> None:
         else:
             print(f"    OK: tx={result.output.get('tx_hash')}")
             ok += 1
+            total_recovered_eth += denom_eth   # P1-6 fix
         time.sleep(1)   # rate limit between withdraws
 
     print()
     print(f"=== Recovery summary ===")
     print(f"  Notes total:     {len(notes)}")
     print(f"  Already spent:   {already_spent}")
-    print(f"  Recovered:       {ok}  (= {ok} ETH reclaimed)")
+    print(f"  Recovered:       {ok} notes  (= {total_recovered_eth:.4f} ETH reclaimed)")
     print(f"  Failed:          {failed}")
 
     # Consolidation phase: sweep recipient wallet back to deployer if:
@@ -324,7 +353,9 @@ def main() -> None:
     #   (b) it holds any ETH.
     if (not args.dry_run) and recipient != deployer_addr and recipient in wallets:
         r_bal = w3.eth.get_balance(recipient)
-        gas_est = int(21000 * w3.eth.gas_price)
+        # P1-5 fix: pad gas_price 2x + use "pending" nonce here too.
+        padded_gas = int(w3.eth.gas_price * 2)
+        gas_est = int(21000 * padded_gas)
         if r_bal > gas_est:
             amount = r_bal - gas_est
             print()
@@ -332,8 +363,8 @@ def main() -> None:
                   f"({r_bal/1e18:.6f} ETH) → deployer")
             tx = {
                 "from": recipient, "to": deployer_addr, "value": amount,
-                "nonce": w3.eth.get_transaction_count(recipient),
-                "gas": 21000, "gasPrice": w3.eth.gas_price,
+                "nonce": w3.eth.get_transaction_count(recipient, "pending"),
+                "gas": 21000, "gasPrice": padded_gas,
                 "chainId": 11155111,
             }
             signed = w3.eth.account.sign_transaction(

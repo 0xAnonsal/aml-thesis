@@ -2768,16 +2768,13 @@ class ToolDispatcher:
         if reserve_eth < 0:
             return ToolResult(error=f"reserve_eth cannot be negative, got {reserve_eth}")
 
+        # P1-1 fix: single _GAS_PRICE_TX_MULT applied once. Prior code
+        # applied it twice (2x * 2x = 4x preflight vs 2x tx), causing
+        # spurious "would breach gas reserve" rejections that wasted
+        # LLM iterations. Now preflight check and tx build use the
+        # same padded price, so if the check passes, the tx passes.
         gas_price = int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT)
-        # Preflight AND tx build both use _GAS_PRICE_TX_MULT-padded
-        # gas price so the wallet balance check exactly matches what
-        # the tx will actually cost — no gap for base_fee ticks to
-        # exploit. Extra "overpay" only manifests if the observed
-        # gas_price was already elevated; on EIP-1559 chains miners
-        # take only base_fee + priority so most of the padding is
-        # returned by not being consumed.
-        padded_gas_price = int(gas_price * _GAS_PRICE_TX_MULT)
-        gas_cost_wei = _ETH_TRANSFER_GAS * padded_gas_price
+        gas_cost_wei = _ETH_TRANSFER_GAS * gas_price
         wei_amount = int(amount_eth * 10**18)
         reserve_wei = int(reserve_eth * 10**18)
         eth_balance_wei = self.w3.eth.get_balance(from_address)
@@ -2787,7 +2784,7 @@ class ToolDispatcher:
                 f"Transfer would breach gas reserve: wallet holds "
                 f"{eth_balance_wei / 10**18:.6f} ETH, transfer needs "
                 f"{amount_eth} + {gas_cost_wei / 10**18:.6f} gas (padded "
-                f"{_GAS_COST_SAFETY_MULT}x for base_fee volatility), "
+                f"{_GAS_PRICE_TX_MULT}x for base_fee volatility), "
                 f"reserve_eth={reserve_eth}. Pass reserve_eth=0 to drain at "
                 "end-of-campaign — or send a smaller amount."
             ))
@@ -3314,7 +3311,12 @@ class ToolDispatcher:
             return ToolResult(error=f"No private key registered for {from_address}")
 
         balance = self.w3.eth.get_balance(from_address)
-        if balance < denom_wei:
+        # P1-8 fix: include gas headroom (3M gas × padded gas_price) in
+        # the balance check. Otherwise a wallet with exactly denom_wei
+        # passes the check but bounces on send with insufficient funds
+        # (deposit costs ~0.006 ETH at 3 gwei × 3M gas × 2x pad).
+        deposit_gas_headroom = int(3_000_000 * self.w3.eth.gas_price * _GAS_PRICE_TX_MULT)
+        if balance < denom_wei + deposit_gas_headroom:
             held = balance / 10**18
             denom_eth = denom_wei / 10**18
             available = sorted(d / 10**18 for d in self.tornado_pools.keys())
@@ -3347,6 +3349,49 @@ class ToolDispatcher:
         except RuntimeError as e:
             return ToolResult(error=f"Commitment hashing failed: {e}")
         commitment_bytes = commitment_int.to_bytes(32, "big")
+
+        # P0-1 fix: persist the note BEFORE sending the deposit tx. If
+        # send_raw_transaction / wait_for_transaction_receipt subsequently
+        # fails or the process dies, the ETH is either still in the
+        # sender wallet (tx never mined) OR locked in the pool with a
+        # recoverable note on disk. Prior behavior wrote the note AFTER
+        # the receipt, opening a fatal window: crash between send and
+        # write meant the deposit landed on-chain but the nullifier /
+        # secret were only in RAM — irrecoverable ETH.
+        note = _encode_note(nullifier, secret)
+        if self.notes_file is not None:
+            try:
+                import json as _json
+                import time as _time
+                from pathlib import Path as _Path
+                _p = _Path(self.notes_file)
+                _p.parent.mkdir(parents=True, exist_ok=True)
+                with _p.open("a") as _f:
+                    _f.write(_json.dumps({
+                        "ts": _time.time(),
+                        "tx_hash": None,   # filled in below after tx mines
+                        "from_address": from_address,
+                        "leaf_index": None,
+                        "commitment": "0x" + commitment_bytes.hex(),
+                        "note": note,
+                        "status": "pre-tx",
+                    }) + "\n")
+                    _f.flush()
+                    os.fsync(_f.fileno())
+            except Exception as _exc:   # noqa: BLE001
+                # P0-3 fix: surface the persistence failure to stderr
+                # instead of silently swallowing. If the note cannot be
+                # persisted, ABORT the deposit — better a failed tool
+                # call than stranded ETH.
+                print(
+                    f"[dispatcher] CRITICAL: notes_file pre-write failed: {_exc} "
+                    f"— aborting mixer_deposit to avoid stranded ETH",
+                    file=sys.stderr,
+                )
+                return ToolResult(error=(
+                    f"notes_file pre-write failed: {_exc}. Refusing to "
+                    "deposit — the note would be irrecoverable."
+                ))
 
         try:
             tx = pool.functions.deposit(commitment_bytes).build_transaction({
@@ -3381,18 +3426,16 @@ class ToolDispatcher:
         except Exception:   # noqa: BLE001 — leaf_index is optional
             pass
 
-        note = _encode_note(nullifier, secret)
-        # Safety-net persistence (if enabled by runner). Written IMMEDIATELY
-        # after receipt so a subsequent LLM eviction / crash / halt cannot
-        # lose the note. Each line is a self-contained JSON record that a
-        # separate `scripts/mixer_recover.py` can read to redeem locked ETH.
+        # Post-tx: append the finalized note with tx_hash + leaf_index
+        # so mixer_recover can route it back to this pool later. The
+        # pre-tx write above guaranteed the note (nullifier/secret)
+        # itself is on disk even if we crash before this final write.
         if self.notes_file is not None:
             try:
                 import json as _json
                 import time as _time
                 from pathlib import Path as _Path
                 _p = _Path(self.notes_file)
-                _p.parent.mkdir(parents=True, exist_ok=True)
                 with _p.open("a") as _f:
                     _f.write(_json.dumps({
                         "ts": _time.time(),
@@ -3401,9 +3444,17 @@ class ToolDispatcher:
                         "leaf_index": leaf_index,
                         "commitment": "0x" + commitment_bytes.hex(),
                         "note": note,
+                        "status": "confirmed",
                     }) + "\n")
-            except Exception:   # noqa: BLE001 — never let persistence break a deposit
-                pass
+                    _f.flush()
+                    os.fsync(_f.fileno())
+            except Exception as _exc:   # noqa: BLE001
+                print(
+                    f"[dispatcher] notes_file post-tx write failed: {_exc} "
+                    f"(tx_hash {tx_hash.hex()} — note still recoverable "
+                    "from pre-tx line)",
+                    file=sys.stderr,
+                )
 
         return ToolResult(output={
             "tx_hash": tx_hash.hex(),

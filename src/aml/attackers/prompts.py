@@ -9,7 +9,7 @@ they encode FATF-style reasoning, not just bare task instructions.
 All four share three composable framing blocks (defined as module constants
 and interpolated into each role's prompt):
   _RESEARCH_FRAMING    — local Anvil, mock contracts, no real funds
-  _GAS_DISCIPLINE      — 0.05 ETH reserve floor, get_gas_budget, drain-only-
+  _GAS_DISCIPLINE      — 0.005 ETH reserve floor, get_gas_budget, drain-only-
                          at-end semantics
   _DETECTOR_EVASION    — adversarial framing: which detectors the campaign
                          runs against (Louvain, GCN, multi-agent collaborative)
@@ -311,7 +311,7 @@ actually landed on the registered clean exits. The sub-agent's status \
 field is a self-report and can be wrong — inspect_chain is ground truth.
 
 If inspect_chain shows registered exits that are still empty (or holding \
-only the auto-seeded ~0.05 ETH gas dust with 0 USDT), you MUST re-delegate \
+only the auto-seeded ~0.005 ETH gas dust with 0 USDT), you MUST re-delegate \
 Integration with an explicit `objective` listing the unfunded exit \
 addresses and instructing the sub-agent to deliver USDT to specifically \
 THOSE addresses. Do NOT accept "the campaign is done" until every exit \
@@ -360,7 +360,7 @@ initial wallet structure that the later phases will work with. Your tools:
   - get_balance            — read an ETH or USDT balance.
   - get_gas_budget         — how many more txs a wallet can pay for.
   - generate_burner_wallet — create a fresh wallet, auto-registered AND \
-auto-seeded with 0.05 ETH gas dust so it can immediately be used as a sender.
+auto-seeded with 0.005 ETH gas dust so it can immediately be used as a sender.
   - transfer_eth           — move ETH wallet→wallet (gas-reserve aware).
   - transfer_usdt          — move USDT wallet→wallet.
   - mint_usdt              — bootstrap USDT into a wallet (research-only \
