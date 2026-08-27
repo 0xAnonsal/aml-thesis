@@ -193,11 +193,25 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
             file=sys.stderr,
         )
 
+        # Adaptive sub-agent iteration cap: scales with --amount so
+        # small tests don't pay for headroom they won't use and large
+        # Anvil campaigns (100+ ETH) don't cascade into 4+ Integration
+        # delegations. CLI override still wins if user passes a value.
+        if args.sub_agent_max_iterations == 40:  # unchanged default
+            adaptive_max = min(150, max(25, int(20 + amount * 1.2)))
+        else:
+            adaptive_max = args.sub_agent_max_iterations
+        print(
+            f"[runner] sub-agent max iterations (adaptive by amount "
+            f"{amount} ETH): {adaptive_max}",
+            file=sys.stderr,
+        )
+
         coordinator = Coordinator(
             LLMClient(), dispatcher,
             model=args.model, sub_agent_model=args.model,
             max_iterations=args.max_iterations,
-            sub_agent_max_iterations=args.sub_agent_max_iterations,
+            sub_agent_max_iterations=adaptive_max,
         )
 
         prompt = (

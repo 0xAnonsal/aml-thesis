@@ -573,12 +573,27 @@ def main():
         dispatcher.bootstrap_funder_pool(amounts_eth=funder_amounts)
     bootstrap_attacker_addrs = sorted(dispatcher.wallets.keys())
 
+    # Adaptive sub-agent iteration cap: scales with campaign scale so
+    # small tests (1.5 ETH) don't pay for iterations they won't use and
+    # large Anvil campaigns (100+ ETH) don't cascade into 4+ Integration
+    # delegations. Formula: min(150, max(25, int(20 + amount * 1.2))).
+    # CLI --sub-agent-max-iterations always overrides.
+    if args.sub_agent_max_iterations == 40:  # unchanged default
+        adaptive_max = min(150, max(25, int(20 + amount * 1.2)))
+    else:
+        adaptive_max = args.sub_agent_max_iterations
+    print(
+        f"[runner] sub-agent max iterations (adaptive by amount "
+        f"{amount} ETH): {adaptive_max}",
+        file=sys.stderr,
+    )
+
     # Run Coordinator
     coordinator = Coordinator(
         LLMClient(), dispatcher,
         model=args.model, sub_agent_model=args.model,
         max_iterations=args.max_iterations,
-        sub_agent_max_iterations=args.sub_agent_max_iterations,
+        sub_agent_max_iterations=adaptive_max,
     )
     prompt = (
         scenario.format_prompt(alice=alice, amount=amount)
