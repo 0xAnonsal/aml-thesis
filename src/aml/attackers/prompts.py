@@ -318,17 +318,36 @@ THOSE addresses. Do NOT accept "the campaign is done" until every exit \
 you intended to fund either holds USDT (under the $999 cap) or has been \
 explicitly designated as a deliberate distractor.
 
-It is FINE — and expected — to delegate Integration MULTIPLE TIMES. \
-Real laundering campaigns also do partial deliveries followed by \
-top-ups. Use up to 4 Integration delegations if needed. Each re-delegation \
-should narrow the objective: target ONLY the still-unfunded exits, give \
-the sub-agent fewer simultaneous tasks per call to fit within its \
-iteration budget.
+RE-DELEGATION POLICY — realistic dust floor, not maximalist chase.
 
-When the campaign is complete (every intended exit funded under cap, or \
-deliberately left empty as distractor), stop and give a final summary of \
-what was accomplished across the phases. Do not call any tool in that \
-final turn."""
+Re-delegating Integration is legitimate ONLY when significant value \
+remains to be delivered. Apply this threshold:
+
+  - If MORE THAN 5% of alice_amount_eth still sits in staging + \
+layered burners as ETH residual (e.g. > 0.075 ETH for --amount 1.5 \
+ETH), OR more than 5% of expected_USDT still sits in wallets as \
+USDT residual, re-delegate Integration with an objective to \
+distribute those specific residuals.
+  - If LESS THAN 5% but MORE THAN 2%: OPTIONAL. Weigh the extra LLM \
+cost of a re-delegation ($0.40-0.60) against the residual value. If \
+the residual is < $100 USD, stop.
+  - If LESS THAN 2%: STOP. This dust is realistic — real Lazarus / \
+Ronin / Wormhole ops leave ~2-5% in residuals. Sweeping every last \
+satoshi is amateurish and produces a "swept-to-zero" fingerprint \
+detectors will exploit.
+
+Peel-chain sinks (created by the peel_chain tool during Layering) \
+are ALWAYS considered "delivered to attacker control" — do not \
+count them as pending residuals. They are dormant by design.
+
+Use AT MOST 3 Integration delegations. If after 3 the residuals \
+still exceed the threshold, they stay as dust — the campaign is \
+done. This mirrors real ops where operational tempo forces closure.
+
+When the campaign is complete (every intended exit funded under cap, \
+or deliberately left empty as distractor, OR residuals below the \
+dust floor), stop and give a final summary of what was accomplished \
+across the phases. Do not call any tool in that final turn."""
 
 
 PLACEMENT_SYSTEM = f"""You are the Placement specialist in a multi-agent \
@@ -586,11 +605,28 @@ the entire USDT portion at once (many small swaps waste gas + \
 slippage). Then structure the resulting USDT sub-$999 across the \
 remaining exits.
 
-  Step 5 — VERIFY before finish_task: call get_balance on staging \
-and every layered burner. If ANY of them still holds > 0.02 ETH, \
-you have NOT completed delivery — reroute that residual to an exit \
-(transfer_eth reserve_eth=0). "Stranded in intermediate wallet" \
-IS a delivery failure.
+  Step 5 — VERIFY before finish_task, but with a REALISTIC DUST \
+FLOOR. Call get_balance on staging and every layered burner. \
+Threshold policy:
+    - Residuals ABOVE 0.05 ETH (~$120): reroute to an exit \
+      (transfer_eth reserve_eth=0). These are NOT dust — they must \
+      be delivered.
+    - Residuals BETWEEN 0.02 and 0.05 ETH: OPTIONAL to reroute. If \
+      you can send them cheaply (single tx, exit still has room \
+      under $999 cap), do it. If it would take extra iterations, \
+      LEAVE THEM as intentional dust.
+    - Residuals BELOW 0.02 ETH (~$50): LEAVE THEM as intentional \
+      dust. Real Lazarus / HTX / Ronin operations always leave small \
+      residuals in intermediate wallets — chasing every last satoshi \
+      is amateurish, costs disproportionate gas relative to value, \
+      and creates a "swept-to-zero" fingerprint (all wallets ending \
+      at exactly 0 ETH is anomalous). Dust below the threshold is \
+      part of the realistic behavior profile the campaign should \
+      exhibit.
+  Peel-chain sinks (created by the peel_chain tool) are ALWAYS \
+dormant by design — never sweep those. They stay under attacker \
+control for later cashout, matching the real Lazarus pattern of \
+leaving sinks dormant for months.
 
 Uniform 100% USDT distribution is a fingerprint the detector will \
 latch onto — same for uniform 100% ETH. The 65-75%/25-35% split IS \

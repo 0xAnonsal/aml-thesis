@@ -1007,6 +1007,9 @@ def main():
         f"  economically_lost_pct:               "
         f"{max(0.0, 100.0 - (100.0 * (honest_recovery_eth + reconc_alice_now + reconc_burners_eth_now) * eth_price / max(usd_stolen, 1e-9))):.1f}%  "
         f"(gas + pool slippage — permanent economic loss)",
+        f"  intentional_dust_pct:                "
+        f"{100.0 * reconc_burners_eth_now * eth_price / max(usd_stolen, 1e-9):.1f}%  "
+        f"(residuals left in burners by design — real Lazarus ops leave 2-5%)",
         f"Coordinator stopped: {result.stopped_reason}",
         f"",
         f"Etherscan links:",
