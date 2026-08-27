@@ -987,14 +987,25 @@ def main():
         f"          - pool:  recoverable via sweep_sepolia.py --reverse-swap",
         f"          - gas:   PERMANENTLY LOST to validators",
         f"",
-        f"ECONOMIC EFFICIENCY (real hacker perspective — what stays under attacker control):",
-        f"  delivered_to_exits_pct:        {honest_recovery_pct:.1f}%  "
-        f"(immediate cash-out via CEX gateways)",
-        f"  total_attacker_controlled_pct: "
-        f"{100.0 * (honest_recovery_eth + reconc_alice_now + reconc_exits_eth_now + reconc_burners_eth_now) / max(reconc_alice_in, 1e-9):.1f}%  "
-        f"(delivered + recoverable — matches real ops like Lazarus 86%, Wormhole 93%)",
-        f"  economically_lost_pct:         "
-        f"{100.0 * max(0.0, reconc_residual) / max(reconc_alice_in, 1e-9):.1f}%  "
+        f"ECONOMIC EFFICIENCY (real hacker perspective — no double-counting):",
+        f"  ETH direct at exits (non-gas-seed):  {eth_at_exits:.4f} ETH  "
+        f"= ${eth_at_exits * eth_price:,.2f}",
+        f"  USDT at exits (raw balance):         {usdt_at_exits:,.2f} USDT  "
+        f"= ${usdt_at_exits * usdt_price:,.2f} @ market",
+        f"  USDT valued at pool-swapped ETH cap: {usdt_as_eth_capped:.4f} ETH  "
+        f"(prevents mock-pool ratio distortion inflating the metric)",
+        f"  ",
+        f"  delivered_to_exits_pct (capped):     {honest_recovery_pct:.1f}%  "
+        f"({honest_recovery_eth:.4f} ETH = ${honest_recovery_usd:,.2f} / "
+        f"${usd_stolen:,.2f} stolen)",
+        f"  attacker_recoverable_pct (residual): "
+        f"{100.0 * (reconc_alice_now + reconc_burners_eth_now) * eth_price / max(usd_stolen, 1e-9):.1f}%  "
+        f"(alice_residual + burners_residual — reachable via sweep)",
+        f"  total_attacker_controlled_pct:       "
+        f"{100.0 * (honest_recovery_eth + reconc_alice_now + reconc_burners_eth_now) * eth_price / max(usd_stolen, 1e-9):.1f}%  "
+        f"(delivered + still-recoverable, NO double-count with exit ETH dust)",
+        f"  economically_lost_pct:               "
+        f"{max(0.0, 100.0 - (100.0 * (honest_recovery_eth + reconc_alice_now + reconc_burners_eth_now) * eth_price / max(usd_stolen, 1e-9))):.1f}%  "
         f"(gas + pool slippage — permanent economic loss)",
         f"Coordinator stopped: {result.stopped_reason}",
         f"",

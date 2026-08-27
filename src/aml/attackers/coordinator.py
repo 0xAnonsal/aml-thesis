@@ -52,13 +52,13 @@ from .tools import ToolDispatcher
 # off-ramp consolidation primitives (but no mint, no mixer — Integration's job
 # is consolidating layered funds, not creating or further obfuscating them).
 _PLACEMENT_TOOLS = [
-    "get_balance", "get_gas_budget",
+    "get_balance", "get_balances", "get_gas_budget",
     "generate_burner_wallet",
     "mint_usdt", "transfer_usdt",
     "transfer_eth", "smurf_eth_split",
 ]
 _LAYERING_TOOLS = [
-    "get_balance", "get_gas_budget",
+    "get_balance", "get_balances", "get_gas_budget",
     "generate_burner_wallet",
     "transfer_eth", "transfer_usdt",
     "smurf_split", "smurf_eth_split",
@@ -68,7 +68,7 @@ _LAYERING_TOOLS = [
     "advance_blocks",   # PR #52: simulate timing delays between phases
 ]
 _INTEGRATION_TOOLS = [
-    "get_balance", "get_gas_budget",
+    "get_balance", "get_balances", "get_gas_budget",
     "transfer_eth", "transfer_usdt",
     "get_swap_quote", "swap_eth_for_usdt", "swap_usdt_for_eth",
     "register_clean_exit",

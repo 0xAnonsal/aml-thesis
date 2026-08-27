@@ -33,14 +33,31 @@ _RESEARCH_FRAMING = (
 
 _GAS_DISCIPLINE = (
     "OPERATIONAL DISCIPLINE — gas: every Ethereum transaction costs ETH gas, "
-    "paid by the sender. Fresh burner wallets are auto-funded with 0.05 ETH "
+    "paid by the sender. Fresh burner wallets are auto-funded with 0.005 ETH "
     "of gas dust when generated, and most tools (transfer_eth, swap_*, "
-    "transfer_usdt) refuse to drop a wallet below that 0.05 ETH floor. Call "
-    "get_gas_budget on a wallet before chaining many txs through it — it "
-    "tells you how many more transactions the wallet can pay for. At "
-    "end-of-campaign you may pass `reserve_eth=0` to drain a wallet's dust "
-    "(e.g. swap_eth_for_usdt with reserve_eth=0 sweeps the last ETH into "
-    "USDT before the wallet is abandoned)."
+    "transfer_usdt, mixer_deposit) refuse to drop a wallet below the "
+    "reserve floor.\n\n"
+    "MANDATORY GAS DISCIPLINE — read this carefully, it saves iterations "
+    "and LLM cost:\n"
+    "  1. BEFORE every transfer_eth / swap_eth_for_usdt / mixer_deposit "
+    "that could push a wallet near its reserve floor, FIRST call "
+    "get_gas_budget on that wallet and read `max_sendable_eth` from the "
+    "response.\n"
+    "  2. Use that `max_sendable_eth` value directly as your amount_eth "
+    "parameter — DO NOT compute the amount yourself using balance - reserve "
+    "- gas (the tool applies a padded gas check that will reject your "
+    "hand-computed amount by a small margin, wasting an iteration).\n"
+    "  3. For batches of wallets (e.g. checking all layered burners before "
+    "consolidation), use `get_balances` (plural) — ONE tool call for the "
+    "whole list, instead of N sequential get_balance calls (each iteration "
+    "of the LLM loop costs ~$0.03 in inference).\n"
+    "  4. At end-of-campaign you may pass `reserve_eth=0` to drain a "
+    "wallet's dust (e.g. swap_eth_for_usdt with reserve_eth=0 sweeps the "
+    "last ETH into USDT before the wallet is abandoned).\n"
+    "Skipping this discipline is expensive: seed 511 wasted ~4 iterations "
+    "on \"would breach gas reserve\" errors that get_gas_budget would have "
+    "prevented for free (get_gas_budget is a read-only call that costs no "
+    "gas)."
 )
 
 _DETECTOR_EVASION = (
@@ -119,6 +136,24 @@ inspect_chain shows zero mixer_deposits, that phase didn't really happen \
 and you should re-delegate with sharper instructions. If inspect_chain \
 reports a `uniformity_warning`, that's the chain telling you the next \
 phase's sub-agent needs explicit instructions to vary its patterns.
+
+INSPECT_CHAIN USAGE POLICY:
+  - Between Placement and Layering: OPTIONAL — Placement is short and \
+its key_facts already carry the burner addresses + balances you need.
+  - Between Layering and Integration: RECOMMENDED — Layering touches \
+many wallets; verifying that mixer deposits actually landed and burner \
+balances match the sub-agent's report catches drift early.
+  - Between multiple Integration re-delegations: RECOMMENDED when the \
+sub-agent reports "partial" or when you're about to instruct a new \
+re-delegation on the same staging wallet — a stale key_facts + fresh \
+tool calls can produce contradictory objectives.
+  - Every inspect_chain call takes 15-30s of wall-clock on Sepolia and \
+costs ~$0.02-0.05 in LLM tokens (the response body is compact but \
+non-trivial). If cost pressure is high or the sub-agent reports are \
+consistently accurate (which they are when the sub-agent's own \
+get_balance calls succeeded), you MAY skip inspect_chain and rely on \
+sub-agent key_facts. The pipeline works either way — inspect_chain is a \
+safety net for bug detection, not a functional requirement.
 
 Work through the phases in a sensible order (typically placement → layering → \
 integration, but adapt to the objective). Decompose the user's objective \

@@ -160,7 +160,11 @@ _TOOL_SCHEMAS: list[dict] = [
         "description": (
             "Get the current balance of ETH or USDT for an Ethereum address on "
             "the simulated chain. Returns the balance as a decimal number in "
-            "human units (ETH or USDT — not wei or 6-decimal base units)."
+            "human units (ETH or USDT — not wei or 6-decimal base units). "
+            "For checking > 3 wallets, prefer `get_balances` (plural) which "
+            "returns all balances in ONE tool call (saves iterations and "
+            "LLM cost — seed 511 spent 39% of its 198 tool calls on "
+            "sequential get_balance)."
         ),
         "input_schema": {
             "type": "object",
@@ -176,6 +180,37 @@ _TOOL_SCHEMAS: list[dict] = [
                 },
             },
             "required": ["address", "asset"],
+        },
+    },
+    {
+        "name": "get_balances",
+        "description": (
+            "Batched balance read for MANY wallets in ONE tool call — "
+            "prefer this over N sequential get_balance whenever you're "
+            "checking > 3 wallets (e.g. planning Integration consolidation "
+            "or verifying end-of-phase drain). Returns a "
+            "{address: balance} dict + a separate errors dict for any "
+            "invalid addresses. Capped at 50 addresses per call."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "addresses": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "List of Ethereum addresses (checksum or lowercase). "
+                        "1-50 entries."
+                    ),
+                },
+                "asset": {
+                    "type": "string",
+                    "enum": ["ETH", "USDT"],
+                    "description": "Which asset to query for all addresses.",
+                    "default": "ETH",
+                },
+            },
+            "required": ["addresses"],
         },
     },
     {
@@ -1322,6 +1357,8 @@ class ToolDispatcher:
 
         if tool_name == "get_balance":
             return self._get_balance(**tool_input)
+        if tool_name == "get_balances":
+            return self._get_balances(**tool_input)
         if tool_name == "transfer_usdt":
             return self._transfer_usdt(**tool_input)
         if tool_name == "generate_burner_wallet":
@@ -1378,6 +1415,55 @@ class ToolDispatcher:
             return ToolResult(output={"asset": "USDT", "balance": base / 10**6})
         return ToolResult(error=f"Unsupported asset: {asset!r}")
 
+    def _get_balances(
+        self, addresses: list[str], asset: str = "ETH",
+    ) -> ToolResult:
+        """Batched balance read for multiple wallets in ONE tool call.
+
+        Sequential get_balance calls in a loop (76+ per campaign seen in
+        seed 511) waste RPC round-trips and LLM iterations. This batched
+        variant returns {address: balance} for the whole list; the RPC
+        calls still go one-by-one on the Alchemy side but from the LLM's
+        perspective it's one iteration instead of N. Use whenever
+        checking > 3 wallets — Integration's consolidation planning is
+        the primary use case.
+        """
+        if not isinstance(addresses, list) or not addresses:
+            return ToolResult(error="addresses must be a non-empty list")
+        if len(addresses) > 50:
+            return ToolResult(
+                error=f"addresses list capped at 50 per call, got {len(addresses)}"
+            )
+        if asset not in ("ETH", "USDT"):
+            return ToolResult(error=f"Unsupported asset: {asset!r}")
+        if asset == "USDT" and self.usdt is None:
+            return ToolResult(error="USDT contract not set on dispatcher")
+
+        results: dict[str, float] = {}
+        errors: dict[str, str] = {}
+        for addr in addresses:
+            try:
+                checksum = Web3.to_checksum_address(addr)
+            except ValueError:
+                errors[str(addr)] = "invalid address"
+                continue
+            try:
+                if asset == "ETH":
+                    wei = self.w3.eth.get_balance(checksum)
+                    results[checksum] = wei / 10**18
+                else:
+                    base = self.usdt.functions.balanceOf(checksum).call()
+                    results[checksum] = base / 10**6
+            except Exception as exc:   # noqa: BLE001
+                errors[checksum] = str(exc)[:80]
+
+        return ToolResult(output={
+            "asset": asset,
+            "balances": results,
+            "errors": errors if errors else None,
+            "count": len(results),
+        })
+
     def _transfer_usdt(
         self, from_address: str, to_address: str, amount_usdt: float
     ) -> ToolResult:
@@ -1416,7 +1502,7 @@ class ToolDispatcher:
                 tx, private_key=self.wallets[from_address]
             )
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
         except Exception as e:
             return ToolResult(error=f"Transfer raised: {e}")
 
@@ -1760,7 +1846,7 @@ class ToolDispatcher:
             }
         signed = self.w3.eth.account.sign_transaction(tx, private_key=faucet_key)
         tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120, poll_latency=3.0)
         if receipt.status != 1:
             raise RuntimeError(f"gas seed tx reverted (tx_hash={tx_hash.hex()})")
         return tx_hash.hex()
@@ -2049,7 +2135,7 @@ class ToolDispatcher:
                     tx, private_key=self.wallets[funder]
                 )
                 tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
                 if receipt.status == 1:
                     entry["returned_wei"] = send_amount_wei
                     entry["status"] = "swept"
@@ -2212,7 +2298,7 @@ class ToolDispatcher:
                     }
                     signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
                     tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-                    receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+                    receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
                     local_nonce += 1
                     if receipt.status != 1:
                         return ToolResult(error=(
@@ -2234,7 +2320,7 @@ class ToolDispatcher:
                     })
                     signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
                     tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-                    receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+                    receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
                     local_nonce += 1
                     if receipt.status != 1:
                         return ToolResult(error=(
@@ -2370,7 +2456,7 @@ class ToolDispatcher:
             })
             signed = self.w3.eth.account.sign_transaction(tx, private_key=gas_key)
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
         except Exception as e:
             return ToolResult(error=f"Mint raised: {e}")
 
@@ -2515,7 +2601,7 @@ class ToolDispatcher:
                 })
                 signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
                 tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
                 if receipt.status == 1:
                     total_gas_used += receipt.gasUsed
                     successful += 1
@@ -2615,7 +2701,7 @@ class ToolDispatcher:
                 tx, private_key=self.wallets[from_address],
             )
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
         except Exception as e:   # noqa: BLE001 — surface to LLM
             return ToolResult(error=f"Transfer raised: {e}")
 
@@ -2753,7 +2839,7 @@ class ToolDispatcher:
                 }
                 signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
                 tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
                 if receipt.status == 1:
                     total_gas_used += receipt.gasUsed
                     successful += 1
@@ -2960,7 +3046,7 @@ class ToolDispatcher:
                 tx, private_key=self.wallets[from_address],
             )
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
         except Exception as e:
             return ToolResult(error=f"Swap raised: {e}")
 
@@ -3037,7 +3123,7 @@ class ToolDispatcher:
                 approve_tx, private_key=sender_key,
             )
             approve_hash = self.w3.eth.send_raw_transaction(_raw_tx(approve_signed))
-            approve_receipt = self.w3.eth.wait_for_transaction_receipt(approve_hash)
+            approve_receipt = self.w3.eth.wait_for_transaction_receipt(approve_hash, poll_latency=3.0)
             if approve_receipt.status != 1:
                 return ToolResult(
                     error=f"Approve reverted (tx_hash={approve_hash.hex()})"
@@ -3054,7 +3140,7 @@ class ToolDispatcher:
                 swap_tx, private_key=sender_key,
             )
             swap_hash = self.w3.eth.send_raw_transaction(_raw_tx(swap_signed))
-            swap_receipt = self.w3.eth.wait_for_transaction_receipt(swap_hash)
+            swap_receipt = self.w3.eth.wait_for_transaction_receipt(swap_hash, poll_latency=3.0)
         except Exception as e:
             return ToolResult(error=f"Swap raised: {e}")
 
@@ -3169,7 +3255,7 @@ class ToolDispatcher:
                 tx, private_key=self.wallets[from_address],
             )
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
         except Exception as e:
             return ToolResult(error=f"Deposit raised: {e}")
 
@@ -3606,7 +3692,7 @@ class ToolDispatcher:
                 tx, private_key=self.wallets[gas_payer],
             )
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=3.0)
         except Exception as e:
             return ToolResult(error=f"Withdraw raised: {e}")
 
