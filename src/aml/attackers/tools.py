@@ -88,6 +88,18 @@ _DEFAULT_GAS_RESERVE_ETH = 0.005
 # errors like seed 509 saw at 1.5x.
 _GAS_COST_SAFETY_MULT = 1.2
 
+# Multiplier applied to the observed gas_price when BUILDING the tx
+# (not just the preflight check). Padding the actual gasPrice field
+# above the observed price guards against a base_fee tick between
+# fetch and send: seed 508/512 crashed with base_fee spikes of ~3x
+# on Sepolia which 1.2x did not cover. 2.0x provides 100% headroom
+# — the tx overpays by up to 100% on the rare high-tick case, but
+# the wallet balance always covers `value + gas * gasPrice` so the
+# tx never bounces. On EIP-1559 chains the "overpay" is a ceiling,
+# not an obligation — miners only take base_fee + priority. Actual
+# cost overhead per campaign: ~$0.30-1.50 depending on tx count.
+_GAS_PRICE_TX_MULT = 2.0
+
 # Gwei budget for a standard ETH transfer (21k gas baseline).
 _ETH_TRANSFER_GAS = 21_000
 
@@ -1496,7 +1508,7 @@ class ToolDispatcher:
                 "from": from_address,
                 "nonce": self.w3.eth.get_transaction_count(from_address, "pending"),
                 "gas": 200_000,
-                "gasPrice": self.w3.eth.gas_price,
+                "gasPrice": int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT),
             })
             signed = self.w3.eth.account.sign_transaction(
                 tx, private_key=self.wallets[from_address]
@@ -1829,7 +1841,7 @@ class ToolDispatcher:
                 "value": int(amount_eth * 10**18),
                 "nonce": self.w3.eth.get_transaction_count(faucet, "pending"),
                 "gas": _ETH_TRANSFER_GAS,
-                "gasPrice": self.w3.eth.gas_price,
+                "gasPrice": int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT),
                 "chainId": self.w3.eth.chain_id,
             }
         else:
@@ -1985,7 +1997,7 @@ class ToolDispatcher:
 
         # Gas-cost threshold for the ETH balance check.
         try:
-            gas_price = self.w3.eth.gas_price
+            gas_price = int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT)
         except Exception:   # noqa: BLE001
             gas_price = self.w3.to_wei(3, "gwei")
         usdt_gas_wei = 65_000 * int(gas_price * 1.2)
@@ -2093,7 +2105,7 @@ class ToolDispatcher:
         destination = Web3.to_checksum_address(destination)
 
         try:
-            gas_price = self.w3.eth.gas_price
+            gas_price = int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT)
         except Exception:   # noqa: BLE001
             gas_price = self.w3.to_wei(3, "gwei")
         gas_cost_wei = _ETH_TRANSFER_GAS * int(gas_price * 1.2)
@@ -2293,7 +2305,7 @@ class ToolDispatcher:
                         "value": int(amt * 10**18),
                         "nonce": local_nonce,
                         "gas": _ETH_TRANSFER_GAS,
-                        "gasPrice": self.w3.eth.gas_price,
+                        "gasPrice": int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT),
                         "chainId": self.w3.eth.chain_id,
                     }
                     signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
@@ -2315,7 +2327,7 @@ class ToolDispatcher:
                         "from": current_sender,
                         "nonce": local_nonce,
                         "gas": 100_000,
-                        "gasPrice": self.w3.eth.gas_price,
+                        "gasPrice": int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT),
                         "chainId": self.w3.eth.chain_id,
                     })
                     signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
@@ -2452,7 +2464,7 @@ class ToolDispatcher:
                 "from": gas_payer,
                 "nonce": self.w3.eth.get_transaction_count(gas_payer, "pending"),
                 "gas": 200_000,
-                "gasPrice": self.w3.eth.gas_price,
+                "gasPrice": int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT),
             })
             signed = self.w3.eth.account.sign_transaction(tx, private_key=gas_key)
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
@@ -2582,7 +2594,7 @@ class ToolDispatcher:
         # Execute transfers sequentially (Anvil mines on demand; ~5ms per tx)
         sender_key = self.wallets[from_address]
         nonce = self.w3.eth.get_transaction_count(from_address, "pending")
-        gas_price = self.w3.eth.gas_price
+        gas_price = int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT)
 
         total_gas_used = 0
         successful = 0
@@ -2667,12 +2679,16 @@ class ToolDispatcher:
         if reserve_eth < 0:
             return ToolResult(error=f"reserve_eth cannot be negative, got {reserve_eth}")
 
-        gas_price = self.w3.eth.gas_price
-        # Preflight uses padded gas cost so a base_fee tick between
-        # check-time and send-time cannot push the tx into insufficient-
-        # funds. The tx itself is built with the un-padded gas_price so
-        # the wallet only actually pays the true fee.
-        gas_cost_wei = int(_ETH_TRANSFER_GAS * gas_price * _GAS_COST_SAFETY_MULT)
+        gas_price = int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT)
+        # Preflight AND tx build both use _GAS_PRICE_TX_MULT-padded
+        # gas price so the wallet balance check exactly matches what
+        # the tx will actually cost — no gap for base_fee ticks to
+        # exploit. Extra "overpay" only manifests if the observed
+        # gas_price was already elevated; on EIP-1559 chains miners
+        # take only base_fee + priority so most of the padding is
+        # returned by not being consumed.
+        padded_gas_price = int(gas_price * _GAS_PRICE_TX_MULT)
+        gas_cost_wei = _ETH_TRANSFER_GAS * padded_gas_price
         wei_amount = int(amount_eth * 10**18)
         reserve_wei = int(reserve_eth * 10**18)
         eth_balance_wei = self.w3.eth.get_balance(from_address)
@@ -2784,7 +2800,7 @@ class ToolDispatcher:
             ))
 
         # Sender must have total_eth + headroom for num_wallets transfers.
-        gas_price = self.w3.eth.gas_price
+        gas_price = int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT)
         gas_cost_wei = num_wallets * _ETH_TRANSFER_GAS * gas_price
         sender_balance_wei = self.w3.eth.get_balance(from_address)
         if sender_balance_wei < total_wei + gas_cost_wei:
@@ -2894,7 +2910,7 @@ class ToolDispatcher:
         eth_balance_wei = self.w3.eth.get_balance(address)
         eth_balance = eth_balance_wei / 10**18
         spendable = max(0.0, eth_balance - reserve_eth)
-        gas_price = self.w3.eth.gas_price
+        gas_price = int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT)
         # Heuristic per-tx cost: a USDT transfer ~100k gas — middle of
         # the realistic tx-cost range for this campaign.
         per_tx_wei = 100_000 * gas_price
@@ -3017,7 +3033,7 @@ class ToolDispatcher:
         # Gas-reserve guard: refuse if eth_amount + gas would drop the
         # sender below reserve. The check is conservative — we budget a
         # generous gas headroom so the wallet has slack for variability.
-        gas_price = self.w3.eth.gas_price
+        gas_price = int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT)
         gas_headroom_wei = _GAS_HEADROOM_TX * gas_price
         eth_balance_wei = self.w3.eth.get_balance(from_address)
         wei_in = int(eth_amount * 10**18)
@@ -3091,7 +3107,7 @@ class ToolDispatcher:
         amount_base = int(usdt_amount * 10**6)
         min_out_wei = int(min_eth_out * 10**18)
         sender_key = self.wallets[from_address]
-        gas_price = self.w3.eth.gas_price
+        gas_price = int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT)
 
         # Gas-reserve guard: even though the swap NETS ETH, the approve+swap
         # txs must be paid for first — the wallet needs reserve_eth + 2×gas
@@ -3248,7 +3264,7 @@ class ToolDispatcher:
                 "from": from_address,
                 "nonce": self.w3.eth.get_transaction_count(from_address, "pending"),
                 "gas": 3_000_000,   # MiMC insert re-hashes the full tree path
-                "gasPrice": self.w3.eth.gas_price,
+                "gasPrice": int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT),
                 "value": denom_wei,
             })
             signed = self.w3.eth.account.sign_transaction(
@@ -3686,7 +3702,7 @@ class ToolDispatcher:
                 "from": gas_payer,
                 "nonce": self.w3.eth.get_transaction_count(gas_payer, "pending"),
                 "gas": 2_000_000,
-                "gasPrice": self.w3.eth.gas_price,
+                "gasPrice": int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT),
             })
             signed = self.w3.eth.account.sign_transaction(
                 tx, private_key=self.wallets[gas_payer],
@@ -3744,7 +3760,7 @@ class ToolDispatcher:
         # uses ~3M gas (MiMC hashes the full Merkle path); with a headroom
         # factor of 1.2× we don't strand the sender mid-batch.
         balance = self.w3.eth.get_balance(from_address)
-        gas_price = self.w3.eth.gas_price
+        gas_price = int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT)
         required_deposit_wei = num_deposits * _MIXER_DENOMINATION_WEI
         estimated_gas_wei = int(num_deposits * 3_000_000 * gas_price * 1.2)
         if balance < required_deposit_wei + estimated_gas_wei:
