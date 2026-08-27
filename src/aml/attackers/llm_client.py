@@ -104,13 +104,20 @@ class LLMClient:
     the SDK handles HTTP retries (429, 5xx) automatically with exponential
     backoff.
 
-    Timeout hardening (post 2026-08-23 seed 503 hang incident):
-    - Explicit per-phase httpx.Timeout: 10s connect, 180s read, 30s write, 10s pool.
+    Timeout hardening (post 2026-08-23 seed 503 hang; tightened
+    2026-08-27 after seed 513 froze 30 min silently):
+    - Explicit per-phase httpx.Timeout: 5s connect, 90s read, 15s write, 5s pool.
       Prevents the observed failure where the previous single `timeout=600.0`
-      collapsed all phases into one and the process hung for 55+ minutes on
-      what should have been a fast call. Anthropic's typical p99 for a single
-      Sonnet response is <90s even with heavy context, so 180s is generous.
-    - `max_retries=3` (was 2) → up to 4 total attempts on transient failures.
+      collapsed all phases into one and the process hung for 55+ minutes.
+      Anthropic's typical p99 for a single Sonnet response is <60s even with
+      heavy context; 90s is generous but bounded so a stuck API doesn't
+      blackhole the campaign.
+    - `max_retries=2` (was 3 pre-seed-513) → up to 3 total attempts on
+      transient failures. Combined with the shorter timeout the worst-case
+      per-call wait drops from ~9 min (3×180s + backoff) to ~3-4 min
+      (2×90s + backoff). If the API is genuinely down for longer, the
+      sub-agent sees an error, the Coordinator re-delegates with the
+      partial key_facts, and the pipeline continues.
     - Every `complete()` call prints a timestamp + duration to stderr so
       future hangs are visible in the log stream rather than silently
       swallowed.
@@ -120,7 +127,7 @@ class LLMClient:
         self,
         *,
         api_key: str | None = None,
-        max_retries: int = 3,
+        max_retries: int = 2,
         timeout: float | httpx.Timeout | None = None,
         verbose: bool = True,
     ):
@@ -130,8 +137,8 @@ class LLMClient:
             # timeout in httpx applies to ALL phases identically, which
             # under some server conditions produced a hang the SDK never
             # recovered from. Explicit phases let each drop independently.
-            timeout = httpx.Timeout(connect=10.0, read=180.0,
-                                    write=30.0, pool=10.0)
+            timeout = httpx.Timeout(connect=5.0, read=90.0,
+                                    write=15.0, pool=5.0)
         self._client = anthropic.Anthropic(
             api_key=api_key,
             max_retries=max_retries,
