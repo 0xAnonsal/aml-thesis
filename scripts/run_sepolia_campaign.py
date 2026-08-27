@@ -257,6 +257,15 @@ def load_deployed_contracts(w3: Web3):
     for key, addr in addrs.items():
         if not key.startswith("MockTornado"):
             continue
+        # Skip _OLD suffixed entries — these are orphaned addresses
+        # preserved for historical mixer_recover lookups but MUST NOT
+        # be used for new campaigns. Without this filter, a redeploy
+        # (deploy_fresh_pools.py) writes both new and _OLD entries to
+        # deployments/sepolia.json for the same denomination, and the
+        # dict overwrite makes the _OLD entry win — seed 515 lost
+        # 1.2 ETH into old pools by exactly this bug.
+        if key.endswith("_OLD"):
+            continue
         ct = w3.eth.contract(address=addr, abi=tornado_abi)
         try:
             denom = int(ct.functions.DENOMINATION().call())
