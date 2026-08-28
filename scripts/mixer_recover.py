@@ -281,6 +281,13 @@ def main() -> None:
     total_recovered_eth = 0.0   # P1-6: track actual ETH per denom
     already_spent = 0
     failed = 0
+    # P1-7 fix: pre-compute the default 1-ETH pool key explicitly so the
+    # legacy fallback (notes with no tx_hash) always routes to MockTornado,
+    # not to whatever pool happens to be first in dict-iteration order
+    # (which may be an _OLD archived pool depending on JSON key ordering).
+    default_pool_key = Web3.to_checksum_address(
+        deployment["contracts"]["MockTornado"]
+    ).lower()
     for i, entry in enumerate(notes, 1):
         note = entry.get("note")
         if not note:
@@ -290,7 +297,7 @@ def main() -> None:
         # back to the default 1-ETH pool (legacy behaviour).
         tx_hash = entry.get("tx_hash")
         pool_ct = tornado
-        pool_dispatcher = dispatchers_by_pool[list(tornado_pools_by_addr.keys())[0]]
+        pool_dispatcher = dispatchers_by_pool[default_pool_key]
         denom_eth = 1.0   # default for legacy notes without tx_hash lookup
         if tx_hash:
             try:

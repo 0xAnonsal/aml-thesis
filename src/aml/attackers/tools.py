@@ -1352,6 +1352,11 @@ class ToolDispatcher:
             payload = {
                 "registered_clean_exits": self.registered_clean_exits,
                 "peel_locked_eth": self._peel_locked_eth,
+                # P1-3 fix: persist funder-pool addresses so --resume can
+                # restore them. Without this, the resumed dispatcher sees
+                # an empty _funder_pool, _pick_funder returns None, and
+                # gas-seeding falls back to alice (obfuscation lost).
+                "funder_pool": list(self._funder_pool),
             }
             import json as _json
             with tmp.open("w", encoding="utf-8") as fh:
@@ -1384,10 +1389,14 @@ class ToolDispatcher:
             payload = _json.load(fh)
         self.registered_clean_exits = list(payload.get("registered_clean_exits", []))
         self._peel_locked_eth = float(payload.get("peel_locked_eth", 0.0))
+        # P1-3 fix: restore funder-pool addresses so gas-seeding on --resume
+        # keeps using the same obfuscation layer as the crashed run.
+        self._funder_pool = list(payload.get("funder_pool", []))
         print(
             f"[dispatcher] state restored: "
             f"{len(self.registered_clean_exits)} exits, "
-            f"peel_locked = {self._peel_locked_eth:.4f} ETH",
+            f"peel_locked = {self._peel_locked_eth:.4f} ETH, "
+            f"funder_pool = {len(self._funder_pool)} wallets",
             file=sys.stderr,
         )
 
@@ -1805,6 +1814,11 @@ class ToolDispatcher:
             except Exception:   # noqa: BLE001
                 # Partial pool is still better than none; skip this funder.
                 del self.wallets[acct.address]
+        # P1-3 fix: persist the funder-pool immediately so --resume can
+        # rebuild it. Without this, the resumed run loses the funder pool
+        # entirely (bootstrap is skipped on --resume by design — creating
+        # NEW funders would waste ETH and pollute the obfuscation layer).
+        self._write_dispatcher_state()
 
     def _pick_funder(self) -> str | None:
         """Random funder from the pool. None if pool not bootstrapped.
@@ -2430,15 +2444,19 @@ class ToolDispatcher:
 
             hops.append(cont_addr)
             peels.append({"address": peel_addr, "amount": round(peel_amount, 6)})
+            # P1-2 fix: update campaign-level peel budget PER HOP (immediately
+            # after the peel + continuation transfers land), not once at the
+            # end of the loop. If the loop crashes at hop k of N, the on-chain
+            # peels are permanent; without per-hop persistence, a retry would
+            # see _peel_locked_eth = 0 and could accept a peel_chain call that
+            # over-runs the campaign budget.
+            if asset == "ETH":
+                self._peel_locked_eth += peel_amount
+                self._write_dispatcher_state()
             current_sender = cont_addr
             current_amount = cont_amount
 
         total_peeled = sum(p["amount"] for p in peels)
-        # Track campaign-level peel locking (ETH only — the budget is
-        # denominated in ETH; USDT peels aren't currently budgeted).
-        if asset == "ETH":
-            self._peel_locked_eth += total_peeled
-            self._write_dispatcher_state()
 
         return ToolResult(output={
             "asset": asset,

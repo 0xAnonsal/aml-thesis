@@ -638,11 +638,12 @@ def main():
     if args.resume:
         # Funders were already bootstrapped in the crashed run — they
         # exist on-chain with balances, and their keys were loaded from
-        # wallets_keys.jsonl above. We skip the bootstrap here. The
-        # dispatcher._funder_pool list stays empty, which means _pick_funder
-        # returns None → _gas_source falls back to alice as gas_payer
-        # (which is what we want post-resume anyway; the funder-pool
-        # obfuscation layer was already exercised during the crashed run).
+        # wallets_keys.jsonl above. We skip re-bootstrap (would waste ETH
+        # + pollute the obfuscation layer with fresh funders alongside the
+        # already-seeded originals). The dispatcher._funder_pool LIST is
+        # restored by load_dispatcher_state() from dispatcher_state.json
+        # (P1-3 fix), so _pick_funder keeps returning the original funders
+        # post-resume and the obfuscation layer stays intact.
         funder_amounts = []
     elif args.funder_eth is not None:
         funder_amounts = [args.funder_eth] * args.num_funders
