@@ -3368,24 +3368,38 @@ class ToolDispatcher:
         if balance < denom_wei + deposit_gas_headroom:
             held = balance / 10**18
             denom_eth = denom_wei / 10**18
+            gas_headroom_eth = deposit_gas_headroom / 10**18
+            needed_eth = denom_eth + gas_headroom_eth
+            gas_price_gwei = self.w3.eth.gas_price / 10**9
+            # P1-17 fix: (i) report the REAL required amount using the
+            # current gas price, not a stale ~0.005 hint; (ii) only suggest
+            # a smaller pool when a STRICTLY smaller denom fits (excludes
+            # the current one, since suggesting the pool the LLM already
+            # picked was circular and wasted iterations in seed 601).
             available = sorted(d / 10**18 for d in self.tornado_pools.keys())
-            smaller = [d for d in available if d <= held - 0.005]
-            smaller_hint = (
-                f"USE the {max(smaller):g} ETH pool instead "
-                f"(denomination_eth={max(smaller):g})"
-                if smaller else "no smaller pool fits either"
-            )
+            smaller = [d for d in available
+                       if d < denom_eth and d + gas_headroom_eth <= held]
+            if smaller:
+                smaller_hint = (
+                    f"downshift to the {max(smaller):g} ETH pool "
+                    f"(denomination_eth={max(smaller):g}); "
+                )
+            else:
+                smaller_hint = ""
             return ToolResult(error=(
-                f"Insufficient ETH: {from_address} holds {held:.4f} ETH — "
-                f"the {denom_eth:g} ETH pool needs exactly {denom_eth:g} ETH "
-                f"plus ~0.005 ETH gas. Alternatives with {held:.4f} ETH: "
-                f"(a) {smaller_hint}; (b) peel_chain(asset='ETH', "
-                f"initial_amount={max(0.0, held-0.005):.4f}, num_hops=15-25, "
-                f"peel_pct=0.05) — used in ~70% of real crypto heists per "
-                f"TRM Labs; (c) smurf_eth_split across 5-15 fresh burners; "
-                f"(d) swap_eth_for_usdt then smurf_split the USDT. "
-                f"Do NOT top-up this wallet to reach {denom_eth:g} ETH — "
-                f"that creates a co-funding signature the detector catches."
+                f"Insufficient ETH: {from_address} holds {held:.6f} ETH — "
+                f"the {denom_eth:g} ETH pool needs {denom_eth:g} ETH + "
+                f"~{gas_headroom_eth:.4f} ETH gas (real headroom at "
+                f"{gas_price_gwei:.2f} gwei × 3M gas × 2x pad = "
+                f"{needed_eth:.6f} ETH total). Short by "
+                f"{needed_eth - held:.6f} ETH. Options: "
+                f"(a) transfer_eth {needed_eth - held:.6f} more ETH into "
+                f"this wallet (top-up is DETECTABLE as co-funding — prefer "
+                f"a burner unrelated to Alice); {smaller_hint}"
+                f"(b) peel_chain(asset='ETH', initial_amount="
+                f"{max(0.0, held - gas_headroom_eth):.4f}, num_hops=15-25, "
+                f"peel_pct=0.05); (c) swap_eth_for_usdt then smurf_split "
+                f"the USDT into sub-CTR chunks."
             ))
 
         # Fresh deposit note: random (nullifier, secret) in the bn254 field.
@@ -3742,6 +3756,51 @@ class ToolDispatcher:
                     error="No registered wallet available to pay withdraw gas"
                 )
             gas_payer = next(iter(self.wallets))
+
+        # P1-18 fix: preflight gas budget on gas_payer. mixer_withdraw is
+        # ~2M gas (MiMC-heavy Merkle path verification); at padded gas
+        # price that's 2M × gas_price × 2 wei. Rejecting up-front with a
+        # clear message is much cheaper than sending a tx that reverts
+        # with "insufficient funds" on chain (documented in seed 601
+        # log — Alice with 0.005 ETH picked as gas_payer, real cost was
+        # 0.012 ETH, revert consumed a full LLM iteration to diagnose).
+        gas_payer_balance = self.w3.eth.get_balance(gas_payer)
+        withdraw_gas_price = int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT)
+        withdraw_gas_needed = 2_000_000 * withdraw_gas_price
+        if gas_payer_balance < withdraw_gas_needed:
+            need_eth = withdraw_gas_needed / 10**18
+            have_eth = gas_payer_balance / 10**18
+            gp_gwei = self.w3.eth.gas_price / 10**9
+            # Suggest wallets in the registry with enough balance
+            candidates = []
+            for addr in self.wallets:
+                if addr == gas_payer or addr == recipient:
+                    continue
+                try:
+                    b = self.w3.eth.get_balance(addr)
+                    if b >= withdraw_gas_needed * 2:
+                        candidates.append((addr, b / 10**18))
+                except Exception:
+                    continue
+            candidates.sort(key=lambda x: -x[1])
+            if candidates:
+                addr, bal = candidates[0]
+                alt = (
+                    f" Alternative gas_payer with enough ETH: {addr} "
+                    f"(holds {bal:.4f} ETH)."
+                )
+            else:
+                alt = (
+                    " No registered wallet has enough ETH — "
+                    f"first transfer_eth ≥ {need_eth * 2:.4f} ETH to a "
+                    f"fresh burner and use it as gas_payer."
+                )
+            return ToolResult(error=(
+                f"gas_payer {gas_payer} holds {have_eth:.6f} ETH but "
+                f"the withdraw needs ~{need_eth:.6f} ETH (2M gas × "
+                f"{gp_gwei:.2f} gwei × 2x pad). Short by "
+                f"{need_eth - have_eth:.6f} ETH.{alt}"
+            ))
 
         # Reconstruct commitment + nullifierHash from the note.
         try:
