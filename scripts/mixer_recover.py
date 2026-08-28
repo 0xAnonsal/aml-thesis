@@ -132,15 +132,35 @@ def main() -> None:
     print()
 
     notes = []
-    seen: set[str] = set()
+    by_note: dict[str, dict] = {}
 
     def _add(entry: dict, source: str) -> None:
+        """Dedup by note text. P1-15 fix: prefer the entry with tx_hash +
+        leaf_index over the P0-1 pre-tx placeholder. Without this the pre-tx
+        entry (written BEFORE send_raw_transaction, so tx_hash=null) wins
+        the dedup because it's first in the file — routing fallbacks to the
+        default 1-ETH pool, and every note from a non-1-ETH pool fails with
+        'Commitment not found'. Preferring the confirmed entry restores
+        per-pool routing for multi-denom campaigns."""
         n = entry.get("note") or ""
-        if not n or n in seen:
+        if not n:
             return
-        seen.add(n)
         entry.setdefault("_source", source)
-        notes.append(entry)
+        existing = by_note.get(n)
+        if existing is None:
+            by_note[n] = entry
+            return
+        # Merge: prefer whichever entry actually has tx_hash + leaf_index +
+        # confirmed status. A "confirmed" entry always wins over a "pre-tx"
+        # entry; between two confirmed entries the later one wins.
+        prefer_new = (
+            entry.get("status") == "confirmed"
+            and existing.get("status") != "confirmed"
+        ) or (
+            entry.get("tx_hash") and not existing.get("tx_hash")
+        )
+        if prefer_new:
+            by_note[n] = entry
 
     if notes_file.exists():
         for line in notes_file.open():
@@ -174,6 +194,10 @@ def main() -> None:
                         "leaf_index": d.get("leaf_index"),
                     }, "sub_agent_transcripts.json")
 
+    # P1-15 fix: materialize the deduped dict as the notes list. The
+    # merging in _add always keeps the richest entry per note text.
+    notes = list(by_note.values())
+
     print(f"Found {len(notes)} unique persisted notes "
           f"({sum(1 for n in notes if n.get('_source') == 'mixer_notes.jsonl')} "
           f"from notes_file, "
@@ -202,7 +226,14 @@ def main() -> None:
     # forbids the deployer from appearing anywhere in a mixer operation.
     # We need a wallet with enough ETH to cover the withdraw gas (~0.001 ETH).
     # If none exists in the run's wallets, fund a fresh one from the deployer.
-    MIN_GAS_ETH = int(2e15)   # 0.002 ETH — covers 200k-gas withdraw at 10 gwei
+    # P1-16 fix: raise to 0.01 ETH so the picked gas_payer can afford
+    # multiple withdraws in a row. A single mixer_withdraw is ~2M gas
+    # (MiMC-heavy Merkle path verification); at Sepolia typical 1 gwei
+    # base_fee + 2x pad = 2 gwei effective, that's 4e15 wei = 0.004 ETH
+    # per withdraw. Old value of 0.002 ETH failed with "insufficient funds
+    # for gas * price + value" on the SECOND withdraw of a multi-note
+    # recovery (seed 601, notes 2 and 3 in the 0.1 ETH pool).
+    MIN_GAS_ETH = int(1e16)   # 0.01 ETH — headroom for 2-3 withdraws
     gas_payer = None
     for addr in wallets:
         if addr == deployer_addr:
@@ -218,7 +249,7 @@ def main() -> None:
         from eth_account import Account as _Account
         _acct = _Account.create()
         print(f"[recover] no wallet in run has ≥ 0.002 ETH gas — bootstrapping "
-              f"fresh gas_payer {_acct.address} with 0.005 ETH from deployer")
+              f"fresh gas_payer {_acct.address} with 0.025 ETH from deployer")
         # CRITICAL: persist the bootstrapped gas_payer key to
         # wallets_keys.jsonl IMMEDIATELY, before ANY on-chain action.
         # Seed 513 lost 1 ETH because this key stayed only in Python
@@ -242,8 +273,11 @@ def main() -> None:
         # use "pending" nonce for concurrent-tx safety (same pattern as
         # tools.py). Prior code stuck in mempool on Sepolia spikes,
         # blocking the whole mixer_recover flow.
+        # P1-16 fix: seed the fresh gas_payer with enough for ~5 withdraws
+        # (was 0.005 ETH = ~1 withdraw). MockTornado withdraw ~2M gas at
+        # padded 2 gwei = 0.004 ETH per withdraw.
         tx = {"from": deployer_addr, "to": _acct.address,
-              "value": int(5e15),
+              "value": int(2.5e16),
               "nonce": w3.eth.get_transaction_count(deployer_addr, "pending"),
               "gas": 21000, "gasPrice": int(w3.eth.gas_price * 2),
               "chainId": 11155111}
