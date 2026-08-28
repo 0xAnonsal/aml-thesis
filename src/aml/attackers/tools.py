@@ -1463,47 +1463,66 @@ class ToolDispatcher:
                     k: v for k, v in tool_input.items() if k in declared
                 }
 
-        if tool_name == "get_balance":
-            return self._get_balance(**tool_input)
-        if tool_name == "get_balances":
-            return self._get_balances(**tool_input)
-        if tool_name == "transfer_usdt":
-            return self._transfer_usdt(**tool_input)
-        if tool_name == "generate_burner_wallet":
-            return self._generate_burner_wallet(**tool_input)
-        if tool_name == "register_clean_exit":
-            return self._register_clean_exit(**tool_input)
-        if tool_name == "mint_usdt":
-            return self._mint_usdt(**tool_input)
-        if tool_name == "smurf_split":
-            return self._smurf_split(**tool_input)
-        if tool_name == "transfer_eth":
-            return self._transfer_eth(**tool_input)
-        if tool_name == "smurf_eth_split":
-            return self._smurf_eth_split(**tool_input)
-        if tool_name == "get_gas_budget":
-            return self._get_gas_budget(**tool_input)
-        if tool_name == "get_swap_quote":
-            return self._get_swap_quote(**tool_input)
-        if tool_name == "swap_eth_for_usdt":
-            return self._swap_eth_for_usdt(**tool_input)
-        if tool_name == "swap_usdt_for_eth":
-            return self._swap_usdt_for_eth(**tool_input)
-        if tool_name == "mixer_deposit":
-            return self._mixer_deposit(**tool_input)
-        if tool_name == "mixer_withdraw":
-            return self._mixer_withdraw(**tool_input)
-        if tool_name == "mixer_batch_deposit":
-            return self._mixer_batch_deposit(**tool_input)
-        if tool_name == "mixer_batch_withdraw":
-            return self._mixer_batch_withdraw(**tool_input)
-        if tool_name == "peel_chain":
-            return self._peel_chain(**tool_input)
-        if tool_name == "advance_blocks":
-            return self._advance_blocks(**tool_input)
-        if tool_name == "inspect_chain":
-            return self._inspect_chain(**tool_input)
-        return ToolResult(error=f"Unknown tool: {tool_name}")
+        # P1-14 fix: wrap the whole dispatch table in a try/except so a
+        # transient RPC failure (e.g. web3.exceptions.TimeExhausted from
+        # wait_for_transaction_receipt after ~120s of Sepolia lag, or an
+        # Alchemy 429/503) surfaces to the LLM as a tool error instead of
+        # propagating up and killing the whole coordinator loop. Most
+        # individual tools already convert exceptions to ToolResult in
+        # their own try/except, but peel_chain and a few others rely on
+        # the wait_for_receipt raising cleanly — this safety net closes
+        # the gap. Any exception becomes a ToolResult(error=...) with the
+        # class name for debuggability; the LLM sees it as a normal tool
+        # failure and can retry / route around.
+        try:
+            if tool_name == "get_balance":
+                return self._get_balance(**tool_input)
+            if tool_name == "get_balances":
+                return self._get_balances(**tool_input)
+            if tool_name == "transfer_usdt":
+                return self._transfer_usdt(**tool_input)
+            if tool_name == "generate_burner_wallet":
+                return self._generate_burner_wallet(**tool_input)
+            if tool_name == "register_clean_exit":
+                return self._register_clean_exit(**tool_input)
+            if tool_name == "mint_usdt":
+                return self._mint_usdt(**tool_input)
+            if tool_name == "smurf_split":
+                return self._smurf_split(**tool_input)
+            if tool_name == "transfer_eth":
+                return self._transfer_eth(**tool_input)
+            if tool_name == "smurf_eth_split":
+                return self._smurf_eth_split(**tool_input)
+            if tool_name == "get_gas_budget":
+                return self._get_gas_budget(**tool_input)
+            if tool_name == "get_swap_quote":
+                return self._get_swap_quote(**tool_input)
+            if tool_name == "swap_eth_for_usdt":
+                return self._swap_eth_for_usdt(**tool_input)
+            if tool_name == "swap_usdt_for_eth":
+                return self._swap_usdt_for_eth(**tool_input)
+            if tool_name == "mixer_deposit":
+                return self._mixer_deposit(**tool_input)
+            if tool_name == "mixer_withdraw":
+                return self._mixer_withdraw(**tool_input)
+            if tool_name == "mixer_batch_deposit":
+                return self._mixer_batch_deposit(**tool_input)
+            if tool_name == "mixer_batch_withdraw":
+                return self._mixer_batch_withdraw(**tool_input)
+            if tool_name == "peel_chain":
+                return self._peel_chain(**tool_input)
+            if tool_name == "advance_blocks":
+                return self._advance_blocks(**tool_input)
+            if tool_name == "inspect_chain":
+                return self._inspect_chain(**tool_input)
+            return ToolResult(error=f"Unknown tool: {tool_name}")
+        except Exception as exc:   # noqa: BLE001 — final safety net
+            return ToolResult(error=(
+                f"{tool_name} raised {type(exc).__name__}: {exc}. "
+                f"This is a defensive catch — the tool's own error handling "
+                f"did not convert the exception to a ToolResult. Treat as a "
+                f"transient RPC / infrastructure failure; safe to retry."
+            ))
 
     # --- Tool implementations -----------------------------------------------
 
@@ -2720,6 +2739,12 @@ class ToolDispatcher:
                 })
                 signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
                 tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
+                # P1-13 fix: bump the local nonce IMMEDIATELY after send
+                # succeeds. If wait_for_transaction_receipt below raises
+                # (RPC timeout) the on-chain nonce is already consumed —
+                # not bumping here reuses the same nonce on the next
+                # iteration and cascades "nonce too low" errors.
+                nonce += 1
                 receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
                 if receipt.status == 1:
                     total_gas_used += receipt.gasUsed
@@ -2729,7 +2754,6 @@ class ToolDispatcher:
                         "index": i, "burner": burner,
                         "amount_usdt": amount_base / 10**6, "error": "reverted",
                     })
-                nonce += 1
             except Exception as e:   # noqa: BLE001 — surface to LLM as a tool error
                 failures.append({
                     "index": i, "burner": burner,
@@ -2959,6 +2983,14 @@ class ToolDispatcher:
                 }
                 signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
                 tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
+                # P1-13 fix: bump the local nonce IMMEDIATELY after
+                # send_raw_transaction succeeds — the on-chain nonce is
+                # consumed by the send, not by the wait. If
+                # wait_for_transaction_receipt below raises (RPC timeout
+                # / provider hiccup) we would otherwise reuse this nonce
+                # on the next iteration and cascade "nonce too low"
+                # errors for the rest of the batch.
+                nonce += 1
                 receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
                 if receipt.status == 1:
                     total_gas_used += receipt.gasUsed
@@ -2968,7 +3000,6 @@ class ToolDispatcher:
                         "index": i, "burner": burner,
                         "amount_eth": amount_wei / 10**18, "error": "reverted",
                     })
-                nonce += 1
             except Exception as e:   # noqa: BLE001
                 failures.append({
                     "index": i, "burner": burner,
@@ -3884,7 +3915,10 @@ class ToolDispatcher:
         return ToolResult(output={
             "tx_hash": tx_hash.hex(),
             "recipient": recipient,
-            "amount_eth": _MIXER_DENOMINATION_WEI / 10**18,
+            # P1-10 fix: report the actual denom withdrawn, not the legacy
+            # 1-ETH constant. Prior wording always said "1 ETH" even for
+            # 0.1 / 10 ETH pools, misleading the sub-agent's accounting.
+            "amount_eth": denom_wei_or_err / 10**18,
             "gas_payer": gas_payer,
             "nullifier_hash": "0x" + nullifier_hash_bytes.hex(),
             "anonymity_set_size": len(leaves),
@@ -3903,6 +3937,21 @@ class ToolDispatcher:
         """Batch deposit: N × 1 ETH into the mixer, return N notes."""
         if self.tornado is None:
             return ToolResult(error="Tornado mixer contract not set on dispatcher")
+        # P1-11 fix: batch tools are hardcoded to the legacy 1-ETH pool.
+        # If the deployment has multiple denominations (0.1 / 1 / 10 ETH),
+        # a silent 1-ETH lock-in would (a) misroute value the agent
+        # intended to place in a larger pool and (b) fail on withdraw
+        # because the note's denom won't match any recovery attempt. Force
+        # the agent to use per-call mixer_deposit with an explicit
+        # denomination_eth in multi-denom deployments.
+        if len(getattr(self, "tornado_pools", {})) > 1:
+            return ToolResult(error=(
+                "mixer_batch_deposit is disabled in multi-denomination "
+                "deployments (this dispatcher has "
+                f"{len(self.tornado_pools)} pools). Call mixer_deposit "
+                "per deposit with an explicit denomination_eth so each "
+                "note lands in the correct pool."
+            ))
 
         try:
             from_address = Web3.to_checksum_address(from_address)
@@ -3996,6 +4045,20 @@ class ToolDispatcher:
         """Batch withdraw: N notes from the mixer, per-note success/failure."""
         if self.tornado is None:
             return ToolResult(error="Tornado mixer contract not set on dispatcher")
+        # P1-12 fix: same rationale as P1-11 for batch_deposit — this path
+        # calls _mixer_withdraw(note, recipient, gas_payer) with default
+        # denomination_eth=1.0, so a note from the 0.1 or 10 ETH pool
+        # would fail with "Commitment not found" (queried against the
+        # wrong pool). Force per-note mixer_withdraw with the correct
+        # denomination_eth in multi-denom deployments.
+        if len(getattr(self, "tornado_pools", {})) > 1:
+            return ToolResult(error=(
+                "mixer_batch_withdraw is disabled in multi-denomination "
+                "deployments (this dispatcher has "
+                f"{len(self.tornado_pools)} pools). Call mixer_withdraw "
+                "per note with the denomination_eth that matches the "
+                "note's origin pool (returned in mixer_deposit's output)."
+            ))
         if not isinstance(deposit_notes, list) or not deposit_notes:
             return ToolResult(
                 error="deposit_notes must be a non-empty list"
