@@ -193,15 +193,19 @@ counts + denominations into the Placement objective:
        remaining = mixer_budget − N_10 × 10
        N_1  = floor(remaining / 1.02)         ← 1-ETH pool + 2% gas
        remaining = remaining − N_1
-       N_01 = floor(remaining / 0.105)        ← 0.1-ETH pool + 5% gas
+       N_01 = floor(remaining / 0.12)         ← 0.1-ETH pool + 0.02 ETH gas
   4. VARY THE MIX: even when a pure denomination would fit, sprinkle \
      at least ONE other denomination for evasion (Lazarus/HTX \
      campaigns mix denominations to poison anonymity-set fingerprinting).
   5. Placement creates exactly N_10 + N_1 + N_01 burners, each sized \
-     to its target denomination + a small gas margin.
+     to its target denomination + REAL gas margin: 0.02 ETH on Sepolia \
+     (mixer_deposit consumes ~0.018 ETH gas at 2-3 gwei with the 2x \
+     pad the runner applies). DO NOT use 0.005 ETH margin — that's the \
+     transfer_eth reserve, NOT enough for a mixer_deposit which uses \
+     ~3M gas.
 
 Tell Placement the plan literally in the objective, e.g. "create 2 \
-burners of 1.02 ETH for 1-ETH mixer, 8 of 0.105 ETH for 0.1-ETH \
+burners of 1.02 ETH for 1-ETH mixer, 8 of 0.12 ETH for 0.1-ETH \
 mixer" (for a 3 ETH campaign) or "create 1 of 10.05 ETH for 10-ETH \
 mixer, 9 of 1.02 ETH for 1-ETH mixer" (for a 20 ETH campaign).
 
@@ -425,11 +429,13 @@ MIXER DECISION RULE (critical — don't waste iterations on doomed calls): \
 mixer_deposit accepts a `denomination_eth` parameter selecting which pool \
 to use. The typical Sepolia deployment exposes THREE pools: 0.1 ETH, \
 1 ETH, and 10 ETH — each a separate contract with its own anonymity set. \
-Pick the LARGEST denomination that fits the working amount plus ~0.005 ETH \
-gas: a burner holding 12 ETH goes to the 10 pool; a burner holding 1.05 \
-ETH goes to the 1 pool; a burner holding 0.4 ETH goes to the 0.1 pool \
-(possibly 4 times). If a burner holds < 0.105 ETH even the smallest pool \
-rejects it — route those sub-0.1-ETH fragments through peel_chain (long \
+Pick the LARGEST denomination that fits the working amount plus a REAL \
+gas headroom of ~0.02 ETH on Sepolia (mixer_deposit consumes ~3M gas at \
+2-3 gwei with the 2x pad = ~0.018 ETH). Concretely: a burner holding 12 \
+ETH goes to the 10 pool; a burner holding 1.02 ETH goes to the 1 pool \
+(needs ≥ 1.02); a burner holding 0.4 ETH goes to the 0.1 pool 3 times \
+with 0.02 headroom each (needs ≥ 0.12 per deposit). If a burner holds \
+< 0.12 ETH even the smallest pool rejects it — route those sub-0.1-ETH fragments through peel_chain (long \
 linear laundering, seen in ~70% of real cases per TRM Labs) or \
 smurf_eth_split (fan-out into 5-15 smaller burners) which have NO minimum-\
 amount restriction. IMPORTANT: `mixer_withdraw` MUST receive the SAME \

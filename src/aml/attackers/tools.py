@@ -432,14 +432,23 @@ _TOOL_SCHEMAS: list[dict] = [
                 "num_blocks": {
                     "type": "integer",
                     "description": (
-                        "How many blocks to advance. On Anvil [100, "
-                        "1000000]; combined with the random per-block "
-                        "interval this yields chain-time from minutes "
-                        "(100 blocks × 12s) up to years (1M blocks × "
-                        "12h) — pick num_blocks to bound roughly what "
-                        "you want, the sampler decides the exact gap. "
-                        "On live chains [5, 30]; num_blocks is a hint "
-                        "only (wall-clock jitter is fixed 10-360s)."
+                        "How many blocks to advance. STRICT PER-CHAIN "
+                        "RANGE — the tool rejects out-of-range values "
+                        "with an error, so ALWAYS respect the cap for "
+                        "the chain this campaign runs on:\n"
+                        "  - Anvil (chain_id=31337): [100, 1000000]. "
+                        "Combined with the per-block random sampler "
+                        "this yields chain-time from minutes to years. "
+                        "Pick num_blocks to bound the delay bucket, "
+                        "the sampler decides the exact gap.\n"
+                        "  - Sepolia / any live testnet "
+                        "(chain_id≠31337): [5, 30] — HARD CAP. On live "
+                        "chains blocks are minted by the network at a "
+                        "fixed cadence (~12s on Sepolia), so num_blocks "
+                        "is a hint; the tool sleeps a random 10-360s "
+                        "wall clock regardless. Passing values ≥ 100 "
+                        "on Sepolia is a common mistake: the tool WILL "
+                        "reject, wasting an iteration."
                     ),
                 },
             },
