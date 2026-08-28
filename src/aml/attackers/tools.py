@@ -260,15 +260,36 @@ _TOOL_SCHEMAS: list[dict] = [
             "Generate a fresh Ethereum keypair and register it in the "
             "dispatcher's wallet registry. The agent only sees the address; "
             "the private key is kept internally so the dispatcher can sign "
-            "future transactions on the wallet's behalf. The new burner is "
-            f"AUTO-SEEDED with {_DEFAULT_GAS_RESERVE_ETH} ETH from the "
-            "operator's faucet wallet so it can immediately pay gas as a "
-            "sender (without this, USDT received by the burner would be "
-            "stranded — burners with no ETH can't even submit transactions). "
-            "Returns {address, gas_seed_eth}. Still holds 0 USDT — fund it "
-            "via transfer_usdt or mint_usdt to give it a laundering balance."
+            "future transactions. Returns {address, gas_seed_eth, note}. "
+            "\n\nGAS DEFAULT: fresh burners are NOT auto-funded with gas. "
+            "Instead they inherit gas from the ETH transferred into them. "
+            "Two usage patterns:\n"
+            "  1. ETH-bound burner (destined for mixer_deposit or an ETH "
+            "downstream tx): call generate_burner_wallet(), then "
+            "transfer_eth into it with a small margin above the denom "
+            "(e.g. 1.02 ETH into a 1-ETH-pool burner, 0.12 into a "
+            "0.1-ETH-pool burner). The received ETH covers its own gas.\n"
+            "  2. USDT-only burner (will receive USDT only and must send "
+            f"onward): pass pre_fund_gas=true to seed {_DEFAULT_GAS_RESERVE_ETH} "
+            "ETH gas dust from a funder before use, since a USDT balance "
+            "cannot pay gas on its own. Only use this pattern when the "
+            "burner genuinely needs to originate a tx — passive USDT "
+            "holders (e.g. exit wallets) do NOT need gas."
         ),
-        "input_schema": {"type": "object", "properties": {}, "required": []},
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "pre_fund_gas": {
+                    "type": "boolean",
+                    "description": (
+                        "Default false. Set true ONLY for USDT-only "
+                        f"senders (auto-seeds {_DEFAULT_GAS_RESERVE_ETH} "
+                        "ETH from a funder wallet)."
+                    ),
+                },
+            },
+            "required": [],
+        },
     },
     {
         "name": "register_clean_exit",
@@ -1689,19 +1710,28 @@ class ToolDispatcher:
             - len(self.registered_clean_exits),
         )
 
-    def _generate_burner_wallet(self) -> ToolResult:
-        """Create a fresh keypair, register it, auto-seed it with gas dust.
+    def _generate_burner_wallet(self, pre_fund_gas: bool = False) -> ToolResult:
+        """Create a fresh keypair, register it. Gas seed is OPT-IN.
 
-        The seed comes from the faucet wallet (first registered) so the new
-        burner can immediately pay gas as a sender. Without this, USDT
-        transferred to the burner would be stranded — burners with no ETH
-        can't even submit transactions. Matches the real-world pattern where
-        the operator drips gas dust into each disposable hop wallet.
+        P1-19 change (2026-08-28): `pre_fund_gas` defaults to False now.
+        Rationale from operator feedback: burners that receive ETH via
+        `transfer_eth` (all mixer-bound burners) already carry their
+        own gas — the ETH they receive covers the ~0.005 ETH gas of
+        their downstream tx. Auto-seeding every burner up-front wasted
+        ~0.005 ETH per burner and doubled the RPC gas cost of the
+        obfuscation layer without adding evasion value (the co-funding
+        edge from Alice is already visible via `transfer_eth`; adding
+        a second co-funding edge from a funder does not hide the
+        first).
+
+        Pass `pre_fund_gas=True` ONLY for burners that will receive
+        USDT-only (via `transfer_usdt` or `swap_eth_for_usdt` where
+        the recipient is fresh) and need to send onward — those DO
+        need a separate gas seed since a USDT balance can't pay gas.
 
         Hard-capped at _burner_cap() to prevent runaway generation loops
         (observed empirically in seed 306 Haiku: 188 empty generate calls
-        in a single Layering sub-agent). Forces the Coordinator to STOP
-        creating new wallets and USE the ones it already has.
+        in a single Layering sub-agent).
         """
         cap = self._burner_cap()
         count = self._current_burner_count()
@@ -1713,20 +1743,27 @@ class ToolDispatcher:
                 f"generate more burners. Instead: (a) use existing burners "
                 f"for the next layering hop, (b) consolidate USDT to a "
                 f"burner you already control, or (c) route funds to the "
-                f"clean exits you registered. Generating more burners "
-                f"without a specific plan is a known failure mode that "
-                f"inflates gas costs and chain state without improving "
-                f"GNN evasion."
+                f"clean exits you registered."
             ))
         acct = Account.create()
-        address = acct.address  # already checksummed by eth_account
-        # acct.key is a HexBytes; .hex() produces the 0x-prefixed string
+        address = acct.address
         self.wallets[address] = acct.key.hex()
 
-        # Seed from faucet so the burner can pay gas. If seeding fails
-        # (no faucet, faucet broke, RPC hiccup) the burner is still
-        # registered — caller gets a warning and zero gas_seed_eth so they
-        # can react.
+        if not pre_fund_gas:
+            return ToolResult(output={
+                "address": address,
+                "gas_seed_eth": 0.0,
+                "note": (
+                    "Burner registered with ZERO gas. Fund via "
+                    "transfer_eth (recipient covers own gas from "
+                    "received amount) OR pass pre_fund_gas=true on "
+                    "generate_burner_wallet if this burner will only "
+                    "receive USDT and needs to send onward."
+                ),
+                "burners_in_campaign": count + 1,
+                "cap_remaining": cap - (count + 1),
+            })
+
         try:
             self._seed_gas(address, _DEFAULT_GAS_RESERVE_ETH,
                            source=self._gas_source())

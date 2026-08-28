@@ -67,14 +67,58 @@ def _send(w3, fn_or_tx, sender, key, value=0, gas=3_000_000):
     return receipt
 
 
+def _oracle_eth_price_usd() -> float:
+    """Read the latest ETH/USD from data/prices/eth.csv."""
+    prices_csv = REPO / "data" / "prices" / "eth.csv"
+    if not prices_csv.exists():
+        raise RuntimeError(
+            f"oracle csv missing: {prices_csv}. "
+            "Run scripts/download_prices.py first."
+        )
+    last = None
+    for line in prices_csv.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("ix"):
+            continue
+        try:
+            _ts, price = line.split(",")
+            last = float(price)
+        except ValueError:
+            continue
+    if last is None:
+        raise RuntimeError(f"oracle csv empty: {prices_csv}")
+    return last
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--eth", type=float, default=5.0,
                    help="ETH to bootstrap into the fresh pool (default 5)")
-    p.add_argument("--usdt", type=float, default=250_000.0,
-                   help="USDT to bootstrap (default 250 000)")
+    p.add_argument("--usdt", type=float, default=None,
+                   help=("USDT to bootstrap. Default: computed at ORACLE "
+                         "spot rate (eth_amount × latest ETH/USD from "
+                         "data/prices/eth.csv) so the mock pool's spot "
+                         "matches the real market price. Explicit "
+                         "override (e.g. --usdt 250000) breaks the "
+                         "spot-vs-market invariant — use only for "
+                         "deliberate stress-test scenarios."))
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args()
+
+    if args.usdt is None:
+        # P1-20 change: default to oracle-matched bootstrap. Without this,
+        # a 5 ETH + 250k USDT bootstrap yields spot=50k USDT/ETH vs market
+        # 2.5k USDT/ETH — a 20x distortion that inflates the nominal
+        # `total_usdt_delivered_to_exits` and confuses Sonnet's strategic
+        # planning (LLM thinks 1 ETH swap yields 40k USDT, so it plans
+        # 40+ exits; at real market rate 1 ETH → 2.5k USDT would suggest
+        # ~3 exits max). Oracle-matched bootstrap makes the mock's
+        # constant-product math produce swaps consistent with real prices.
+        eth_price = _oracle_eth_price_usd()
+        args.usdt = args.eth * eth_price
+        print(f"oracle ETH price: ${eth_price:,.2f}")
+        print(f"oracle-matched bootstrap: {args.eth} ETH + "
+              f"{args.usdt:,.2f} USDT (spot = ${eth_price:,.2f}/ETH)")
 
     rpc = os.environ.get("SEPOLIA_RPC_URL")
     key = os.environ.get("SEPOLIA_DEPLOYER_PRIVATE_KEY")
