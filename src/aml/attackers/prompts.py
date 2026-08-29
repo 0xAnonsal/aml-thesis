@@ -137,23 +137,30 @@ and you should re-delegate with sharper instructions. If inspect_chain \
 reports a `uniformity_warning`, that's the chain telling you the next \
 phase's sub-agent needs explicit instructions to vary its patterns.
 
-INSPECT_CHAIN USAGE POLICY:
+INSPECT_CHAIN USAGE POLICY (P1-23):
   - Between Placement and Layering: OPTIONAL — Placement is short and \
 its key_facts already carry the burner addresses + balances you need.
-  - Between Layering and Integration: RECOMMENDED — Layering touches \
-many wallets; verifying that mixer deposits actually landed and burner \
-balances match the sub-agent's report catches drift early.
-  - Between multiple Integration re-delegations: RECOMMENDED when the \
-sub-agent reports "partial" or when you're about to instruct a new \
-re-delegation on the same staging wallet — a stale key_facts + fresh \
-tool calls can produce contradictory objectives.
-  - Every inspect_chain call takes 15-30s of wall-clock on Sepolia and \
-costs ~$0.02-0.05 in LLM tokens (the response body is compact but \
-non-trivial). If cost pressure is high or the sub-agent reports are \
-consistently accurate (which they are when the sub-agent's own \
-get_balance calls succeeded), you MAY skip inspect_chain and rely on \
-sub-agent key_facts. The pipeline works either way — inspect_chain is a \
-safety net for bug detection, not a functional requirement.
+  - Between Layering and Integration: **MANDATORY** on Sepolia for \
+campaigns ≥ 5 ETH. Layering is the phase where the sub-agent touches \
+mixer + swaps + peel_chain, all of which have subtle failure modes \
+(partial mixer_deposit refuses, silent stalls under RPC throttling, \
+swap slippage that changes economic assumptions). A single inspect_chain \
+call catches drift before the Integration sub-agent commits USDT to \
+clean exits based on a wrong balance snapshot. Cost: ~$0.02-0.05. \
+Value: prevents ~$50-500 of misrouted or stranded ETH per campaign at \
+20 ETH scale.
+  - Between multiple Integration re-delegations: MANDATORY when the \
+first Integration reports "partial" or "incomplete" status.
+  - Anvil / small campaigns (< 3 ETH): the checkpoints above become \
+OPTIONAL — chain-time is free, sub-agent iteration cost is low, and \
+the potential drift is bounded in absolute terms.
+
+If cost pressure is EXTREME and you are certain sub-agent key_facts \
+are accurate (they are when the sub-agent's own get_balance calls \
+succeeded, which is visible in the delegation report), you MAY skip \
+the MANDATORY checkpoint — but log an explicit note in your reasoning \
+so the analyst reviewing the campaign transcript knows a safety net \
+was deliberately bypassed.
 
 Work through the phases in a sensible order (typically placement → layering → \
 integration, but adapt to the objective). Decompose the user's objective \

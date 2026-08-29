@@ -41,6 +41,12 @@ def main() -> None:
                         help="Address to receive the reclaimed ETH (default: deployer)")
     parser.add_argument("--dry-run", action="store_true",
                         help="List recoverable notes without executing withdrawals")
+    parser.add_argument("--verbose", "-v", action="store_true",
+                        help=("P1-27: print per-note routing decisions "
+                              "(which entry chosen from mixer_notes.jsonl "
+                              "dedup, which pool matched by tx_hash, denom "
+                              "resolved). Useful for diagnosing pool-routing "
+                              "regressions like P1-15 (pre-tx tx_hash=null)."))
     args = parser.parse_args()
 
     # Primary source: mixer_notes.jsonl (written by ToolDispatcher at deposit).
@@ -333,6 +339,11 @@ def main() -> None:
         pool_ct = tornado
         pool_dispatcher = dispatchers_by_pool[default_pool_key]
         denom_eth = 1.0   # default for legacy notes without tx_hash lookup
+        if args.verbose:
+            print(f"[{i}] dedup source={entry.get('_source','?')} "
+                  f"status={entry.get('status','?')} "
+                  f"tx_hash={('0x'+tx_hash)[:16] if tx_hash else '<null>'} "
+                  f"leaf_index={entry.get('leaf_index')}")
         if tx_hash:
             try:
                 tx = w3.eth.get_transaction("0x" + tx_hash if not tx_hash.startswith("0x") else tx_hash)
@@ -342,8 +353,15 @@ def main() -> None:
                     pool_dispatcher = dispatchers_by_pool[pool_key]
                     denom_eth = tx["value"] / 1e18
                     print(f"[{i}] note routes to pool {denom_eth} ETH ({pool_key[:12]}...)")
+                elif args.verbose:
+                    print(f"[{i}] pool_key {pool_key[:12]}... NOT in "
+                          f"tornado_pools_by_addr — falling back to default "
+                          f"({default_pool_key[:12]}...)")
             except Exception as _e:
                 print(f"[{i}] pool-routing lookup failed ({_e}); using default")
+        elif args.verbose:
+            print(f"[{i}] no tx_hash → default pool "
+                  f"({default_pool_key[:12]}...)")
 
         # Check if nullifier already spent
         try:
