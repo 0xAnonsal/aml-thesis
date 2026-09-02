@@ -1702,7 +1702,13 @@ class ToolDispatcher:
         # Post-transfer: ensure recipient has gas dust so any downstream
         # move of this USDT (relay, exit off-ramp, etc.) can pay for
         # itself. No-op if recipient is external / already funded.
-        self._ensure_gas_dust(to_address)
+        # P1-29 fix: SKIP if the recipient is a registered clean exit.
+        # Exits are terminal wallets — they never originate a tx, so
+        # they don't need gas. Auto-seeding them was ~9.2% of stolen
+        # value wasted per campaign (seed 603 baseline).
+        exit_addrs = {e.get("address") for e in self.registered_clean_exits}
+        if to_address not in exit_addrs:
+            self._ensure_gas_dust(to_address)
 
         return ToolResult(output={
             "tx_hash": tx_hash.hex(),
@@ -1816,12 +1822,17 @@ class ToolDispatcher:
     ) -> ToolResult:
         """Create a fresh wallet and register it as an intended clean exit.
 
-        Same gas-seeding behaviour as _generate_burner_wallet — the new exit
-        wallet is auto-funded with 0.05 ETH so it can immediately receive
-        and (in principle) move USDT. The difference is the extra metadata
-        recorded in self.registered_clean_exits: this is what tells the
-        post-campaign artifact writer which wallets count as labeled
-        off-ramp destinations for detector ground truth.
+        P1-29 change (2026-09-02): NO auto-seed. Clean exits are TERMINAL
+        wallets — they receive USDT/ETH from the campaign and hold it
+        until the (off-chain, out-of-scope) mule cashes out to fiat.
+        Exits never need to originate a transaction, so they don't need
+        an ETH balance. Auto-seeding them wasted ~0.005-0.017 ETH per
+        exit (visible in seed 603: 0.1377 ETH = $332.88 dust across 8
+        exits, ~9.2% of the stolen amount) with zero operational value.
+        The receive path (transfer_usdt / transfer_eth) pays gas from
+        the SENDER; the exit itself does nothing. If a downstream
+        analytical tool ever needs to move USDT out of an exit, seed on
+        demand at that point instead of preemptively.
         """
         if not isinstance(exchange_platform, str) or not exchange_platform.strip():
             return ToolResult(error="exchange_platform must be a non-empty string")
@@ -1835,27 +1846,20 @@ class ToolDispatcher:
         if note is not None:
             note_str = str(note).strip()
             if note_str:
-                entry["note"] = note_str[:200]   # cap to keep artifacts tidy
+                entry["note"] = note_str[:200]
         self.registered_clean_exits.append(entry)
         self._write_dispatcher_state()
 
-        # Auto-seed gas dust — same as burners. If seeding fails the exit
-        # is still registered and the agent gets a warning.
-        try:
-            self._seed_gas(address, _DEFAULT_GAS_RESERVE_ETH,
-                           source=self._gas_source())
-            return ToolResult(output={
-                "address": address,
-                "exchange_platform": platform,
-                "gas_seed_eth": _DEFAULT_GAS_RESERVE_ETH,
-            })
-        except Exception as e:   # noqa: BLE001
-            return ToolResult(output={
-                "address": address,
-                "exchange_platform": platform,
-                "gas_seed_eth": 0.0,
-                "warning": f"Clean exit registered but gas seeding failed: {e}",
-            })
+        return ToolResult(output={
+            "address": address,
+            "exchange_platform": platform,
+            "gas_seed_eth": 0.0,
+            "note": (
+                "Terminal wallet — no auto gas seed (P1-29). Receives "
+                "USDT/ETH via transfer_usdt / transfer_eth; the sender "
+                "pays gas. Exits do not originate transactions."
+            ),
+        })
 
     def bootstrap_funder_pool(
         self,
