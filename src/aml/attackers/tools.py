@@ -1004,6 +1004,37 @@ def _raw_tx(signed) -> bytes:
     return raw
 
 
+def _wait_receipt(w3, tx_hash, timeout: int = 60, poll_latency: float = 1.0):
+    """P1-25: wait_for_transaction_receipt with tighter timeout + one retry.
+
+    web3.py's default timeout is 120s, which under Sepolia Alchemy
+    free-tier throttling can chain multiple 2-minute hangs per campaign.
+    This wrapper:
+      - Lowers the per-attempt timeout to 60s (typical Sepolia block
+        confirmation is 12s; if we don't see the receipt in 60s the tx
+        is either dropped, stuck in mempool, or the RPC is lagging).
+      - On TimeExhausted, sleeps 5s and retries ONCE. Common case is the
+        tx landed just after the timeout — the retry finds it fast.
+      - Any other exception propagates immediately (e.g. malformed hash).
+
+    Callers get either a receipt or a TimeExhausted after ~65s total —
+    half the previous hang time in the worst case. Combined with P1-14
+    (dispatch catch-all), a hard RPC failure becomes a tool error the
+    LLM can react to, not a coordinator crash.
+    """
+    from web3.exceptions import TimeExhausted
+    import time as _t
+    try:
+        return w3.eth.wait_for_transaction_receipt(
+            tx_hash, timeout=timeout, poll_latency=poll_latency,
+        )
+    except TimeExhausted:
+        _t.sleep(5)
+        return w3.eth.wait_for_transaction_receipt(
+            tx_hash, timeout=timeout, poll_latency=poll_latency,
+        )
+
+
 # --- ZK mixer helpers (module-level — used by mixer_deposit/withdraw) ----
 
 
@@ -1659,7 +1690,7 @@ class ToolDispatcher:
                 tx, private_key=self.wallets[from_address]
             )
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
+            receipt = _wait_receipt(self.w3, tx_hash)
         except Exception as e:
             return ToolResult(error=f"Transfer raised: {e}")
 
@@ -2025,7 +2056,7 @@ class ToolDispatcher:
             }
         signed = self.w3.eth.account.sign_transaction(tx, private_key=faucet_key)
         tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120, poll_latency=1.0)
+        receipt = _wait_receipt(self.w3, tx_hash, timeout=120)
         if receipt.status != 1:
             raise RuntimeError(f"gas seed tx reverted (tx_hash={tx_hash.hex()})")
         return tx_hash.hex()
@@ -2314,7 +2345,7 @@ class ToolDispatcher:
                     tx, private_key=self.wallets[funder]
                 )
                 tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
+                receipt = _wait_receipt(self.w3, tx_hash)
                 if receipt.status == 1:
                     entry["returned_wei"] = send_amount_wei
                     entry["status"] = "swept"
@@ -2477,7 +2508,7 @@ class ToolDispatcher:
                     }
                     signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
                     tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-                    receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
+                    receipt = _wait_receipt(self.w3, tx_hash)
                     local_nonce += 1
                     if receipt.status != 1:
                         return ToolResult(error=(
@@ -2499,7 +2530,7 @@ class ToolDispatcher:
                     })
                     signed = self.w3.eth.account.sign_transaction(tx, private_key=sender_key)
                     tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-                    receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
+                    receipt = _wait_receipt(self.w3, tx_hash)
                     local_nonce += 1
                     if receipt.status != 1:
                         return ToolResult(error=(
@@ -2640,7 +2671,7 @@ class ToolDispatcher:
             })
             signed = self.w3.eth.account.sign_transaction(tx, private_key=gas_key)
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
+            receipt = _wait_receipt(self.w3, tx_hash)
         except Exception as e:
             return ToolResult(error=f"Mint raised: {e}")
 
@@ -2791,7 +2822,7 @@ class ToolDispatcher:
                 # not bumping here reuses the same nonce on the next
                 # iteration and cascades "nonce too low" errors.
                 nonce += 1
-                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
+                receipt = _wait_receipt(self.w3, tx_hash)
                 if receipt.status == 1:
                     total_gas_used += receipt.gasUsed
                     successful += 1
@@ -2891,7 +2922,7 @@ class ToolDispatcher:
                 tx, private_key=self.wallets[from_address],
             )
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
+            receipt = _wait_receipt(self.w3, tx_hash)
         except Exception as e:   # noqa: BLE001 — surface to LLM
             return ToolResult(error=f"Transfer raised: {e}")
 
@@ -3037,7 +3068,7 @@ class ToolDispatcher:
                 # on the next iteration and cascade "nonce too low"
                 # errors for the rest of the batch.
                 nonce += 1
-                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
+                receipt = _wait_receipt(self.w3, tx_hash)
                 if receipt.status == 1:
                     total_gas_used += receipt.gasUsed
                     successful += 1
@@ -3243,7 +3274,7 @@ class ToolDispatcher:
                 tx, private_key=self.wallets[from_address],
             )
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
+            receipt = _wait_receipt(self.w3, tx_hash)
         except Exception as e:
             return ToolResult(error=f"Swap raised: {e}")
 
@@ -3320,7 +3351,7 @@ class ToolDispatcher:
                 approve_tx, private_key=sender_key,
             )
             approve_hash = self.w3.eth.send_raw_transaction(_raw_tx(approve_signed))
-            approve_receipt = self.w3.eth.wait_for_transaction_receipt(approve_hash, poll_latency=1.0)
+            approve_receipt = _wait_receipt(self.w3, approve_hash)
             if approve_receipt.status != 1:
                 return ToolResult(
                     error=f"Approve reverted (tx_hash={approve_hash.hex()})"
@@ -3337,7 +3368,7 @@ class ToolDispatcher:
                 swap_tx, private_key=sender_key,
             )
             swap_hash = self.w3.eth.send_raw_transaction(_raw_tx(swap_signed))
-            swap_receipt = self.w3.eth.wait_for_transaction_receipt(swap_hash, poll_latency=1.0)
+            swap_receipt = _wait_receipt(self.w3, swap_hash)
         except Exception as e:
             return ToolResult(error=f"Swap raised: {e}")
 
@@ -3514,7 +3545,7 @@ class ToolDispatcher:
                 tx, private_key=self.wallets[from_address],
             )
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
+            receipt = _wait_receipt(self.w3, tx_hash)
         except Exception as e:
             return ToolResult(error=f"Deposit raised: {e}")
 
@@ -3817,10 +3848,17 @@ class ToolDispatcher:
             need_eth = withdraw_gas_needed / 10**18
             have_eth = gas_payer_balance / 10**18
             gp_gwei = self.w3.eth.gas_price / 10**9
-            # Suggest wallets in the registry with enough balance
+            # Suggest wallets in the registry with enough balance.
+            # P1-18b fix: exclude the deployer explicitly — the dispatch
+            # guardrail refuses any tool call that names the deployer as
+            # gas_payer (chain infrastructure, holds the "stolen" funds,
+            # must not appear in laundering ops). Suggesting it would
+            # cost Sonnet an iteration to try + get bounced.
             candidates = []
             for addr in self.wallets:
                 if addr == gas_payer or addr == recipient:
+                    continue
+                if self._deployer_addr and addr == self._deployer_addr:
                     continue
                 try:
                     b = self.w3.eth.get_balance(addr)
@@ -4008,7 +4046,7 @@ class ToolDispatcher:
                 tx, private_key=self.wallets[gas_payer],
             )
             tx_hash = self.w3.eth.send_raw_transaction(_raw_tx(signed))
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=1.0)
+            receipt = _wait_receipt(self.w3, tx_hash)
         except Exception as e:
             return ToolResult(error=f"Withdraw raised: {e}")
 
