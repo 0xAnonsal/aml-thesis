@@ -2,16 +2,19 @@
   "chain_id": 11155111,
   "chain_name": "sepolia",
   "deployed_at_utc": "2026-08-11T16:24:24Z",
-  "tornado_deploy_block": 11580536,
+  "tornado_deploy_block": 11628965,
   "contracts": {
     "MockUSDT": "0x665A2176d7beF3bccE52F37F1e64c99D993Aa7Ba",
     "MockUniswapV2Pool": "0x73AD65939B8a7a4f8bD3FF4a48ab3454be64a8Dc",
     "MiMCSponge": "0x615FD17d605325eb05d784Aa8189518FeE5f0Ce6",
     "Verifier": "0x2FDceD2D3C9c3A9322d04afc1e6A243a98a68f46",
-    "MockTornado": "0x3C42dC28F01F5Fe0D320e5f501e5c7e138057762",
+    "MockTornado": "0xA6b4832722F0455a763baf4a118dEB47B4618681",
     "MockBridge": "0x99DFe4eEAbbA728CE1271d0Ba6a0959883986600",
-    "MockTornado_0.1ETH": "0x8617BD3EB20D6efC1BD09Ea77B5a505C5a2Bd266",
-    "MockTornado_10ETH": "0xD83913590e53C699D27280EAbE5000c9967eC3d7"
+    "MockTornado_0.1ETH": "0xF28449a1347127e9BAA99A8bFc70Ec35d486ef2C",
+    "MockTornado_10ETH": "0xdf9f5E174dCF796063af53AFe272B38dD0323E7c",
+    "MockTornado_OLD": "0x3C42dC28F01F5Fe0D320e5f501e5c7e138057762",
+    "MockTornado_0.1ETH_OLD": "0x8617BD3EB20D6efC1BD09Ea77B5a505C5a2Bd266",
+    "MockTornado_10ETH_OLD": "0xD83913590e53C699D27280EAbE5000c9967eC3d7"
   },
   "constants": {
     "merkle_depth": 10,
@@ -21,7 +24,7 @@
   },
   "notes": "Deploy completado en 2 fases: USDT+Pool en primer run (scripts/deploy_eth_mocks_sepolia.py), MiMC+Verifier+Tornado+Bridge en fase resume (deploy_sepolia_resume.py) tras cancelar tx MiMC pendiente por gas legacy underpriced.",
   "multidenom_deployed_at_utc": "2026-08-25T07:18:14.562728+00:00",
-  "multidenom_redeployed_at_utc": "2026-08-27T21:43:50.683374+00:00",
+  "multidenom_redeployed_at_utc": "2026-09-03T20:47:14.888586+00:00",
   "deprecated_contracts_archive": {
     "MockTornado_OLD": "0x199181F8a480A61520Ca3Eb2Ae6BF5dbBc6550C5",
     "MockTornado_0.1ETH_OLD": "0x31f00A2660285c99F382e4ac84DB6035bFb611cb",

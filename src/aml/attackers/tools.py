@@ -3249,18 +3249,38 @@ class ToolDispatcher:
         # Gas-reserve guard: refuse if eth_amount + gas would drop the
         # sender below reserve. The check is conservative — we budget a
         # generous gas headroom so the wallet has slack for variability.
+        # P1-34 fix (Fix B): auto-clamp reserve_eth to 0 when the caller's
+        # requested reserve is impossible AND the wallet can still cover
+        # eth_amount + gas without reserve. Seed 604 lost multiple
+        # iterations because Sonnet passed reserve_eth=0.005, 0.007, 0.009
+        # sucessively — the error message literally said "Pass reserve_eth=0
+        # to drain" but Sonnet never adopted it. Now the tool does it
+        # automatically and annotates the auto-clamp in the response.
         gas_price = int(self.w3.eth.gas_price * _GAS_PRICE_TX_MULT)
         gas_headroom_wei = _GAS_HEADROOM_TX * gas_price
         eth_balance_wei = self.w3.eth.get_balance(from_address)
         wei_in = int(eth_amount * 10**18)
         reserve_wei = int(reserve_eth * 10**18)
+        auto_clamped_reserve = False
         if eth_balance_wei - wei_in - gas_headroom_wei < reserve_wei:
-            return ToolResult(error=(
-                f"Swap would breach gas reserve: wallet holds "
-                f"{eth_balance_wei / 10**18:.6f} ETH, swap needs "
-                f"{eth_amount} + ~{gas_headroom_wei / 10**18:.4f} gas, "
-                f"reserve_eth={reserve_eth}. Pass reserve_eth=0 to drain."
-            ))
+            # Can the swap fit if we drop reserve to 0?
+            if eth_balance_wei - wei_in - gas_headroom_wei >= 0:
+                # Yes — auto-clamp instead of erroring, save the LLM an
+                # iteration. Log the auto-clamp so the run analysis can
+                # see it happened (visible in output).
+                auto_clamped_reserve = True
+                reserve_wei = 0
+            else:
+                # Truly impossible — wallet can't even cover eth_amount + gas
+                return ToolResult(error=(
+                    f"Swap cannot fit: wallet holds "
+                    f"{eth_balance_wei / 10**18:.6f} ETH, swap needs "
+                    f"{eth_amount} + ~{gas_headroom_wei / 10**18:.4f} gas "
+                    f"= {(wei_in + gas_headroom_wei) / 10**18:.6f} ETH "
+                    f"total. Reduce eth_amount to at most "
+                    f"{(eth_balance_wei - gas_headroom_wei) / 10**18:.6f} "
+                    f"ETH, or fund this wallet more first."
+                ))
 
         min_out_base = int(min_usdt_out * 10**6)
 
@@ -3290,13 +3310,20 @@ class ToolDispatcher:
 
         usdt_after = self.usdt.functions.balanceOf(from_address).call()
         usdt_received = (usdt_after - usdt_before) / 10**6
-        return ToolResult(output={
+        out = {
             "tx_hash": tx_hash.hex(),
             "from_address": from_address,
             "eth_paid": eth_amount,
             "usdt_received": usdt_received,
             "gas_used": receipt.gasUsed,
-        })
+        }
+        if auto_clamped_reserve:
+            out["auto_clamped"] = (
+                f"reserve_eth auto-clamped to 0 (drain mode) — "
+                f"wallet was too small to hold the requested "
+                f"{reserve_eth:g} ETH reserve alongside the swap"
+            )
+        return ToolResult(output=out)
 
     def _swap_usdt_for_eth(
         self,
@@ -3446,6 +3473,37 @@ class ToolDispatcher:
         # passes the check but bounces on send with insufficient funds
         # (deposit costs ~0.006 ETH at 3 gwei × 3M gas × 2x pad).
         deposit_gas_headroom = int(3_000_000 * self.w3.eth.gas_price * _GAS_PRICE_TX_MULT)
+        if balance < denom_wei + deposit_gas_headroom:
+            # P1-35 fix (Fix C): auto top-up small shortfalls (< 0.05 ETH)
+            # from the funder pool. Seed 604 lost 3 mixer_deposit attempts
+            # to shortfalls of 0.003-0.018 ETH — trivially recoverable by
+            # a funder top-up. Auto-top-up preserves obfuscation (the ETH
+            # comes from a random funder wallet, not Alice — same
+            # co-funding-signature-breaking path used by _ensure_gas_dust).
+            # Only auto-fills if the shortfall is small enough to be a
+            # rounding-margin issue; larger deltas indicate the LLM sized
+            # the burner wrong and should re-plan explicitly.
+            shortfall_wei = denom_wei + deposit_gas_headroom - balance
+            AUTO_TOPUP_CAP_WEI = int(0.05 * 10**18)
+            if shortfall_wei <= AUTO_TOPUP_CAP_WEI:
+                try:
+                    self._seed_gas(
+                        from_address,
+                        (shortfall_wei + 100) / 10**18,  # tiny buffer
+                        source=self._gas_source(),
+                    )
+                    # Re-read balance after top-up
+                    balance = self.w3.eth.get_balance(from_address)
+                except Exception as _e:   # noqa: BLE001
+                    pass   # fall through to the error path below
+                if balance >= denom_wei + deposit_gas_headroom:
+                    # Auto top-up worked — fall through and proceed with
+                    # the deposit. This is the successful path.
+                    pass
+                else:
+                    # Top-up failed (funder empty, RPC hiccup) — return
+                    # the informative error as before.
+                    pass
         if balance < denom_wei + deposit_gas_headroom:
             held = balance / 10**18
             denom_eth = denom_wei / 10**18
