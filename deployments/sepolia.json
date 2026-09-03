@@ -5,7 +5,7 @@
   "tornado_deploy_block": 11580536,
   "contracts": {
     "MockUSDT": "0x665A2176d7beF3bccE52F37F1e64c99D993Aa7Ba",
-    "MockUniswapV2Pool": "0xBc249a313816b3F1CD6843D75DF8643444C3f555",
+    "MockUniswapV2Pool": "0x73AD65939B8a7a4f8bD3FF4a48ab3454be64a8Dc",
     "MiMCSponge": "0x615FD17d605325eb05d784Aa8189518FeE5f0Ce6",
     "Verifier": "0x2FDceD2D3C9c3A9322d04afc1e6A243a98a68f46",
     "MockTornado": "0x3C42dC28F01F5Fe0D320e5f501e5c7e138057762",
@@ -26,10 +26,16 @@
     "MockTornado_OLD": "0x199181F8a480A61520Ca3Eb2Ae6BF5dbBc6550C5",
     "MockTornado_0.1ETH_OLD": "0x31f00A2660285c99F382e4ac84DB6035bFb611cb",
     "MockTornado_10ETH_OLD": "0x865CF07098b0C142Ae8db9cC7b341305AF9d21e6",
-    "MockUniswapV2Pool_OLD": "0x25fE5d3b168eB30781E749c4fFE46943d631aD16"
+    "MockUniswapV2Pool_OLD": "0x25fE5d3b168eB30781E749c4fFE46943d631aD16",
+    "MockUniswapV2Pool_PRE_ORACLE": "0xBc249a313816b3F1CD6843D75DF8643444C3f555"
   },
   "pool_deploy_block": 11621231,
   "pool_bootstrap_eth": 5.0,
   "pool_bootstrap_usdt": 12088.379442366768,
-  "pool_topup_ts": 1788372540
+  "pool_topup_ts": 1788372540,
+  "pool_type": "MockOraclePool",
+  "oracle_feed": "0x694AA1769357215DE4FAC081bf1f309aDC325306",
+  "oracle_pool_deploy_block": 11628098,
+  "oracle_pool_bootstrap_eth": 0.5,
+  "oracle_pool_topup_ts": 1788457550
 }
