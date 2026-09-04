@@ -1723,19 +1723,22 @@ class ToolDispatcher:
     def _burner_cap(self) -> int:
         """Max burner count for this campaign, derived from laundering scale.
 
-        Formula: max(30, min(250, 3 * ceil(usd / 999))). Corresponds to the
-        "moderate professional" laundering profile in Chainalysis 2023
-        (~$250-750 per intermediate wallet), aggressive enough for realistic
-        sophistication without allowing the runaway loops observed in
-        seed 306 (Haiku, 236 burners for 1 ETH) and seeds 401/402 (Sonnet
-        WSL-crashing loops). Absolute floor 30 protects small runs; cap 250
-        aligns with Bybit-tier sophistication for large runs (up to 125 ETH
-        scope per the thesis).
+        Formula (P1-36 bump 2026-09-04): max(30, min(400, 4 * ceil(usd / 999))).
+        Previous formula (max(30, min(250, 3 * ceil))) capped a 20 ETH
+        campaign at 153 burners — risk 1 documented in the pre-20-ETH
+        review. Bumped multiplier 3→4 and ceiling 250→400 to give
+        Sonnet more headroom at large scale without disabling the
+        runaway-loop protection (seed 306 Haiku 236-burners-for-1-ETH
+        would still be caught: for $2510 stolen the cap is 40).
+
+        Absolute floor 30 unchanged (protects small runs). New ceiling
+        400 aligns with the Ronin/Nomad-tier sophistication observed in
+        the 100-125 ETH range documented in Chainalysis 2024.
         """
         import math
         if self.laundering_target_usd is None:
             return 100   # legacy fallback for callers that don't pass the target
-        return max(30, min(250, 3 * math.ceil(self.laundering_target_usd / 999)))
+        return max(30, min(400, 4 * math.ceil(self.laundering_target_usd / 999)))
 
     def _current_burner_count(self) -> int:
         """Burners generated so far (excludes deployer, alice, funders, exits)."""
@@ -1837,6 +1840,25 @@ class ToolDispatcher:
         if not isinstance(exchange_platform, str) or not exchange_platform.strip():
             return ToolResult(error="exchange_platform must be a non-empty string")
         platform = exchange_platform.strip()
+
+        # P1-38 fix: hard-cap the number of clean exits per campaign to
+        # prevent scale drift. Sonnet at 20 ETH scale with inflated pool
+        # could plan 40-80+ exits based on nominal USDT (impossible for a
+        # realistic laundering op). Cap = max(15, ceil(usd/999) * 2)
+        # matches the Chainlink 2024 typology: 3-5 exits per $999 chunk
+        # cluster max, with ~2× headroom.
+        import math as _m
+        target_usd = self.laundering_target_usd or 3000
+        exit_cap = max(15, min(60, _m.ceil(target_usd / 999) * 2))
+        if len(self.registered_clean_exits) >= exit_cap:
+            return ToolResult(error=(
+                f"HARD LIMIT reached: {len(self.registered_clean_exits)} "
+                f"clean exits already registered for a "
+                f"${target_usd:,.0f} campaign (cap: {exit_cap}). Do NOT "
+                f"register more. Route funds to EXISTING exits instead. "
+                f"Real professional laundering caps at ~2x ceil(stolen/"
+                f"999) exits to avoid trivial cluster fingerprinting."
+            ))
 
         acct = Account.create()
         address = acct.address

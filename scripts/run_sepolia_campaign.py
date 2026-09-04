@@ -357,7 +357,10 @@ def main():
                               "(exact loot, NO gas padding — realistic: "
                               "real thieves don't get extra gas from the "
                               "victim). Override only for controlled tests."))
-    parser.add_argument("--max-iterations", type=int, default=60)
+    # P1-37: bumped from 60 -> 120. Seed 606 (1.5 ETH) used 10 iters;
+    # 20 ETH extrapolated linearly ~130. Doubling the ceiling protects
+    # against Integration truncation at scale.
+    parser.add_argument("--max-iterations", type=int, default=120)
     parser.add_argument("--sub-agent-max-iterations", type=int, default=40)
     parser.add_argument("--max-tokens", type=int, default=8192)
     parser.add_argument(
@@ -517,6 +520,43 @@ def main():
     start_wall = time.time()
     start_block = w3.eth.block_number
     print(f"[runner] campaign starting at block {start_block}", file=sys.stderr)
+
+    # P1-39: pre-flight check on MockOraclePool ETH reserve.
+    # If reserve < 5% of the amount being laundered, top up automatically.
+    # Prevents USDT->ETH swap failures at scale (Integration final drain
+    # sequence or Layering asset-cycling may need it).
+    try:
+        pool_addr = deployment["contracts"].get("MockUniswapV2Pool")
+        if pool_addr and deployment.get("pool_type") == "MockOraclePool":
+            r_eth_wei = w3.eth.get_balance(Web3.to_checksum_address(pool_addr))
+            r_eth = r_eth_wei / 1e18
+            min_reserve = args.amount * 0.05   # 5% of campaign
+            print(f"[runner] oracle pool ETH reserve: {r_eth:.4f} ETH "
+                  f"(need >= {min_reserve:.4f} = 5% of campaign)",
+                  file=sys.stderr)
+            if r_eth < min_reserve:
+                topup_amt = min_reserve - r_eth + 0.05  # 0.05 buffer
+                print(f"[runner] topping up pool reserve with {topup_amt:.4f} ETH",
+                      file=sys.stderr)
+                _tx = {
+                    "from": deployer,
+                    "to": Web3.to_checksum_address(pool_addr),
+                    "value": int(topup_amt * 1e18),
+                    "nonce": w3.eth.get_transaction_count(deployer, "pending"),
+                    "gas": 100_000,
+                    "gasPrice": int(w3.eth.gas_price * 2),
+                    "chainId": w3.eth.chain_id,
+                }
+                _s = w3.eth.account.sign_transaction(_tx, private_key=deployer_key)
+                _raw = getattr(_s, "raw_transaction", None) or _s.rawTransaction
+                _h = w3.eth.send_raw_transaction(_raw)
+                w3.eth.wait_for_transaction_receipt(_h, timeout=120)
+                r_eth2 = w3.eth.get_balance(Web3.to_checksum_address(pool_addr)) / 1e18
+                print(f"[runner] oracle pool reserve after top-up: {r_eth2:.4f} ETH",
+                      file=sys.stderr)
+    except Exception as _e:   # noqa: BLE001
+        print(f"[runner] oracle pool preflight check failed (non-fatal): {_e}",
+              file=sys.stderr)
 
     # Fund alice (skipped on --resume: Alice already exists with her ETH
     # from the crashed run, reload her from wallets_keys.jsonl).
