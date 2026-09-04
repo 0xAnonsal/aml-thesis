@@ -525,9 +525,12 @@ def main():
     # If reserve < 5% of the amount being laundered, top up automatically.
     # Prevents USDT->ETH swap failures at scale (Integration final drain
     # sequence or Layering asset-cycling may need it).
+    # P1-40 fix (2026-09-04): load the deployment JSON here — the outer
+    # scope only has `contracts` (contract objects), not the raw JSON.
     try:
-        pool_addr = deployment["contracts"].get("MockUniswapV2Pool")
-        if pool_addr and deployment.get("pool_type") == "MockOraclePool":
+        _deployment_json = json.loads(DEPLOYMENTS_JSON.read_text())
+        pool_addr = _deployment_json["contracts"].get("MockUniswapV2Pool")
+        if pool_addr and _deployment_json.get("pool_type") == "MockOraclePool":
             r_eth_wei = w3.eth.get_balance(Web3.to_checksum_address(pool_addr))
             r_eth = r_eth_wei / 1e18
             min_reserve = args.amount * 0.05   # 5% of campaign
