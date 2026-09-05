@@ -108,6 +108,37 @@ _ETH_TRANSFER_GAS = 21_000
 # current gas price so the wallet doesn't dip below reserve when it lands.
 _GAS_HEADROOM_TX = 300_000   # generous: covers swap (~250k) or USDT xfer (~100k)
 
+# P1-42 (A+B+D+G+) — Self-sovereign gas propagation architecture.
+#
+# Each wallet role has an expected downstream tx count. When a wallet SENDS
+# to another wallet (via transfer_usdt / transfer_eth), the sender includes
+# enough ETH for the receiver's expected downstream operations, computed at
+# the current base_fee. This eliminates the need for funders to fire during
+# normal operation — funders become an emergency-only backstop.
+#
+# Formula: gas_envelope_wei = expected_tx × avg_tx_gas × base_fee × safety
+#   avg_tx_gas: 300_000 (covers ETH transfer 21k, USDT transfer 100k,
+#               mixer_deposit 350k, mixer_withdraw 400k, swap 250k)
+#   safety:     1.5× to cover base_fee volatility between estimate and submit
+#
+# Counts include a +1 buffer for LLM unpredictability. Total gas propagated
+# through a full 4-hop chain ≈ 0.020 ETH per burner subtree (at Sepolia's
+# typical 1-gwei base_fee), negligible relative to laundered value.
+_ROLE_TX_COUNT: dict[str, int] = {
+    "burner_placement":   4,   # transfer_eth in + mixer_deposit + forward + 1 buf
+    "burner_layering":    6,   # peel_chain hops (3-4) + forward + 1-2 buf
+    "burner_mixer":       3,   # mixer_withdraw + forward + 1 buf
+    "burner_smurf":       2,   # single transfer_usdt (sub-$999) + 1 buf
+    "clean_exit":         0,   # terminal — never originates a tx (P1-29)
+    "burner_generic":     3,   # conservative fallback for unrecognised roles
+    "deployer":           0,   # infrastructure; excluded from role logic
+    "alice":              0,   # source of funds; excluded
+    "funder":             0,   # gas-source pool; excluded
+}
+_GAS_PER_TX_UNITS = 300_000        # generous per-tx gas budget
+_GAS_ENVELOPE_SAFETY_MULT = 1.5    # over base_fee headroom
+_MIN_OPERATIONAL_GAS_ETH = 0.002   # trigger threshold for post-tx auto-refuel
+
 
 # --- ZK mixer (Tornado) wiring ------------------------------------------
 # The mixer tools shell out to Node (zk_helpers.js — MiMC hashing + Merkle
@@ -285,6 +316,25 @@ _TOOL_SCHEMAS: list[dict] = [
                         "Default false. Set true ONLY for USDT-only "
                         f"senders (auto-seeds {_DEFAULT_GAS_RESERVE_ETH} "
                         "ETH from a funder wallet)."
+                    ),
+                },
+                "role": {
+                    "type": "string",
+                    "enum": [
+                        "burner_placement", "burner_layering",
+                        "burner_mixer", "burner_smurf", "burner_generic",
+                    ],
+                    "description": (
+                        "Optional role hint for the P1-42 gas envelope. "
+                        "Affects how much gas the sender includes when "
+                        "moving USDT into this burner. Pick the label "
+                        "matching what the burner will do next: "
+                        "burner_placement (mixer_deposit + forward), "
+                        "burner_layering (peel_chain hops), "
+                        "burner_mixer (mixer_withdraw + forward), "
+                        "burner_smurf (single sub-$999 USDT forward), "
+                        "burner_generic (fallback, 3-tx budget). "
+                        "Default: burner_generic."
                     ),
                 },
             },
@@ -1393,6 +1443,16 @@ class ToolDispatcher:
         # because the SAME address is in both — clean exits ARE wallets the
         # dispatcher can sign for, they just carry extra label metadata.
         self.registered_clean_exits: list[dict] = []
+        # P1-42 (A+B+D+G+) — role tag per wallet, used by the self-sovereign
+        # gas propagation model. When a wallet SENDS to another wallet, the
+        # sender computes the receiver's downstream gas budget from this
+        # dict and includes that ETH alongside the value transfer. Populated
+        # by _generate_burner_wallet(role=...) and _register_clean_exit
+        # (auto "clean_exit"). Unregistered addresses default to
+        # "burner_generic" via _downstream_gas_estimate.
+        self._wallet_roles: dict[str, str] = {}
+        if self._deployer_addr is not None:
+            self._wallet_roles[self._deployer_addr] = "deployer"
         # Optional path for atomic dispatcher-state persistence. When set,
         # every register_clean_exit and every peel_chain that mutates
         # _peel_locked_eth writes the full state to this file (JSON dump,
@@ -1679,6 +1739,41 @@ class ToolDispatcher:
         # through its initial 0.05 ETH seed.
         self._ensure_gas_dust(from_address)
 
+        # P1-42 (G+) — SELF-SOVEREIGN GAS PROPAGATION.
+        # Before sending USDT, check whether the receiver has enough ETH
+        # for its own downstream operations. If not, send the gas from
+        # THIS sender (not from a funder) in a separate tx BEFORE the
+        # USDT transfer. This makes gas flow follow value flow, which is
+        # what a legitimate transfer looks like (moving crypto to a new
+        # wallet always includes bootstrap gas), and eliminates the
+        # funder→wallet edges that cluster wallets in AML detectors.
+        # Skipped for terminal roles (clean_exit, deployer) — they never
+        # originate tx so they need no downstream gas.
+        exit_addrs = {e.get("address") for e in self.registered_clean_exits}
+        propagated_gas_eth = 0.0
+        propagate_tx_hash: str | None = None
+        if to_address not in exit_addrs:
+            gas_needed = self._downstream_gas_estimate(to_address)
+            if gas_needed > 0:
+                try:
+                    recv_bal_wei = self.w3.eth.get_balance(to_address)
+                except Exception:   # noqa: BLE001
+                    recv_bal_wei = 0
+                gas_needed_wei = int(gas_needed * 10**18)
+                if recv_bal_wei < gas_needed_wei:
+                    top_up_eth = (gas_needed_wei - recv_bal_wei) / 10**18
+                    # Best-effort: if the sender can't afford the propagation,
+                    # skip silently — sender's own transfer_usdt will still
+                    # succeed, and the receiver falls back to _post_tx_refuel
+                    # or anti-strand rescue.
+                    try:
+                        propagate_tx_hash = self._seed_gas(
+                            to_address, top_up_eth, source=from_address,
+                        )
+                        propagated_gas_eth = top_up_eth
+                    except Exception:   # noqa: BLE001
+                        pass
+
         try:
             tx = self.usdt.functions.transfer(to_address, amount_base).build_transaction({
                 "from": from_address,
@@ -1699,16 +1794,26 @@ class ToolDispatcher:
                 error=f"Transfer reverted on-chain (tx_hash={tx_hash.hex()})"
             )
 
-        # Post-transfer: ensure recipient has gas dust so any downstream
-        # move of this USDT (relay, exit off-ramp, etc.) can pay for
-        # itself. No-op if recipient is external / already funded.
-        # P1-29 fix: SKIP if the recipient is a registered clean exit.
-        # Exits are terminal wallets — they never originate a tx, so
-        # they don't need gas. Auto-seeding them was ~9.2% of stolen
-        # value wasted per campaign (seed 603 baseline).
-        exit_addrs = {e.get("address") for e in self.registered_clean_exits}
-        if to_address not in exit_addrs:
-            self._ensure_gas_dust(to_address)
+        # P1-42 (B) — post-tx auto-refuel: if the sender dropped below the
+        # operational floor after paying for this tx AND for the gas
+        # propagation, top up from the funder pool as emergency.
+        # In normal operation this is a no-op because senders are
+        # sized generously by G+ propagation at their own creation time.
+        self._post_tx_refuel(from_address)
+
+        # P1-42 fix: the legacy tail `_ensure_gas_dust(to_address)` was
+        # firing an Alice→receiver top-up ON TOP of G+ propagation,
+        # re-introducing the co-funding leak we removed. Replace with
+        # an emergency-only path: if G+ propagation did NOT fire
+        # (sender couldn't afford it, or propagation raised), fall back
+        # to funders_only refuel via _post_tx_refuel to prevent
+        # stranding. If G+ succeeded, this is a no-op.
+        if (
+            to_address not in exit_addrs
+            and propagated_gas_eth == 0.0
+            and self._wallet_roles.get(to_address, "burner_generic") != "clean_exit"
+        ):
+            self._post_tx_refuel(to_address, min_eth=_MIN_OPERATIONAL_GAS_ETH)
 
         return ToolResult(output={
             "tx_hash": tx_hash.hex(),
@@ -1716,6 +1821,8 @@ class ToolDispatcher:
             "to_address": to_address,
             "amount_usdt": amount_usdt,
             "gas_used": receipt.gasUsed,
+            "gas_propagated_eth": propagated_gas_eth,
+            "gas_propagation_tx": propagate_tx_hash,
         })
 
     # --- New tools (PR 5.4) -------------------------------------------------
@@ -1750,7 +1857,9 @@ class ToolDispatcher:
             - len(self.registered_clean_exits),
         )
 
-    def _generate_burner_wallet(self, pre_fund_gas: bool = False) -> ToolResult:
+    def _generate_burner_wallet(
+        self, pre_fund_gas: bool = False, role: str = "burner_generic",
+    ) -> ToolResult:
         """Create a fresh keypair, register it. Gas seed is OPT-IN.
 
         P1-19 change (2026-08-28): `pre_fund_gas` defaults to False now.
@@ -1788,10 +1897,16 @@ class ToolDispatcher:
         acct = Account.create()
         address = acct.address
         self.wallets[address] = acct.key.hex()
+        # P1-42 (G+) — register role for downstream gas-envelope sizing.
+        # Unknown roles fall back to "burner_generic" (3-tx budget).
+        if role not in _ROLE_TX_COUNT:
+            role = "burner_generic"
+        self._wallet_roles[address] = role
 
         if not pre_fund_gas:
             return ToolResult(output={
                 "address": address,
+                "role": role,
                 "gas_seed_eth": 0.0,
                 "note": (
                     "Burner registered with ZERO gas. Fund via "
@@ -1809,6 +1924,7 @@ class ToolDispatcher:
                            source=self._gas_source())
             return ToolResult(output={
                 "address": address,
+                "role": role,
                 "gas_seed_eth": _DEFAULT_GAS_RESERVE_ETH,
                 "burners_in_campaign": count + 1,
                 "cap_remaining": cap - (count + 1),
@@ -1816,6 +1932,7 @@ class ToolDispatcher:
         except Exception as e:   # noqa: BLE001 — surface to LLM as a warning
             return ToolResult(output={
                 "address": address,
+                "role": role,
                 "gas_seed_eth": 0.0,
                 "warning": f"Burner registered but gas seeding failed: {e}",
             })
@@ -1863,6 +1980,8 @@ class ToolDispatcher:
         acct = Account.create()
         address = acct.address
         self.wallets[address] = acct.key.hex()
+        # P1-42 (G+) — mark as terminal role so gas propagation skips it
+        self._wallet_roles[address] = "clean_exit"
 
         entry: dict = {"address": address, "exchange_platform": platform}
         if note is not None:
@@ -2119,9 +2238,87 @@ class ToolDispatcher:
             raise RuntimeError(f"gas seed tx reverted (tx_hash={tx_hash.hex()})")
         return tx_hash.hex()
 
+    def _downstream_gas_estimate(
+        self, address: str, override_role: str | None = None,
+    ) -> float:
+        """P1-42 (A+G+) — ETH the wallet needs for its downstream tx chain.
+
+        Uses the wallet's registered role (or override_role, or fallback
+        "burner_generic") to look up expected tx count, then multiplies by
+        the current base_fee and a safety margin. Returns 0.0 for terminal
+        roles (clean_exit, deployer) so no gas propagates to sinks.
+
+        Formula:
+            envelope_eth = expected_tx × 300_000 gas × base_fee × 1.5
+
+        At Sepolia typical base_fee 1 gwei:
+            burner_placement (4 tx): 0.0018 ETH
+            burner_layering  (6 tx): 0.0027 ETH
+            burner_smurf     (2 tx): 0.0009 ETH
+
+        Under congestion (base_fee 10 gwei): scales 10× automatically.
+        """
+        try:
+            addr = Web3.to_checksum_address(address)
+        except (ValueError, TypeError):
+            return 0.0
+        role = override_role or self._wallet_roles.get(addr, "burner_generic")
+        expected_tx = _ROLE_TX_COUNT.get(role, _ROLE_TX_COUNT["burner_generic"])
+        if expected_tx <= 0:
+            return 0.0
+
+        try:
+            latest = self.w3.eth.get_block("latest")
+            base_fee = latest.get("baseFeePerGas") or self.w3.eth.gas_price
+        except Exception:   # noqa: BLE001
+            base_fee = int(2e9)   # 2 gwei fallback
+        gas_wei = (
+            expected_tx
+            * _GAS_PER_TX_UNITS
+            * int(base_fee * _GAS_ENVELOPE_SAFETY_MULT)
+        )
+        return gas_wei / 10**18
+
+    def _post_tx_refuel(
+        self, address: str, min_eth: float = _MIN_OPERATIONAL_GAS_ETH,
+    ) -> None:
+        """P1-42 (B) — Emergency post-tx refuel from funders.
+
+        Called after every state-mutating tool (transfer_usdt, transfer_eth,
+        swap_*) to check whether the sender's balance dropped below the
+        operational floor. If so, top up from the funder pool (never Alice —
+        forces funders_only=True). This is the second-line defence: G+
+        gas propagation should keep every wallet self-funded during normal
+        operation, so this path fires only when:
+          (1) base_fee spiked above the safety multiplier in the envelope
+          (2) the LLM did more tx on this wallet than its role budget
+          (3) the wallet is a leaf we didn't propagate gas to
+
+        Silent no-op if refuel succeeds — LLM sees the tool as clean. If
+        refuel FAILS (funder pool exhausted, RPC error), the fail-loud
+        path in _ensure_gas_dust surfaces the warning via ToolResult so
+        the coordinator learns of the emergency.
+        """
+        try:
+            addr = Web3.to_checksum_address(address)
+        except (ValueError, TypeError):
+            return
+        if addr not in self.wallets:
+            return
+        if self._wallet_roles.get(addr) in ("deployer", "alice", "funder"):
+            return   # infrastructure wallets manage their own balance
+        try:
+            bal_wei = self.w3.eth.get_balance(addr)
+        except Exception:   # noqa: BLE001
+            return
+        if bal_wei >= int(min_eth * 10**18):
+            return
+        # Trigger emergency refuel via funders_only path
+        self._ensure_gas_dust(addr, min_eth=min_eth * 2.5, funders_only=True)
+
     def _ensure_gas_dust(
         self, address: str, min_eth: float = _DEFAULT_GAS_RESERVE_ETH,
-        funders_only: bool = False,
+        funders_only: bool = False, expected_tx: int | None = None,
     ) -> None:
         """Top up `address` to `min_eth` ETH from the faucet if below floor.
 
@@ -2130,16 +2327,28 @@ class ToolDispatcher:
           - address not in our wallet registry (can't sign for it)
           - address IS the faucet (would be recursive)
           - balance already >= min_eth
-          - top-up tx fails (best-effort; sweep_sepolia rescue is the
-            second-line safety net)
+          - top-up tx fails silently on the NORMAL path (best-effort)
 
         P1-41 fix: pass `funders_only=True` for post-hoc cleanup paths
         (anti-strand rescue). The regular `_gas_source()` prefers Alice
         for realism during the campaign, but for automated cleanup that
         creates a direct Alice→exit edge which any AML detector
-        resolves instantly (co-funding signature stronger than any
-        obfuscation the pipeline built). funders_only=True forces the
+        resolves instantly. funders_only=True forces the
         `_gas_source_funders_only()` path.
+
+        P1-42 (A) — if `expected_tx` is provided, the floor is computed
+        DYNAMICALLY as `expected_tx × avg_gas × base_fee × safety`,
+        overriding `min_eth` when it's larger. This lets callers size the
+        top-up to what the wallet will actually spend rather than always
+        using the flat _DEFAULT_GAS_RESERVE_ETH.
+
+        P1-42 (D) — fail-loud when `funders_only=True` (emergency path).
+        The regular path stays silent because gas propagation (G+) is the
+        primary mechanism, but if an emergency refuel fails the pipeline
+        needs to know: a stranded wallet on the emergency path indicates
+        the funder pool is exhausted, which will strand every subsequent
+        wallet until refilled. We log to stderr — the coordinator sees
+        this in the run log and can react.
         """
         try:
             address = Web3.to_checksum_address(address)
@@ -2150,7 +2359,22 @@ class ToolDispatcher:
         faucet = next(iter(self.wallets))
         if address == faucet:
             return
-        min_wei = int(min_eth * 10**18)
+
+        # P1-42 (A) — dynamic sizing overrides min_eth when it would be larger
+        if expected_tx is not None and expected_tx > 0:
+            try:
+                latest = self.w3.eth.get_block("latest")
+                base_fee = latest.get("baseFeePerGas") or self.w3.eth.gas_price
+            except Exception:   # noqa: BLE001
+                base_fee = int(2e9)
+            dynamic_wei = (
+                expected_tx * _GAS_PER_TX_UNITS
+                * int(base_fee * _GAS_ENVELOPE_SAFETY_MULT)
+            )
+            min_wei = max(int(min_eth * 10**18), dynamic_wei)
+        else:
+            min_wei = int(min_eth * 10**18)
+
         try:
             current_wei = self.w3.eth.get_balance(address)
         except Exception:   # noqa: BLE001
@@ -2164,8 +2388,28 @@ class ToolDispatcher:
                 if funders_only
                 else self._gas_source(min_eth_needed=top_up_eth)
             )
+            if source is None and funders_only:
+                # P1-42 (D) — funder pool empty during an EMERGENCY refuel.
+                # Every subsequent tx from any low-gas wallet will strand.
+                import sys as _sys
+                print(
+                    f"[GAS-EMERGENCY] Funder pool exhausted while trying "
+                    f"to refuel {address} — pipeline will strand wallets. "
+                    f"Consider stopping the run.",
+                    file=_sys.stderr, flush=True,
+                )
+                return
             self._seed_gas(address, top_up_eth, source=source)
-        except Exception:   # noqa: BLE001 — best-effort
+        except Exception as e:   # noqa: BLE001
+            if funders_only:
+                # P1-42 (D) — fail-loud on emergency path
+                import sys as _sys
+                print(
+                    f"[GAS-EMERGENCY] Emergency refuel FAILED for "
+                    f"{address}: {e}. Wallet may strand.",
+                    file=_sys.stderr, flush=True,
+                )
+            # Normal path: silent best-effort as before
             pass
 
     def _forward_stranded_usdt(self, from_addr: str) -> dict:
@@ -3001,6 +3245,12 @@ class ToolDispatcher:
 
         if receipt.status != 1:
             return ToolResult(error=f"Transfer reverted (tx_hash={tx_hash.hex()})")
+
+        # P1-42 (B) — emergency post-tx refuel for the sender.
+        # No-op in normal operation (G+ propagates gas via transfer_eth's
+        # own value payload); fires only if sender dropped below the
+        # operational floor after this tx.
+        self._post_tx_refuel(from_address)
 
         return ToolResult(output={
             "tx_hash": tx_hash.hex(),
