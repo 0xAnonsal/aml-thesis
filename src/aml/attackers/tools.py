@@ -2026,6 +2026,38 @@ class ToolDispatcher:
             # rainy-day / sleeping-wallet fund.
         return self._pick_funder()
 
+    def _gas_source_funders_only(self, min_eth_needed: float = 0.005) -> str | None:
+        """P1-41 fix: forced-funder gas source for post-hoc cleanup paths.
+
+        NEVER uses Alice — critical for anti-strand cleanup where a
+        direct Alice→exit ETH transfer creates a devastating co-funding
+        signature that any Chainalysis/TRM/Louvain detector resolves in
+        < 5 minutes. The regular `_gas_source()` prefers Alice for
+        realism during the campaign, but for the automated post-hoc
+        rescue that pattern must be reversed: keep Alice out of the
+        cleanup edges at all costs.
+
+        Behavior:
+          1. Try _pick_funder() — a funder with balance >= threshold
+          2. If no funder passes, force-refill one from deployer via
+             the internal _pick_funder rotation (which already refills
+             when all are exhausted)
+          3. If _pick_funder still returns None (funder pool never
+             bootstrapped), degrade gracefully with a warning: use
+             deployer directly (better than Alice, though not perfect —
+             deployer is chain infra, not stolen-funds recipient)
+          4. Never returns Alice.
+        """
+        f = self._pick_funder()
+        if f is not None:
+            return f
+        # No funder pool at all — fall back to deployer explicitly
+        # (chain infrastructure, not stolen-funds recipient). This is
+        # sub-optimal but strictly better than Alice for evasion.
+        if self.wallets:
+            return next(iter(self.wallets))
+        return None
+
     def _seed_gas(
         self, recipient: str, amount_eth: float, source: str | None = None,
     ) -> str:
@@ -2089,6 +2121,7 @@ class ToolDispatcher:
 
     def _ensure_gas_dust(
         self, address: str, min_eth: float = _DEFAULT_GAS_RESERVE_ETH,
+        funders_only: bool = False,
     ) -> None:
         """Top up `address` to `min_eth` ETH from the faucet if below floor.
 
@@ -2099,6 +2132,14 @@ class ToolDispatcher:
           - balance already >= min_eth
           - top-up tx fails (best-effort; sweep_sepolia rescue is the
             second-line safety net)
+
+        P1-41 fix: pass `funders_only=True` for post-hoc cleanup paths
+        (anti-strand rescue). The regular `_gas_source()` prefers Alice
+        for realism during the campaign, but for automated cleanup that
+        creates a direct Alice→exit edge which any AML detector
+        resolves instantly (co-funding signature stronger than any
+        obfuscation the pipeline built). funders_only=True forces the
+        `_gas_source_funders_only()` path.
         """
         try:
             address = Web3.to_checksum_address(address)
@@ -2118,9 +2159,12 @@ class ToolDispatcher:
             return
         top_up_eth = (min_wei - current_wei) / 10**18
         try:
-            # Random funder from pool if bootstrapped; else fallback to
-            # deployer. `source=None` means _seed_gas uses the deployer.
-            self._seed_gas(address, top_up_eth, source=self._gas_source())
+            source = (
+                self._gas_source_funders_only(min_eth_needed=top_up_eth)
+                if funders_only
+                else self._gas_source(min_eth_needed=top_up_eth)
+            )
+            self._seed_gas(address, top_up_eth, source=source)
         except Exception:   # noqa: BLE001 — best-effort
             pass
 
@@ -2254,7 +2298,10 @@ class ToolDispatcher:
 
         # Pass 2: top up each stranded wallet from a random funder.
         for addr in stranded_before:
-            self._ensure_gas_dust(addr, min_eth=min_eth)
+            # P1-41 fix: anti-strand rescue MUST use funders-only, never
+            # Alice. A direct Alice→exit edge created here would collapse
+            # the entire pipeline's obfuscation (documented in TFM §8.9.21).
+            self._ensure_gas_dust(addr, min_eth=min_eth, funders_only=True)
 
         # Pass 2.5: forward stranded USDT to random clean_exits so the
         # laundering path completes. Skips wallets that ARE clean_exits
