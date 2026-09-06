@@ -224,27 +224,46 @@ learns first. In every Layering delegation you MUST explicitly instruct \
 the sub-agent to use all three of the following, with the indicated \
 value split:
 
-  ROUTE A — ZK Tornado mixer cycles (30-50% of the layered value). \
-For working amounts ≥ 1 ETH (use the multi-denom pool that fits: 0.1 / \
-1 / 10 ETH). Each mixer_withdraw MUST pass gas_payer set to an \
-unrelated wallet. This is the strongest unlinkability primitive but is \
-also the most-scrutinised on-chain — never the sole technique.
+  P1-44 HARD CONSTRAINT — BALANCED TECHNIQUE MIX (validated empirically):
 
-  ROUTE B — `peel_chain` linear topology (20-40% of the layered value). \
-The peel-chain is what real analysts see MOST often (~70% of TRM Labs \
-cases). Use `asset="ETH"`, `peel_pct=0.02`, `peel_jitter=0.5`, \
-`num_hops=6-8`. The dispatcher enforces a hard 3%-of-campaign cap on \
-cumulative peel-sink lock; the sub-agent will get a clear error if the \
-budget would be exceeded, and can adjust `initial_amount` or `num_hops` \
-downward. The `peel_jitter=0.5` sample makes per-hop peels vary in \
-[1%, 3%] instead of a fixed ratio — deterministic ratios are themselves \
-a fingerprint.
+  Instruct Layering with an EXPLICIT numeric split in the objective. \
+Empirical audit of seed 802 revealed that Sonnet routed 98% via mixer \
+and only 1.4% via peel-chain — the exact "mixer-heavy campaign" pattern \
+Chainalysis 2024 §4.2 flags as amateur/automated. Real Lazarus / Ronin / \
+Nomad ops distribute across techniques ~40/30/20/10, never single-technique.
 
-  ROUTE C — recycled-burner cycles + swap asset-switching (remaining \
-value). Send a portion BACK to burners that appeared in Placement or \
-earlier Layering hops (creates cycles that break Louvain modularity); \
-run a fraction through swap_eth_for_usdt → swap_usdt_for_eth to break \
-token-level tracing.
+  MANDATORY per-route budget for defi-exploit at alice_amount ≥ 3 ETH:
+
+  ROUTE A — ZK Tornado mixer (35-45% of alice_amount, NOT more): \
+Multi-denom pool split — bias toward smaller denoms (many 1-ETH deposits \
+over a few 10-ETH) because 10-ETH pool deposits are individually more \
+scrutinised on-chain. For a 22.6 ETH campaign: ~9 ETH mixer split as \
+1x 10-ETH + variable 1-ETH deposits, or preferably ~9 x 1-ETH deposits \
+(uniform-denomination decoy noise) + zero 10-ETH deposits. Each \
+mixer_withdraw MUST pass gas_payer set to an unrelated wallet.
+
+  ROUTE B — `peel_chain` (25-35% of alice_amount). Use ~3-5 SEPARATE \
+peel chains (not 1 big one) of `num_hops=5-8`, `peel_pct=0.02-0.04` \
+with `peel_jitter=0.5`. For 22.6 ETH: ~7 ETH split into 4 peel chains \
+of ~1.75 ETH each × 6 hops. Peel-chain is what analysts see MOST often \
+(TRM Labs: 70% of laundering cases), so underweighting it (as seed 802 \
+did with 1.4%) is a fingerprint.
+
+  ROUTE C — direct swap + asset-switching (15-25% of alice_amount). \
+For 22.6 ETH: ~4 ETH via 3-5 wallets each doing swap_eth_for_usdt → \
+swap_usdt_for_eth (double-hop asset switch). This adds USDT-denominated \
+edges to the subgraph, breaking token-type homogeneity that a GCN \
+learns from ETH-only subgraphs.
+
+  ROUTE D — cycles + recycled burners (5-15% of alice_amount). \
+For 22.6 ETH: ~2 ETH via 2-3 mini-cycles that send portions BACK to \
+Placement burners (creates non-tree topology that breaks Louvain \
+modularity). Send some as ETH, some as USDT.
+
+  VALIDATION: After Layering completes, the sum of ETH routed through \
+each technique should approximately match the above bands. If Layering's \
+summary shows any single technique exceeding its band by more than +10pp, \
+re-delegate with an explicit reminder of the balanced-mix requirement.
 
 For the Integration structuring phase, when the USDT chunk count is \
 large (>10 sub-$999 outputs to different burner destinations), instruct \
@@ -590,14 +609,56 @@ chunks), vary the number of hops between consolidation and each exit \
 burners), vary the time (block delay) between successive deliveries to \
 the same exit.
 
+  P1-47 HARD CONSTRAINT — FRACTIONAL, NON-ROUND USDT amounts. Do NOT \
+send $999.00, $995.00, $500.00 or other round values — those look \
+automated. Every transfer_usdt amount MUST have 2 decimals of variability \
+sampled from a realistic distribution. Examples of good amounts: \
+$742.19, $891.34, $487.66, $203.55. Examples of BAD (round) amounts: \
+$999.00, $995.00, $500.00, $750.00. When distribute_to_exits computes \
+`usdt_per_exit`, ADD `random.uniform(-49.99, 49.99)` variance per exit.
+
+  P1-48 HARD CONSTRAINT — POWER-LAW distribution of exit amounts. \
+Real cash-out patterns follow a Pareto distribution (Chainalysis 2024 \
+§3.4): a few exits receive $800-980 (mule with high account limits), \
+many exits receive $150-400 (many small-limit mules). DO NOT send \
+uniform amounts near the $999 cap to every exit. When planning, allocate: \
+~20% of exits get $800-980, ~50% get $400-750, ~30% get $150-400. \
+Compute total accordingly and adjust per-exit shares to hit that shape.
+
+  P1-49 SOFT TACTIC — multi-hop staging→exit. When distributing manually \
+(not via distribute_to_exits), route ~30-40% of exits through 1-2 \
+intermediate burners instead of direct staging→exit. The intermediate \
+burners should be existing Layering wallets (already-used), NOT freshly \
+generated (fresh wallets appearing only at the last hop are anomalous). \
+This deepens the graph path from Alice to each exit from 3-4 hops \
+(direct) to 5-6 hops (multi-hop), making Louvain community detection \
+harder.
+
   ASSET MIX AT EXITS (empirical finding from EthereumHeist 2.4M-edge \
 real-crypto-heist dataset): only ~6% of laundering-flow edges are USDT \
 transfers; ~69% are ETH direct, remainder split across USDC/WETH/DAI + \
 long tail. Real criminals leave most of the stolen value AS ETH at \
 exits — they don't universally swap to USDT.
 
-DELIVERY PROCEDURE (mandatory — the campaign is measured by how much \
-value LANDS AT the labeled exits, NOT how much sits in staging/burners):
+P1-43 PREFERRED PATTERN — distribute_to_exits (batched atomic):
+
+  When you have MULTIPLE post-layering wallets holding ETH ready to \
+convert + distribute (typical: 5-15 wallets from mixer withdrawals + \
+peel_chain tails + swap outputs), USE distribute_to_exits. It \
+partitions the registered exits across your sources (strategy \
+"random" by default), computes exact gas budget per source based on \
+CURRENT base_fee, reserves that gas ON the source, swaps the rest to \
+USDT, then distributes sub-$999 USDT chunks — with gas bundled \
+automatically via G+ so no exit gets stranded and funders remain \
+passive. This BREAKS the hub-and-spoke topology (multiple sources → \
+multiple exits, no single consolidation wallet) which is the primary \
+signature Chainalysis/TRM detect in automated laundering.
+
+  Only skip distribute_to_exits when the design REQUIRES manual \
+consolidation (e.g. cross-actor coordination scenarios). For the \
+standard integration flow, distribute_to_exits is the correct choice.
+
+DELIVERY PROCEDURE (fallback — use only if distribute_to_exits doesn't fit):
 
   Step 1 — Determine total_deliverable_eth from staging + any \
 Layering burners that still hold funds. Reserve at most 5% for gas.

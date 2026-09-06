@@ -129,7 +129,10 @@ _ROLE_TX_COUNT: dict[str, int] = {
     "burner_layering":    6,   # peel_chain hops (3-4) + forward + 1-2 buf
     "burner_mixer":       3,   # mixer_withdraw + forward + 1 buf
     "burner_smurf":       2,   # single transfer_usdt (sub-$999) + 1 buf
-    "clean_exit":         0,   # terminal — never originates a tx (P1-29)
+    "clean_exit":         1,   # P1-43: mule cashes out via 1 tx to exchange
+                               # (was 0 pre-P1-43; changed so G+ propagation
+                               # bundles gas with the USDT delivery, keeping
+                               # funders passive during normal operation)
     "burner_generic":     3,   # conservative fallback for unrecognised roles
     "deployer":           0,   # infrastructure; excluded from role logic
     "alice":              0,   # source of funds; excluded
@@ -569,6 +572,69 @@ _TOOL_SCHEMAS: list[dict] = [
                 },
             },
             "required": ["from_asset", "amount"],
+        },
+    },
+    {
+        "name": "distribute_to_exits",
+        "description": (
+            "P1-43 — Atomic distributed swap + payout to ALL registered "
+            "clean_exits, breaking the hub-and-spoke topology that made "
+            "the pre-P1-43 pipeline detectable. Instead of consolidating "
+            "into 1 staging wallet, swapping once, and fanning out to N "
+            "exits, this tool: (a) partitions the exits across the given "
+            "source_wallets by `strategy`, (b) computes the exact ETH gas "
+            "each source needs to bundle 1 tx-worth of gas per assigned "
+            "exit, (c) reserves that gas ON the source, swaps the rest to "
+            "USDT via the oracle pool, (d) distributes sub-$999 USDT "
+            "chunks to its assigned exits — each transfer_usdt "
+            "auto-propagates the reserved gas alongside via G+ "
+            "(clean_exit role now = 1 tx, so gas propagation activates). "
+            "Result: no single wallet touches all exits, funders remain "
+            "passive (emergency only), and the on-chain graph shows N "
+            "independent traders distributing payments — indistinguishable "
+            "from legitimate OTC settlement flows. "
+            "PREFER THIS over manual consolidation + N × transfer_usdt."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "source_wallets": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Post-layering wallets holding ETH ready to swap. "
+                        "Each wallet will independently swap and distribute "
+                        "to its assigned subset of exits."
+                    ),
+                },
+                "usdt_per_exit": {
+                    "type": "number",
+                    "description": (
+                        "Optional fixed USDT per exit. If omitted, "
+                        "auto = (source_usdt_after_swap × (1 - keep_dust)) / n_assigned_exits. "
+                        "Always capped at $969 (CTR-safe headroom)."
+                    ),
+                },
+                "strategy": {
+                    "type": "string",
+                    "enum": ["random", "round_robin", "proportional"],
+                    "description": (
+                        "How to allocate exits to sources: "
+                        "'random' (default, max entropy — recommended), "
+                        "'round_robin' (uniform), "
+                        "'proportional' (larger balance → more exits)."
+                    ),
+                },
+                "keep_dust_pct": {
+                    "type": "number",
+                    "description": (
+                        "Fraction of USDT to leave in each source as "
+                        "'residual dust' for realism (default 0.02 = 2%, "
+                        "Chainalysis 2024 baseline for pro launderers)."
+                    ),
+                },
+            },
+            "required": ["source_wallets"],
         },
     },
     {
@@ -1618,6 +1684,8 @@ class ToolDispatcher:
                 return self._get_gas_budget(**tool_input)
             if tool_name == "get_swap_quote":
                 return self._get_swap_quote(**tool_input)
+            if tool_name == "distribute_to_exits":
+                return self._distribute_to_exits(**tool_input)
             if tool_name == "swap_eth_for_usdt":
                 return self._swap_eth_for_usdt(**tool_input)
             if tool_name == "swap_usdt_for_eth":
@@ -3542,6 +3610,280 @@ class ToolDispatcher:
             })
 
         return ToolResult(error=f"Unsupported from_asset: {from_asset!r}")
+
+    def _compute_exit_gas_budget(
+        self, n_exits_override: int | None = None,
+    ) -> dict:
+        """P1-43 — Total ETH needed to bundle 1 tx-worth of gas per exit.
+
+        Reads current base_fee and computes the gas envelope needed to
+        propagate to each registered clean_exit that currently has 0 ETH.
+        Used by _distribute_to_exits (and optionally by _swap_eth_for_usdt
+        with auto_reserve_exit_gas=True) to reserve the right amount of
+        ETH BEFORE the big swap, so the distribution phase never needs
+        to hit funders for gas.
+
+        Formula: n_exits × 1 tx × _GAS_PER_TX_UNITS × base_fee × safety
+        At Sepolia typical 1 gwei: 60 exits × 0.00045 ETH ≈ 0.027 ETH.
+        Under 10-gwei congestion: 0.27 ETH (scales linearly).
+        """
+        if n_exits_override is not None:
+            n = int(max(0, n_exits_override))
+        else:
+            n = 0
+            for entry in self.registered_clean_exits:
+                addr = entry.get("address")
+                if not addr:
+                    continue
+                try:
+                    if self.w3.eth.get_balance(
+                        Web3.to_checksum_address(addr),
+                    ) < int(_MIN_OPERATIONAL_GAS_ETH * 10**18):
+                        n += 1
+                except Exception:   # noqa: BLE001
+                    n += 1   # conservative: assume it needs gas
+        try:
+            base_fee = self.w3.eth.get_block("latest").get("baseFeePerGas") \
+                       or self.w3.eth.gas_price
+        except Exception:   # noqa: BLE001
+            base_fee = int(2e9)
+        per_exit_wei = 1 * _GAS_PER_TX_UNITS * int(base_fee * _GAS_ENVELOPE_SAFETY_MULT)
+        total_wei = n * per_exit_wei
+        return {
+            "n_exits_pending": n,
+            "per_exit_gas_eth": per_exit_wei / 10**18,
+            "total_reserve_eth": total_wei / 10**18,
+            "base_fee_gwei": base_fee / 1e9,
+        }
+
+    def _distribute_to_exits(
+        self,
+        source_wallets: list[str],
+        usdt_per_exit: float | None = None,
+        strategy: str = "random",
+        keep_dust_pct: float = 0.02,
+    ) -> ToolResult:
+        """P1-43 — Atomic distributed swap + payout to registered exits.
+
+        For each source wallet:
+          1. Allocate a subset of registered exits (round_robin / proportional
+             / random split), so no single source touches all exits.
+          2. Compute gas budget for the allocated exits (via
+             _compute_exit_gas_budget) using CURRENT base_fee.
+          3. Reserve gas budget on the source, then swap
+             (source_balance - reserve) ETH → USDT via the oracle pool.
+          4. Distribute USDT to allocated exits in sub-$999 chunks
+             (CTR-safe), each transfer_usdt automatically G+-propagates
+             the reserved gas alongside.
+
+        Broken hub-and-spoke: 9 sources × ~7 exits each instead of
+        1 staging hub × 60 exits. Funders never fire during normal
+        operation because gas comes from the same chain that carries
+        the value. See TFM §8.9.24.
+
+        Args:
+          source_wallets: post-layering wallets holding ETH ready to swap.
+          usdt_per_exit: fixed USDT per exit; None → auto = total_usdt / n_exits.
+          strategy: "random" (max entropy) | "round_robin" | "proportional".
+          keep_dust_pct: leave this % of USDT in each source as "residual
+            dust" for realism (real launderers never fully drain wallets —
+            2-5% dust is Chainalysis 2024 baseline; default 2%).
+
+        Returns per-source breakdown of swap + distribution + gas propagation.
+        """
+        if not source_wallets:
+            return ToolResult(error="source_wallets cannot be empty")
+        if self.pool is None or self.usdt is None:
+            return ToolResult(error="pool/USDT contracts not wired")
+        if strategy not in ("random", "round_robin", "proportional"):
+            return ToolResult(error=f"unknown strategy: {strategy}")
+
+        # Normalize + validate sources
+        sources = []
+        for s in source_wallets:
+            try:
+                addr = Web3.to_checksum_address(s)
+            except (ValueError, TypeError):
+                return ToolResult(error=f"invalid source address: {s}")
+            if addr not in self.wallets:
+                return ToolResult(error=f"unregistered source: {addr}")
+            sources.append(addr)
+
+        exit_addrs = [e["address"] for e in self.registered_clean_exits
+                      if e.get("address")]
+        if not exit_addrs:
+            return ToolResult(error="no clean exits registered — call register_clean_exit first")
+        n_exits = len(exit_addrs)
+        n_sources = len(sources)
+
+        # Allocate exits to sources by strategy
+        allocation: dict[str, list[str]] = {s: [] for s in sources}
+        if strategy == "random":
+            shuffled = list(exit_addrs)
+            random.shuffle(shuffled)
+            for i, ex in enumerate(shuffled):
+                allocation[sources[i % n_sources]].append(ex)
+        elif strategy == "round_robin":
+            for i, ex in enumerate(exit_addrs):
+                allocation[sources[i % n_sources]].append(ex)
+        elif strategy == "proportional":
+            balances = []
+            for s in sources:
+                try:
+                    balances.append((s, self.w3.eth.get_balance(s)))
+                except Exception:   # noqa: BLE001
+                    balances.append((s, 0))
+            total_bal = sum(b for _, b in balances) or 1
+            remaining = list(exit_addrs)
+            for s, b in balances[:-1]:
+                share = max(1, int(n_exits * b / total_bal))
+                allocation[s] = remaining[:share]
+                remaining = remaining[share:]
+            allocation[balances[-1][0]] = remaining
+
+        per_source_results: list[dict] = []
+        total_usdt_distributed = 0.0
+        total_gas_reserved = 0.0
+        total_swap_eth = 0.0
+        emergency_funder_fires = 0
+
+        for source in sources:
+            assigned = allocation[source]
+            n_assigned = len(assigned)
+            if n_assigned == 0:
+                per_source_results.append({
+                    "source": source, "assigned_exits": 0,
+                    "swapped_eth": 0.0, "usdt_out": 0.0,
+                    "note": "no exits assigned by strategy",
+                })
+                continue
+
+            # 1. Compute gas budget for THIS source's allocation
+            budget = self._compute_exit_gas_budget(n_exits_override=n_assigned)
+            gas_reserve_eth = budget["total_reserve_eth"]
+
+            # 2. Reserve gas, swap the rest
+            try:
+                src_bal_wei = self.w3.eth.get_balance(source)
+            except Exception as e:   # noqa: BLE001
+                per_source_results.append({
+                    "source": source, "error": f"balance query failed: {e}",
+                })
+                continue
+            src_bal_eth = src_bal_wei / 10**18
+            # Keep _DEFAULT_GAS_RESERVE_ETH for source's own tx overhead
+            available_to_swap = src_bal_eth - gas_reserve_eth - _DEFAULT_GAS_RESERVE_ETH
+            if available_to_swap <= 0.001:
+                per_source_results.append({
+                    "source": source, "assigned_exits": n_assigned,
+                    "swapped_eth": 0.0,
+                    "note": f"balance {src_bal_eth:.4f} ETH insufficient "
+                            f"after gas reserve {gas_reserve_eth:.4f} — skipped",
+                })
+                continue
+
+            swap_res = self._swap_eth_for_usdt(
+                from_address=source,
+                eth_amount=available_to_swap,
+                reserve_eth=gas_reserve_eth + _DEFAULT_GAS_RESERVE_ETH,
+            )
+            if swap_res.is_error:
+                per_source_results.append({
+                    "source": source, "swap_error": swap_res.error,
+                })
+                continue
+
+            total_swap_eth += available_to_swap
+            total_gas_reserved += gas_reserve_eth
+            usdt_out = float(swap_res.output.get("usdt_out", 0) or 0)
+
+            # 3. Determine per-exit USDT amounts using P1-48 Pareto shape:
+            # 20% of exits get 800-980 USDT (high-limit mules)
+            # 50% of exits get 400-750 USDT (medium mules)
+            # 30% of exits get 150-400 USDT (low-limit mules)
+            # then scaled so sum ≤ keepable_usdt.
+            keepable = usdt_out * (1 - keep_dust_pct)
+            # Build target shares per Pareto shape
+            n_high = max(1, int(n_assigned * 0.20))
+            n_mid  = max(1, int(n_assigned * 0.50))
+            n_low  = max(0, n_assigned - n_high - n_mid)
+            per_exit_amounts = []
+            for _ in range(n_high):
+                per_exit_amounts.append(random.uniform(800.0, 980.0))
+            for _ in range(n_mid):
+                per_exit_amounts.append(random.uniform(400.0, 750.0))
+            for _ in range(n_low):
+                per_exit_amounts.append(random.uniform(150.0, 400.0))
+            random.shuffle(per_exit_amounts)
+            # Scale if the sum exceeds keepable (rare but possible)
+            planned_total = sum(per_exit_amounts)
+            if planned_total > keepable and planned_total > 0:
+                scale = keepable / planned_total
+                per_exit_amounts = [a * scale for a in per_exit_amounts]
+            # CTR-safe cap: strict sub-$999 with $30 headroom
+            per_exit_amounts = [round(min(a, 969.0), 2) for a in per_exit_amounts]
+
+            # If usdt_per_exit was explicitly passed, honor it as a hard cap
+            if usdt_per_exit is not None:
+                per_exit_amounts = [round(min(a, usdt_per_exit), 2)
+                                     for a in per_exit_amounts]
+
+            # 4. Distribute — each transfer_usdt auto-propagates gas via G+
+            distributed = 0
+            for exit_addr, per_exit in zip(assigned, per_exit_amounts):
+                if per_exit < 50.0:
+                    continue   # too small to bother
+                r = self._transfer_usdt(
+                    from_address=source, to_address=exit_addr,
+                    amount_usdt=per_exit,
+                )
+                if r.is_error:
+                    continue
+                distributed += 1
+                total_usdt_distributed += per_exit
+                if float(r.output.get("gas_propagated_eth", 0) or 0) == 0:
+                    # G+ didn't fire (already had gas or failed) — that's
+                    # fine, but track it. If receiver ends stranded,
+                    # _post_tx_refuel will hit funders (emergency B path).
+                    pass
+
+            actual_distributed_sum = sum(per_exit_amounts[:distributed])
+            per_source_results.append({
+                "source": source,
+                "assigned_exits": n_assigned,
+                "swapped_eth": available_to_swap,
+                "gas_reserved_eth": gas_reserve_eth,
+                "usdt_out": usdt_out,
+                "distributed_count": distributed,
+                "usdt_distributed": actual_distributed_sum,
+                "pareto_shape": {"high": n_high, "mid": n_mid, "low": n_low},
+                "amount_range": {
+                    "min": min(per_exit_amounts) if per_exit_amounts else 0,
+                    "max": max(per_exit_amounts) if per_exit_amounts else 0,
+                },
+                "dust_residual_usdt": usdt_out - actual_distributed_sum,
+            })
+
+        # Check: did any funder fire an emergency refuel during this batch?
+        # (best-effort — the _post_tx_refuel path prints [GAS-EMERGENCY] to
+        # stderr, which the runner captures. Nothing else to check here.)
+
+        return ToolResult(output={
+            "strategy": strategy,
+            "n_sources": n_sources,
+            "n_exits_total": n_exits,
+            "swaps_performed": sum(1 for r in per_source_results
+                                    if r.get("swapped_eth", 0) > 0),
+            "distributions_performed": sum(r.get("distributed_count", 0)
+                                            for r in per_source_results),
+            "total_eth_swapped": total_swap_eth,
+            "total_gas_reserved": total_gas_reserved,
+            "total_usdt_distributed": total_usdt_distributed,
+            "hub_topology_broken": all(
+                r.get("assigned_exits", 0) < n_exits for r in per_source_results
+            ),
+            "per_source": per_source_results,
+        })
 
     def _swap_eth_for_usdt(
         self,
