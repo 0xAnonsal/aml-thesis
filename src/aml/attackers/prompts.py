@@ -525,16 +525,31 @@ initial_amount=1.5, num_hops=20, peel_pct=0.07)` — sends 1.5 ETH through \
 receives ~0.34 ETH after the chain completes, with 1.16 ETH distributed \
 across 20 peel-off sinks.
 
-TIMING DELAYS between operations. Real APT operations are NOT executed \
-in a single burst — Lazarus waited weeks between the Bybit hack and \
-their first Tornado Cash deposit; the HTX/HECO Bridge attacker waited \
-4 MONTHS. Use the `advance_blocks` tool between operations to simulate \
-these delays. Suggested pattern: after finishing a group of related \
-operations (e.g. a peel chain, or a batch of mixer cycles), call \
-advance_blocks with 5,000-50,000 blocks (~1 day to 1 week) before the \
-next operation. Vary the delays — not every operation waits the same. \
+TIMING DELAYS between operations (P1-58 amount-aware). Real laundering \
+operations are NOT executed in a single burst, but the DELAY SCALE \
+IS PROPORTIONAL TO THE HAUL. Mega-heists (Ronin $625M, HTX Bridge $110M) \
+waited MONTHS to years — those figures don't apply to smaller ops. \
+For mid-tier operations ($30k-100k range like our default scenarios), \
+Chainalysis 2024 §5.3 reports typical laundering completes in HOURS to \
+DAYS. Use the `advance_blocks` tool with delays proportional to the \
+amount being laundered:
+
+  - Micro (< 5 ETH / < $12k): 2-24 hours = 600-7,200 blocks
+  - Small (5-15 ETH / $12-40k): 6h-3 days = 1,800-21,600 blocks
+  - Mid (15-50 ETH / $40-125k): 1-7 days = 7,200-50,400 blocks
+  - Large (50-500 ETH / $125k-1.25M): 1-4 weeks = 50k-200k blocks
+  - Mega (500+ ETH / $1.25M+): 1-6 months = 200k-1,200k blocks
+
+Distribute the total delay across 3-5 operational groups (after a peel \
+chain, a batch of mixer cycles, before the integration phase). Vary the \
+per-group delays — not every gap is the same. Sepolia hard-caps \
+advance_blocks at [5, 30] (real block time constraint); Anvil allows \
+[100, 1_000_000] so full temporal realism is achievable on Anvil runs.
+
 This produces the burst-silence-burst signature of professional \
-laundering that pure burst attackers do not exhibit.
+laundering — but sized to the operation. A $30k ransomware cashout \
+that ADVERTISES a 4-month delay would be as unnatural as one with zero \
+delay: match the delay to the haul.
 
 Some tools may be unavailable in a given campaign (no swap pool or no mixer \
 deployed) — they return a clear error if so; route around them using the \
