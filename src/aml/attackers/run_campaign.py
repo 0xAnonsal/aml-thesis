@@ -197,8 +197,16 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
         # small tests don't pay for headroom they won't use and large
         # Anvil campaigns (100+ ETH) don't cascade into 4+ Integration
         # delegations. CLI override still wins if user passes a value.
+        #
+        # P1-61 (2026-09-09): formula bumped from `20 + amount * 1.2`
+        # to `30 + amount * 2.0` after seed 830 empirically hit
+        # max_iterations=49 in Layering (leaving 4 orphan mixer notes
+        # = ~$10k lost). The old formula was calibrated pre-P1-44
+        # (balanced technique mix) which requires ~2x more iter per
+        # amount due to diversified routes. New cap for 24.83 ETH: 80
+        # iter (was 49); for 100 ETH: 150 iter (was 140).
         if args.sub_agent_max_iterations == 40:  # unchanged default
-            adaptive_max = min(150, max(25, int(20 + amount * 1.2)))
+            adaptive_max = min(150, max(30, int(30 + amount * 2.0)))
         else:
             adaptive_max = args.sub_agent_max_iterations
         print(
