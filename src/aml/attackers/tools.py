@@ -1815,32 +1815,40 @@ class ToolDispatcher:
         # what a legitimate transfer looks like (moving crypto to a new
         # wallet always includes bootstrap gas), and eliminates the
         # funder→wallet edges that cluster wallets in AML detectors.
-        # Skipped for terminal roles (clean_exit, deployer) — they never
-        # originate tx so they need no downstream gas.
-        exit_addrs = {e.get("address") for e in self.registered_clean_exits}
+        #
+        # P1-65 fix (2026-09-10): removed the `if to_address not in
+        # exit_addrs` short-circuit. Previously exits were excluded from
+        # G+ propagation on the assumption they're terminal, but that
+        # made anti-strand fire for every exit (24/24 in seed 850,
+        # 60/60 in Sepolia seed 802) — creating the exact funder→exit
+        # edges P1-43 was trying to eliminate. Now G+ propagates based
+        # on `_downstream_gas_estimate(to_addr)` which uses the wallet's
+        # `_wallet_roles[to_addr]` — clean_exit role has budget 1 (P1-43)
+        # so exits DO receive gas alongside USDT. Result: exits are
+        # self-sufficient, anti-strand should find 0 stranded.
         propagated_gas_eth = 0.0
         propagate_tx_hash: str | None = None
-        if to_address not in exit_addrs:
-            gas_needed = self._downstream_gas_estimate(to_address)
-            if gas_needed > 0:
+        gas_needed = self._downstream_gas_estimate(to_address)
+        if gas_needed > 0:
+            try:
+                recv_bal_wei = self.w3.eth.get_balance(to_address)
+            except Exception:   # noqa: BLE001
+                recv_bal_wei = 0
+            gas_needed_wei = int(gas_needed * 10**18)
+            if recv_bal_wei < gas_needed_wei:
+                top_up_eth = (gas_needed_wei - recv_bal_wei) / 10**18
+                # Best-effort: if the sender can't afford the propagation,
+                # skip silently — sender's own transfer_usdt will still
+                # succeed, and the receiver falls back to _post_tx_refuel
+                # or anti-strand rescue.
                 try:
-                    recv_bal_wei = self.w3.eth.get_balance(to_address)
+                    propagate_tx_hash = self._seed_gas(
+                        to_address, top_up_eth, source=from_address,
+                    )
+                    propagated_gas_eth = top_up_eth
                 except Exception:   # noqa: BLE001
-                    recv_bal_wei = 0
-                gas_needed_wei = int(gas_needed * 10**18)
-                if recv_bal_wei < gas_needed_wei:
-                    top_up_eth = (gas_needed_wei - recv_bal_wei) / 10**18
-                    # Best-effort: if the sender can't afford the propagation,
-                    # skip silently — sender's own transfer_usdt will still
-                    # succeed, and the receiver falls back to _post_tx_refuel
-                    # or anti-strand rescue.
-                    try:
-                        propagate_tx_hash = self._seed_gas(
-                            to_address, top_up_eth, source=from_address,
-                        )
-                        propagated_gas_eth = top_up_eth
-                    except Exception:   # noqa: BLE001
-                        pass
+                    pass
+        exit_addrs = {e.get("address") for e in self.registered_clean_exits}
 
         try:
             tx = self.usdt.functions.transfer(to_address, amount_base).build_transaction({
