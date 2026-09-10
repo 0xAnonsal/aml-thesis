@@ -1,0 +1,160 @@
+{
+  "datasets": {
+    "sepolia_800": {
+      "nodes": 5775,
+      "edges": 18895,
+      "n_attacker_labeled": 99,
+      "n_benign_labeled": 510,
+      "n_background_unknown": 5166,
+      "detectors": {
+        "louvain": {
+          "fit_time_s": 0.47,
+          "tp": 99,
+          "fp_labeled_benign": 0,
+          "fn": 0,
+          "fp_background_unknown": 5162,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "bg_fpr": 0.999226
+        },
+        "gcn": {
+          "fit_time_s": 2.04,
+          "tp": 99,
+          "fp_labeled_benign": 17,
+          "fn": 0,
+          "fp_background_unknown": 5099,
+          "precision": 0.8534,
+          "recall": 1.0,
+          "f1": 0.9209,
+          "bg_fpr": 0.987031
+        }
+      }
+    },
+    "sepolia_802": {
+      "nodes": 22212,
+      "edges": 37033,
+      "n_attacker_labeled": 103,
+      "n_benign_labeled": 504,
+      "n_background_unknown": 21605,
+      "detectors": {
+        "louvain": {
+          "fit_time_s": 1.49,
+          "tp": 103,
+          "fp_labeled_benign": 0,
+          "fn": 0,
+          "fp_background_unknown": 21601,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "bg_fpr": 0.999815
+        },
+        "gcn": {
+          "fit_time_s": 1.8,
+          "tp": 103,
+          "fp_labeled_benign": 9,
+          "fn": 0,
+          "fp_background_unknown": 21591,
+          "precision": 0.9196,
+          "recall": 1.0,
+          "f1": 0.9581,
+          "bg_fpr": 0.999352
+        }
+      }
+    },
+    "sepolia_803": {
+      "nodes": 8554,
+      "edges": 23392,
+      "n_attacker_labeled": 134,
+      "n_benign_labeled": 510,
+      "n_background_unknown": 7910,
+      "detectors": {
+        "louvain": {
+          "fit_time_s": 0.49,
+          "tp": 129,
+          "fp_labeled_benign": 0,
+          "fn": 5,
+          "fp_background_unknown": 7906,
+          "precision": 1.0,
+          "recall": 0.9627,
+          "f1": 0.981,
+          "bg_fpr": 0.999494
+        },
+        "gcn": {
+          "fit_time_s": 1.05,
+          "tp": 134,
+          "fp_labeled_benign": 16,
+          "fn": 0,
+          "fp_background_unknown": 7699,
+          "precision": 0.8933,
+          "recall": 1.0,
+          "f1": 0.9437,
+          "bg_fpr": 0.973325
+        }
+      }
+    },
+    "anvil_830": {
+      "nodes": 680,
+      "edges": 12174,
+      "n_attacker_labeled": 155,
+      "n_benign_labeled": 518,
+      "n_background_unknown": 7,
+      "detectors": {
+        "louvain": {
+          "fit_time_s": 0.1,
+          "tp": 151,
+          "fp_labeled_benign": 0,
+          "fn": 4,
+          "fp_background_unknown": 3,
+          "precision": 1.0,
+          "recall": 0.9742,
+          "f1": 0.9869,
+          "bg_fpr": 0.428571
+        },
+        "gcn": {
+          "fit_time_s": 0.83,
+          "tp": 154,
+          "fp_labeled_benign": 28,
+          "fn": 1,
+          "fp_background_unknown": 3,
+          "precision": 0.8462,
+          "recall": 0.9935,
+          "f1": 0.9139,
+          "bg_fpr": 0.428571
+        }
+      }
+    },
+    "anvil_850": {
+      "nodes": 582,
+      "edges": 12041,
+      "n_attacker_labeled": 71,
+      "n_benign_labeled": 504,
+      "n_background_unknown": 7,
+      "detectors": {
+        "louvain": {
+          "fit_time_s": 0.09,
+          "tp": 61,
+          "fp_labeled_benign": 0,
+          "fn": 10,
+          "fp_background_unknown": 3,
+          "precision": 1.0,
+          "recall": 0.8592,
+          "f1": 0.9242,
+          "bg_fpr": 0.428571
+        },
+        "gcn": {
+          "fit_time_s": 0.8,
+          "tp": 71,
+          "fp_labeled_benign": 8,
+          "fn": 0,
+          "fp_background_unknown": 3,
+          "precision": 0.8987,
+          "recall": 1.0,
+          "f1": 0.9467,
+          "bg_fpr": 0.428571
+        }
+      }
+    }
+  },
+  "seed": 42
+}
