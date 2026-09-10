@@ -439,9 +439,21 @@ def run_campaign(args, scenario: Scenario) -> tuple[Any, Path]:
             },
         }
 
-        print("[runner] extracting chain trace...", file=sys.stderr)
+        # P1-64 fix (2026-09-10): use CURRENT block, not campaign_end_block
+        # captured pre-anti-strand. Discovered in seed 850 (Anvil ransomware):
+        # anti-strand rescue emitted 24 tx (blocks 27222-27746) but trace
+        # ended at 27221 = pre-rescue. Result: chain_trace.jsonl showed 0
+        # tx→exits, contradicting meta.anti_strand.rescued=24. Refreshing
+        # end_block after the post-coordinator phase catches all recovery
+        # tx (anti-strand + funder sweep + P1-62 mixer recovery).
+        trace_end_block = w3.eth.block_number
+        print(
+            f"[runner] extracting chain trace (blocks -> {trace_end_block}, "
+            f"including {trace_end_block - campaign_end_block} post-hoc blocks)...",
+            file=sys.stderr,
+        )
         trace = extract_chain_trace(
-            w3, campaign_end_block,
+            w3, trace_end_block,
             known_contracts={"usdt": usdt, "pool": pool, "tornado": tornado},
         )
         print(f"[runner] {len(trace)} txs traced", file=sys.stderr)
