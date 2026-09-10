@@ -1,0 +1,34 @@
+{
+  "label": "sepolia_800",
+  "model": "haiku",
+  "num_hard_neg": 500,
+  "nodes": 5775,
+  "edges": 18895,
+  "n_attacker": 99,
+  "n_benign_synth": 510,
+  "n_hard_neg": 500,
+  "n_remaining_bg": 4666,
+  "louvain": {
+    "tp": 99,
+    "fp_synth": 0,
+    "fp_hard_neg": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "fpr_hard_neg": 0.0
+  },
+  "llm_defender": {
+    "model": "haiku",
+    "cost_usd": 0.0445,
+    "fit_time_s": 120.47,
+    "used_fallback": false,
+    "tp": 99,
+    "fp_synth": 0,
+    "fp_hard_neg": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "fpr_hard_neg": 0.0,
+    "reasoning_preview": "Clustering identified 31 distinct campaigns across 180 flagged addresses. The dominant pattern is isolation: many addresses (clusters 2, 5, 7, 15, 20, 29) contain purely isolated nodes with zero or near-zero feature values\u2014typical of fresh wallets or placeholder addresses used in money laundering workflows. Mid-tier clusters isolate single-focus patterns: cluster 19 groups 14 USDT-heavy inbound ad"
+  }
+}

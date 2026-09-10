@@ -1,0 +1,34 @@
+{
+  "label": "sepolia_802",
+  "model": "haiku",
+  "num_hard_neg": 500,
+  "nodes": 22212,
+  "edges": 37033,
+  "n_attacker": 103,
+  "n_benign_synth": 504,
+  "n_hard_neg": 500,
+  "n_remaining_bg": 21105,
+  "louvain": {
+    "tp": 103,
+    "fp_synth": 0,
+    "fp_hard_neg": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "fpr_hard_neg": 0.0
+  },
+  "llm_defender": {
+    "model": "haiku",
+    "cost_usd": 0.043,
+    "fit_time_s": 127.25,
+    "used_fallback": false,
+    "tp": 103,
+    "fp_synth": 0,
+    "fp_hard_neg": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "fpr_hard_neg": 0.0,
+    "reasoning_preview": "The 180 flagged addresses cluster into 35 distinct campaigns. Large isolated-node cohorts (Clusters 0, 6, 13, 14, 23, 34) contain addresses with all-zero or near-zero features, likely representing burner addresses or brand-new accounts used within a single campaign. Mid-sized single-feature clusters (1\u20135, 7\u201312, 15\u201322, 24\u201326, 28\u201332) group addresses by specific behavioral signatures: small in-degree"
+  }
+}

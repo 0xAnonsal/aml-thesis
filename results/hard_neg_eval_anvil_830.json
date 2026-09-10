@@ -1,0 +1,34 @@
+{
+  "label": "anvil_830",
+  "model": "haiku",
+  "num_hard_neg": 500,
+  "nodes": 680,
+  "edges": 12174,
+  "n_attacker": 155,
+  "n_benign_synth": 518,
+  "n_hard_neg": 7,
+  "n_remaining_bg": 0,
+  "louvain": {
+    "tp": 154,
+    "fp_synth": 0,
+    "fp_hard_neg": 1,
+    "precision": 0.9935,
+    "recall": 0.9935,
+    "f1": 0.9935,
+    "fpr_hard_neg": 0.1429
+  },
+  "llm_defender": {
+    "model": "haiku",
+    "cost_usd": 0.0417,
+    "fit_time_s": 113.77,
+    "used_fallback": false,
+    "tp": 154,
+    "fp_synth": 0,
+    "fp_hard_neg": 1,
+    "precision": 0.9935,
+    "recall": 0.9935,
+    "f1": 0.9935,
+    "fpr_hard_neg": 0.1429,
+    "reasoning_preview": "This batch contains 155 flagged addresses across three exchanges with highly heterogeneous behavior. The clustering strategy identified 30 distinct actor campaigns: (1) High-volume distribution hub (0x70997970C51812dc3A010C7d01b50e0d17dc79C8) sending to 28 recipients; (2\u20133) Complex multi-exchange swap/mixer users with significant USDT+ETH mixing (0x1194329e00807a03e3D622BA4d1282d3bD71862E, 0x2F022"
+  }
+}

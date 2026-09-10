@@ -1,0 +1,34 @@
+{
+  "label": "sepolia_803",
+  "model": "haiku",
+  "num_hard_neg": 500,
+  "nodes": 8554,
+  "edges": 23392,
+  "n_attacker": 134,
+  "n_benign_synth": 510,
+  "n_hard_neg": 500,
+  "n_remaining_bg": 7410,
+  "louvain": {
+    "tp": 127,
+    "fp_synth": 0,
+    "fp_hard_neg": 0,
+    "precision": 1.0,
+    "recall": 0.9478,
+    "f1": 0.9732,
+    "fpr_hard_neg": 0.0
+  },
+  "llm_defender": {
+    "model": "haiku",
+    "cost_usd": 0.0439,
+    "fit_time_s": 126.88,
+    "used_fallback": false,
+    "tp": 127,
+    "fp_synth": 0,
+    "fp_hard_neg": 0,
+    "precision": 1.0,
+    "recall": 0.9478,
+    "f1": 0.9732,
+    "fpr_hard_neg": 0.0,
+    "reasoning_preview": "The 180 addresses cluster into 41 distinct campaigns. The key grouping signals are: (1) Cross-exchange presence indicating single actor with multiple KYC identities (0xa6b4832722f0455a763baf4a118deb47b4618681 appears on all three exchanges with escalating fingerprints); (2) Identical or near-identical fingerprints within same exchange (e.g., mixer_deposit_out=0.69 addresses, USDT-in consolidation "
+  }
+}
