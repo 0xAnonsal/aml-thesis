@@ -662,7 +662,18 @@ class LLMDefenderCoordinator(Detector):
         if self.llm_client is None:
             # Lazy-import to keep this module importable without anthropic SDK.
             from aml.attackers.llm_client import LLMClient
-            self.llm_client = LLMClient()
+            import httpx
+            # P1-67 fix: defender coordinator sends large prompts (180
+            # addresses × features × 3 exchanges → ~50-100k tokens). Sonnet
+            # / Haiku responses can legitimately take 60-180s. The default
+            # 90s read_timeout + 2 retries = 270s total which was HIT in
+            # both seed 800 Sonnet and Haiku runs (2026-09-10). Bump to
+            # 300s read + 5 retries = 25 min max before crash.
+            self.llm_client = LLMClient(
+                timeout=httpx.Timeout(connect=10.0, read=300.0,
+                                       write=300.0, pool=10.0),
+                max_retries=5,
+            )
 
         user_prompt = _build_llm_user_prompt(per_exchange_flagged)
         all_flagged_addrs = {
@@ -693,6 +704,8 @@ class LLMDefenderCoordinator(Detector):
                 max_tokens=self.llm_max_tokens,
             )
             llm_text = result.text if hasattr(result, "text") else str(result)
+            # P1-66 debug: expose raw LLM output for post-hoc inspection
+            self.raw_llm_output = llm_text
             address_to_cluster, reasoning = _parse_llm_clusters(
                 llm_text, all_flagged_addrs,
             )
@@ -708,6 +721,12 @@ class LLMDefenderCoordinator(Detector):
             # but keep the pipeline running.
             self.llm_reasoning = f"(LLM call failed: {e}; used cosine fallback)"
             self.llm_output_used_fallback = True
+            # P1-66 debug: expose the actual exception for inspection
+            self.raw_llm_output = f"[EXCEPTION] {type(e).__name__}: {e}"
+            self.llm_call_exception = e
+            import traceback
+            print(f"[LLM defender] Exception in complete(): {type(e).__name__}: {e}", flush=True)
+            traceback.print_exc()
             address_to_cluster = {}
             reasoning = ""
 
