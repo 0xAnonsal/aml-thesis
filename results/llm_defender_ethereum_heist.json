@@ -1,0 +1,23 @@
+{
+  "dataset": "EthereumHeist (Wu 2023)",
+  "n_nodes": 633057,
+  "n_hacks": 23,
+  "illicit_rate": 0.0754,
+  "rf_baseline": {
+    "f1": 0.9276,
+    "precision": 0.9311,
+    "recall": 0.9241
+  },
+  "llm_defender": {
+    "model": "haiku",
+    "cost_usd": 0.007,
+    "fit_time_s": 9.63,
+    "top_k_flagged": 60,
+    "tokens_in": 2819,
+    "tokens_out": 843,
+    "ari": 0.0567,
+    "n_true_clusters": 3,
+    "n_pred_clusters": 22,
+    "reasoning_preview": "Clustering strategy based on three key behavioral fingerprints: (1) Network degree (in/out connectivity), (2) Volume (log ETH moved), and (3) Balance (in_degree \u2248 out_degree indicates intermediary vs. receiver/sender bias). High-degree hubs (a49, a33, a14, a55, a58, a26, a56, a21) with substantial volume (log_eth \u22656.4) represent likely exchange/DEX/service operations or major laundering nodes\u2014each"
+  }
+}
