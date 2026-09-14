@@ -1,0 +1,16 @@
+{
+  "label": "sepolia_803",
+  "model": "haiku",
+  "feature_dim": 22,
+  "nodes": 8554,
+  "edges": 23392,
+  "n_attacker": 134,
+  "n_flagged": 8039,
+  "llm": {
+    "cost_usd": 0.0489,
+    "fit_time_s": 128.83,
+    "n_pred_clusters": 50,
+    "ari": 0.0154,
+    "reasoning_preview": "This batch contains 52 distinct criminal campaigns with widely varying operational profiles. The super-hub address 0xa6b4832722f0455a763baf4a118deb47b4618681 (pagerank=733.83, mixer-heavy, seen across all three exchanges) forms its own singleton cluster as a likely shared infrastructure node or serial launderer's primary aggregator. Clusters 1-5 capture high-confidence specialized workflows: mixer"
+  }
+}
