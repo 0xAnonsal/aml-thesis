@@ -1,0 +1,42 @@
+{
+  "label": "sepolia_803",
+  "model": "sonnet",
+  "nodes": 8554,
+  "edges": 23392,
+  "n_flagged": 8039,
+  "n_common_addrs": 79,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.147,
+    "fit_time_s": 220.78
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 23,
+      "ari": 0.0095
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.0223
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.004
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": -0.0509
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": -0.0201
+    },
+    "max_20": {
+      "max_c": 20,
+      "ari": -0.0143
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.0128,
+  "reasoning_preview": "The batch resolves into 23 clusters across three exchanges. Cluster 0 is the sole cross-exchange mixer hub (0xa6b4...) seen on all three exchanges with escalating degree counts, acting as the central relay node for multiple campaigns. Cluster 1 groups pure mixer-deposit feeders (ETH-in, mixer_deposit_out, identical tiny-degree fingerprint) across all three exchanges \u2014 these are burner wallets fund"
+}

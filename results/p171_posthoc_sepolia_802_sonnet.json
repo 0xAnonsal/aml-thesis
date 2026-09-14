@@ -1,0 +1,43 @@
+{
+  "label": "sepolia_802",
+  "model": "sonnet",
+  "nodes": 22212,
+  "edges": 37033,
+  "n_flagged": 21704,
+  "n_common_addrs": 43,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.1441,
+    "fit_time_s": 226.25
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 16,
+      "ari": 0.0145
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.0633
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": -0.0542
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": -0.0385
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": 0.0052
+    },
+    "max_20": {
+      "max_c": 16,
+      "ari": 0.0145,
+      "note": "no merge needed"
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.0488,
+  "reasoning_preview": "Fifteen to sixteen distinct campaigns are identified: Cluster 0 is a large USDT laundering operation centered on exchange_C, anchored by a major hub address (0x530C18A864..., out_degree=27 USDT distributor) feeding ~22 USDT-receiving leaf addresses with log_usdt_in in the 6.0-7.0 range \u2014 a classic funnel-and-spray structure. Cluster 1 is a USDT round-trip pair on exchange_B: a USDT-in address mirr"
+}

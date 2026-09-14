@@ -8,12 +8,12 @@
   "true_n_clusters": 3,
   "llm": {
     "cost_usd": 0.0195,
-    "fit_time_s": 44.79
+    "fit_time_s": 40.6
   },
   "sweep": {
     "baseline": {
-      "max_c": 38,
-      "ari": -0.0146
+      "max_c": 11,
+      "ari": 0.0263
     },
     "max_3": {
       "max_c": 3,
@@ -21,22 +21,30 @@
     },
     "max_5": {
       "max_c": 5,
-      "ari": 0.1054
+      "ari": 0.1374
     },
     "max_8": {
       "max_c": 8,
-      "ari": 0.0951
+      "ari": 0.0728
     },
     "max_12": {
-      "max_c": 12,
-      "ari": -0.0065
+      "max_c": 11,
+      "ari": 0.0263,
+      "note": "no merge needed"
     },
     "max_20": {
-      "max_c": 20,
-      "ari": -0.006
+      "max_c": 11,
+      "ari": 0.0263,
+      "note": "no merge needed"
     }
   },
   "best": "max_3",
-  "delta_vs_baseline": 0.1521,
-  "reasoning_preview": "Clustering identifies 38 distinct campaigns. Cluster 0 groups 6 addresses with nearly identical USDT in-degree=2, log_usdt_in\u22486.85\u20136.90, single unique counterparty (log_unique_in=0.69), pure transfer pattern\u2014consistent burner chain from one source. Cluster 1 groups 5 ETH-focused addresses with in/out-degree pairs (1,1) or (2,0), minimal volumes, transfer or mixer_deposit behavior\u2014distinct from the"
+  "delta_vs_baseline": 0.1112,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": 0.4719,
+    "delta_vs_baseline": 0.4456
+  },
+  "reasoning_preview": "Identified 11 distinct campaigns. Cluster 0: ultra-high-volume hub (0x709...) with 114 total degree and 9.21 log ETH out\u2014solo high-frequency distributor. Cluster 1: mid-volume swap+mixer users (5 addresses, 6\u20139 total degree, ~8 log USDT in/out, consistent swap/mixer signatures)\u2014coordinated laundering ring. Cluster 2: USDT-only receivers (12 addresses, in_degree=1\u20132, log_usdt=6.77\u20136.90, no outbound"
 }

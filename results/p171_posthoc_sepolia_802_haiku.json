@@ -4,39 +4,45 @@
   "nodes": 22212,
   "edges": 37033,
   "n_flagged": 21704,
-  "n_common_addrs": 42,
+  "n_common_addrs": 43,
   "true_n_clusters": 3,
   "llm": {
-    "cost_usd": 0.042,
-    "fit_time_s": 128.55
+    "cost_usd": 0.0444,
+    "fit_time_s": 130.91
   },
   "sweep": {
     "baseline": {
-      "max_c": 26,
-      "ari": 0.0077
+      "max_c": 24,
+      "ari": 0.0151
     },
     "max_3": {
       "max_c": 3,
-      "ari": 0.1936
+      "ari": 0.1948
     },
     "max_5": {
       "max_c": 5,
-      "ari": 0.1936
+      "ari": 0.1463
     },
     "max_8": {
       "max_c": 8,
-      "ari": -0.039
+      "ari": 0.0053
     },
     "max_12": {
       "max_c": 12,
-      "ari": -0.0747
+      "ari": -0.0256
     },
     "max_20": {
       "max_c": 20,
-      "ari": -0.0215
+      "ari": -0.0142
     }
   },
   "best": "max_3",
-  "delta_vs_baseline": 0.1859,
-  "reasoning_preview": "Clustering identified 26 distinct campaign groups. Core patterns: (0) mixer-based laundering with in/out balancing; (1) high-degree distributor (76D0E\u201412 out-edges, 2.56 unique); (2-7) mid-volume relayal burners with in-degree 2 and asymmetric out-degree or single transfers; (8-9) single-edge minimal-volume pass-throughs; (10-14) diverse mid-sized eth/usdt exit wallets; (15) large hub (530C18A\u201427 "
+  "delta_vs_baseline": 0.1798,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": -0.0368,
+    "delta_vs_baseline": -0.0518
+  },
+  "reasoning_preview": "The batch contains 180 addresses across three exchanges. Clustering prioritizes fingerprint similarity (degree, volume, edge-type composition) and cross-exchange signals. High-confidence addresses (conf=1.0) dominate and show stronger behavioral patterns. Cluster 0, 1, 2 group addresses with similar in-degree/out-degree patterns and low transfer volumes (0.69\u20131.10 log-scale). Cluster 3 isolates a "
 }

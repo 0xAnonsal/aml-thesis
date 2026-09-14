@@ -4,40 +4,45 @@
   "nodes": 5775,
   "edges": 18895,
   "n_flagged": 5261,
-  "n_common_addrs": 52,
+  "n_common_addrs": 51,
   "true_n_clusters": 3,
   "llm": {
-    "cost_usd": 0.0448,
-    "fit_time_s": 131.59
+    "cost_usd": 0.0438,
+    "fit_time_s": 121.36
   },
   "sweep": {
     "baseline": {
-      "max_c": 20,
-      "ari": 0.0139
+      "max_c": 24,
+      "ari": 0.0253
     },
     "max_3": {
       "max_c": 3,
-      "ari": 0.204
+      "ari": -0.0553
     },
     "max_5": {
       "max_c": 5,
-      "ari": 0.0938
+      "ari": 0.0556
     },
     "max_8": {
       "max_c": 8,
-      "ari": -0.0274
+      "ari": -0.004
     },
     "max_12": {
       "max_c": 12,
-      "ari": -0.0154
+      "ari": -0.0157
     },
     "max_20": {
       "max_c": 20,
-      "ari": 0.0139,
-      "note": "no merge needed"
+      "ari": -0.0287
     }
   },
-  "best": "max_3",
-  "delta_vs_baseline": 0.1901,
-  "reasoning_preview": "The 180 flagged addresses cluster into 20 distinct campaigns. Cluster 0 groups simple single-input addresses with low/minimal volume (in_degree=1, transfer_eth_in=0.69), a common burner pattern. Cluster 1 comprises similar low-volume receivers but with slightly higher log_eth_in (0.02\u20130.12), suggesting different fund sources. Cluster 2 collects bidirectional pass-through addresses (in_degree=1, ou"
+  "best": "max_5",
+  "delta_vs_baseline": 0.0303,
+  "silhouette_auto": {
+    "picked_k": 12,
+    "n_clusters_after": 12,
+    "ari": -0.0157,
+    "delta_vs_baseline": -0.041
+  },
+  "reasoning_preview": "This batch contains primarily money laundering infrastructure from approximately 23 distinct campaigns. Cluster 0 groups swing-style pass-through addresses (1-in\u21921-out + in-out degree pairs), likely early-stage hub consolidators. Cluster 1 comprises pure passive receiving wallets with identical minimal fingerprints (in_degree=1, log_unique_in=0.69). Cluster 2, 3, 4, 5 represent small active exit n"
 }

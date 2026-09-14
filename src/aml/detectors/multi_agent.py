@@ -551,6 +551,62 @@ def _parse_llm_clusters(
     return address_to_cluster, reasoning
 
 
+def _auto_pick_max_clusters(
+    address_to_cluster: dict[str, int],
+    addr_features: dict[str, np.ndarray],
+    k_candidates: list[int] | None = None,
+) -> int:
+    """P1-73 auto-tune (2026-09-14): pick max_clusters by silhouette score.
+
+    For each candidate k in `k_candidates`, produces a merged clustering by
+    calling `_merge_clusters_by_centroid(..., k)` and scores it with
+    `sklearn.metrics.silhouette_score` on the address fingerprints. Returns
+    the k that maximizes silhouette.
+
+    Rationale: §8.9.42 showed that P1-71 with `max_clusters=3` optimal on
+    our 5 datasets — but the true actor count k is unknown in real
+    deployments. Silhouette gives a data-driven, label-free way to pick k.
+
+    Args:
+        address_to_cluster: LLM-assigned {address → cluster_id}.
+        addr_features: {address → 19-dim fingerprint}. Must contain every
+            address in `address_to_cluster` that will be scored (missing
+            fingerprints are silently dropped from silhouette).
+        k_candidates: values of `max_clusters` to try. Defaults to
+            `[2, 3, 5, 8, 12]` — reasonable for AML campaigns.
+
+    Returns:
+        The k that maximizes silhouette. Falls back to the minimum k if
+        silhouette cannot be computed (e.g. all merges leave 1 cluster).
+    """
+    from sklearn.metrics import silhouette_score
+
+    if k_candidates is None:
+        k_candidates = [2, 3, 5, 8, 12]
+
+    baseline_n = len(set(address_to_cluster.values()))
+    best_k = min(k_candidates)
+    best_score = -np.inf
+    for k in k_candidates:
+        if k >= baseline_n:
+            continue
+        merged = _merge_clusters_by_centroid(address_to_cluster, addr_features, k)
+        # Score on addresses with fingerprints available
+        common = [a for a in merged if a in addr_features]
+        if len(set(merged[a] for a in common)) < 2 or len(common) < 3:
+            continue
+        X = np.array([addr_features[a] for a in common])
+        y = np.array([merged[a] for a in common])
+        try:
+            s = silhouette_score(X, y)
+        except ValueError:
+            continue
+        if s > best_score:
+            best_score = s
+            best_k = k
+    return best_k
+
+
 def _merge_clusters_by_centroid(
     address_to_cluster: dict[str, int],
     addr_features: dict[str, np.ndarray],

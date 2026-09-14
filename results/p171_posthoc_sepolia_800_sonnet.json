@@ -1,0 +1,43 @@
+{
+  "label": "sepolia_800",
+  "model": "sonnet",
+  "nodes": 5775,
+  "edges": 18895,
+  "n_flagged": 5261,
+  "n_common_addrs": 52,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.1395,
+    "fit_time_s": 213.4
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 16,
+      "ari": 0.0269
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": -0.0004
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": -0.0218
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": 0.0057
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": 0.0233
+    },
+    "max_20": {
+      "max_c": 16,
+      "ari": 0.0269,
+      "note": "no merge needed"
+    }
+  },
+  "best": "baseline",
+  "delta_vs_baseline": 0.0,
+  "reasoning_preview": "The 180 addresses were grouped into 16 clusters representing distinct criminal campaigns. Cluster 0 is an exchange_A ETH-in burner campaign anchored by hub 0x15ce1c8B (out_degree=12 distributing to 12 receivers) and its satellite wallets with matching in_degree=1 ETH-receive fingerprints. Cluster 1 is a high-volume USDT laundering campaign on exchange_C centered on hub 0x769a0131 (complex USDT in/"
+}

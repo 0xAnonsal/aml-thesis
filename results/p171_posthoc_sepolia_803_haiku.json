@@ -3,40 +3,46 @@
   "model": "haiku",
   "nodes": 8554,
   "edges": 23392,
-  "n_flagged": 8035,
-  "n_common_addrs": 75,
+  "n_flagged": 8039,
+  "n_common_addrs": 78,
   "true_n_clusters": 3,
   "llm": {
-    "cost_usd": 0.0465,
-    "fit_time_s": 132.6
+    "cost_usd": 0.043,
+    "fit_time_s": 124.4
   },
   "sweep": {
     "baseline": {
-      "max_c": 47,
-      "ari": 0.0098
+      "max_c": 38,
+      "ari": -0.0212
     },
     "max_3": {
       "max_c": 3,
-      "ari": 0.1218
+      "ari": 0.124
     },
     "max_5": {
       "max_c": 5,
-      "ari": -0.0001
+      "ari": -0.01
     },
     "max_8": {
       "max_c": 8,
-      "ari": -0.0034
+      "ari": -0.0283
     },
     "max_12": {
       "max_c": 12,
-      "ari": -0.0364
+      "ari": -0.0021
     },
     "max_20": {
       "max_c": 20,
-      "ari": -0.0183
+      "ari": -0.019
     }
   },
   "best": "max_3",
-  "delta_vs_baseline": 0.1119,
-  "reasoning_preview": "This batch contains 180 flagged addresses (60 per exchange) across three exchanges. Clustering identified 47 distinct campaigns. The primary signals include: (1) identical fingerprints across exchanges (e.g., 0xa6b4832722f0455a763baf4a118deb47b4618681 appearing on both A and B with elevated mixer engagement, forming cluster 15); (2) near-identical on-exchange patterns (clusters 0, 1, 2 grouping ad"
+  "delta_vs_baseline": 0.1451,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": 0.2677,
+    "delta_vs_baseline": 0.2888
+  },
+  "reasoning_preview": "Identified 39 distinct clusters representing coordinated laundering campaigns. Cluster 0 (mixer deposit\u2192ETH) and Cluster 15 (mixer deposit pattern) represent specialized eth-to-mixer operations; Clusters 4, 21, 25 group USDT-receiving addresses with similar low-volume signatures (~6-7 log range). Cluster 13 isolates the high-degree mixer hub (0xa6b4832722...) that appears cross-exchange with eleva"
 }

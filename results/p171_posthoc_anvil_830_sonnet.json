@@ -1,0 +1,43 @@
+{
+  "label": "anvil_830",
+  "model": "sonnet",
+  "nodes": 680,
+  "edges": 12174,
+  "n_flagged": 154,
+  "n_common_addrs": 105,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.146,
+    "fit_time_s": 209.45
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 19,
+      "ari": 0.0014
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.1358
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.0828
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": 0.0426
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": 0.0067
+    },
+    "max_20": {
+      "max_c": 19,
+      "ari": 0.0014,
+      "note": "no merge needed"
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.1344,
+  "reasoning_preview": "Cluster 0: The address 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853 (case-insensitive duplicate included) is a cross-exchange mixer hub appearing on all three exchanges with high mixer_deposit_in and mixer_withdraw_out volumes, confirming it as a central actor. Cluster 1: 0x5FbDB2315678afecb367f032d93F642f64180aa3 appears on all three exchanges at conf=0.5 \u2014 likely a shared infrastructure/deployer a"
+}

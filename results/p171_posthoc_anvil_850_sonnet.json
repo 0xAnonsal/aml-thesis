@@ -1,0 +1,44 @@
+{
+  "label": "anvil_850",
+  "model": "sonnet",
+  "nodes": 582,
+  "edges": 12041,
+  "n_flagged": 64,
+  "n_common_addrs": 37,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.0664,
+    "fit_time_s": 83.3
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 12,
+      "ari": 0.0136
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.1697
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.0781
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": 0.0546
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": 0.0136,
+      "note": "no merge needed"
+    },
+    "max_20": {
+      "max_c": 12,
+      "ari": 0.0136,
+      "note": "no merge needed"
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.1561,
+  "reasoning_preview": "Cluster 0 contains the two cross-exchange bridge addresses (appearing in all three exchanges at conf=0.500) representing shared infrastructure or known relay nodes. Cluster 1 is the high-degree exchange_A coordinator (degree=114, mixed ETH+USDT+swaps) acting as the central hub. Cluster 2 groups 12 exchange_A USDT-only sink burners with nearly identical fingerprints (in_degree=1-2, log_usdt_in\u22486.8-"
+}

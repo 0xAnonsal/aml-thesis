@@ -1,0 +1,47 @@
+{
+  "dataset": "EthereumHeist (Wu 2023)",
+  "n_nodes": 633057,
+  "n_edges": 2452786,
+  "n_hacks": 23,
+  "top_k_flagged": 60,
+  "true_n_clusters": 3,
+  "llm": {
+    "model": "haiku",
+    "cost_usd": 0.0069,
+    "fit_time_s": 9.26
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 29,
+      "ari": 0.077
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.1592
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.2015
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": 0.4162
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": 0.3021
+    },
+    "max_20": {
+      "max_c": 20,
+      "ari": 0.1839
+    }
+  },
+  "best": "max_8",
+  "delta_vs_baseline": 0.3393,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": 0.2017,
+    "delta_vs_baseline": 0.1247
+  }
+}

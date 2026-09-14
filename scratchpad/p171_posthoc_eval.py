@@ -18,6 +18,7 @@ from aml.detectors.dataset import combine_runs, partial_visibility_split
 from aml.detectors.multi_agent import (
     LLMDefenderCoordinator, _LLM_COORDINATOR_SYSTEM_PROMPT,
     _build_llm_user_prompt, _format_address_for_llm, _parse_llm_clusters,
+    _merge_clusters_by_centroid, _auto_pick_max_clusters,
 )
 from aml.detectors.gnn import extract_features, FEATURE_NAMES, FEATURE_DIM
 from aml.attackers.llm_client import LLMClient
@@ -184,9 +185,17 @@ for max_c in SWEEP:
 # Find best
 best_key = max(sweep_results.keys(), key=lambda k: sweep_results[k]['ari'] or -1)
 best = sweep_results[best_key]
-print(f'\n  BEST: {best_key} → ARI={best["ari"]:.4f} ({best["max_c"]} clusters)')
+print(f'\n  BEST (oracle): {best_key} → ARI={best["ari"]:.4f} ({best["max_c"]} clusters)')
 delta = (best['ari'] - baseline_ari) if baseline_ari is not None else None
 print(f'  Δ vs baseline: {delta:+.4f}')
+
+# ============ P1-73 SILHOUETTE AUTO-TUNE ============
+auto_k = _auto_pick_max_clusters(address_to_cluster, addr_to_fp, k_candidates=[2, 3, 5, 8, 12])
+auto_merged = _merge_clusters_by_centroid(address_to_cluster, addr_to_fp, auto_k)
+auto_ari = _ari(auto_merged)
+n_auto = len(set(auto_merged.values()))
+auto_delta = (auto_ari - baseline_ari) if baseline_ari is not None and auto_ari is not None else None
+print(f'\n  SILHOUETTE-PICKED k={auto_k}: got {n_auto} clusters, ARI={auto_ari:.4f}  Δ={auto_delta:+.4f}')
 
 # Save
 out = REPO / 'results' / f'p171_posthoc_{label}_{model}.json'
@@ -203,6 +212,12 @@ out.write_text(json.dumps({
     'sweep': {k: {**v, 'ari': round(v['ari'], 4) if v['ari'] is not None else None} for k, v in sweep_results.items()},
     'best': best_key,
     'delta_vs_baseline': round(delta, 4) if delta is not None else None,
+    'silhouette_auto': {
+        'picked_k': auto_k,
+        'n_clusters_after': n_auto,
+        'ari': round(auto_ari, 4) if auto_ari is not None else None,
+        'delta_vs_baseline': round(auto_delta, 4) if auto_delta is not None else None,
+    },
     'reasoning_preview': (reasoning or '')[:400],
 }, indent=2))
 print(f'\nWrote {out}')

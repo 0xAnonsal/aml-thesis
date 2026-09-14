@@ -3,41 +3,46 @@
   "model": "haiku",
   "nodes": 680,
   "edges": 12174,
-  "n_flagged": 154,
-  "n_common_addrs": 101,
+  "n_flagged": 157,
+  "n_common_addrs": 107,
   "true_n_clusters": 3,
   "llm": {
-    "cost_usd": 0.0409,
-    "fit_time_s": 109.51
+    "cost_usd": 0.0399,
+    "fit_time_s": 105.05
   },
   "sweep": {
     "baseline": {
-      "max_c": 15,
-      "ari": -0.0103
+      "max_c": 21,
+      "ari": -0.0032
     },
     "max_3": {
       "max_c": 3,
-      "ari": 0.1368
+      "ari": 0.1629
     },
     "max_5": {
       "max_c": 5,
-      "ari": 0.0822
+      "ari": 0.0521
     },
     "max_8": {
       "max_c": 8,
-      "ari": 0.0468
+      "ari": 0.0275
     },
     "max_12": {
       "max_c": 12,
-      "ari": -0.0078
+      "ari": 0.026
     },
     "max_20": {
-      "max_c": 15,
-      "ari": -0.0103,
-      "note": "no merge needed"
+      "max_c": 20,
+      "ari": -0.0042
     }
   },
   "best": "max_3",
-  "delta_vs_baseline": 0.1471,
-  "reasoning_preview": "The batch contains 14 distinct actor clusters identified by behavioral and volumetric fingerprint similarities. Cluster 0 is the dominant mixer-reliant address flagged across all three exchanges with varying profile views (in_degree=7\u21921, mixer patterns shifting). Cluster 1 comprises two identical cross-exchange USDT-heavy swap+mixer addresses (0x3e35AEF... and 0x3d0D176...), indicating a tightly-c"
+  "delta_vs_baseline": 0.1661,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": 0.2725,
+    "delta_vs_baseline": 0.2757
+  },
+  "reasoning_preview": "This batch contains approximately 20 distinct campaigns. Cluster 0 groups four high-degree mixer+swap addresses with similar fingerprints (in_degree=4, out_degree=3, total_degree=7, mixing USDT volumes 7.3-7.5 log-scale) \u2014 these are sibling burners from a mid-size USDT mixing-and-swapping campaign. Cluster 1 contains the distinctive mixer aggregator 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853, flag"
 }
