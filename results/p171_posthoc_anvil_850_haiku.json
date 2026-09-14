@@ -1,0 +1,42 @@
+{
+  "label": "anvil_850",
+  "model": "haiku",
+  "nodes": 582,
+  "edges": 12041,
+  "n_flagged": 64,
+  "n_common_addrs": 37,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.0195,
+    "fit_time_s": 44.79
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 38,
+      "ari": -0.0146
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.1374
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.1054
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": 0.0951
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": -0.0065
+    },
+    "max_20": {
+      "max_c": 20,
+      "ari": -0.006
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.1521,
+  "reasoning_preview": "Clustering identifies 38 distinct campaigns. Cluster 0 groups 6 addresses with nearly identical USDT in-degree=2, log_usdt_in\u22486.85\u20136.90, single unique counterparty (log_unique_in=0.69), pure transfer pattern\u2014consistent burner chain from one source. Cluster 1 groups 5 ETH-focused addresses with in/out-degree pairs (1,1) or (2,0), minimal volumes, transfer or mixer_deposit behavior\u2014distinct from the"
+}

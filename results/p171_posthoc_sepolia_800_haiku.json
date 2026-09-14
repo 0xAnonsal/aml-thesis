@@ -1,0 +1,43 @@
+{
+  "label": "sepolia_800",
+  "model": "haiku",
+  "nodes": 5775,
+  "edges": 18895,
+  "n_flagged": 5261,
+  "n_common_addrs": 52,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.0448,
+    "fit_time_s": 131.59
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 20,
+      "ari": 0.0139
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.204
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.0938
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": -0.0274
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": -0.0154
+    },
+    "max_20": {
+      "max_c": 20,
+      "ari": 0.0139,
+      "note": "no merge needed"
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.1901,
+  "reasoning_preview": "The 180 flagged addresses cluster into 20 distinct campaigns. Cluster 0 groups simple single-input addresses with low/minimal volume (in_degree=1, transfer_eth_in=0.69), a common burner pattern. Cluster 1 comprises similar low-volume receivers but with slightly higher log_eth_in (0.02\u20130.12), suggesting different fund sources. Cluster 2 collects bidirectional pass-through addresses (in_degree=1, ou"
+}

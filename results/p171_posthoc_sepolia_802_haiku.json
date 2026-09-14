@@ -1,0 +1,42 @@
+{
+  "label": "sepolia_802",
+  "model": "haiku",
+  "nodes": 22212,
+  "edges": 37033,
+  "n_flagged": 21704,
+  "n_common_addrs": 42,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.042,
+    "fit_time_s": 128.55
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 26,
+      "ari": 0.0077
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.1936
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.1936
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": -0.039
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": -0.0747
+    },
+    "max_20": {
+      "max_c": 20,
+      "ari": -0.0215
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.1859,
+  "reasoning_preview": "Clustering identified 26 distinct campaign groups. Core patterns: (0) mixer-based laundering with in/out balancing; (1) high-degree distributor (76D0E\u201412 out-edges, 2.56 unique); (2-7) mid-volume relayal burners with in-degree 2 and asymmetric out-degree or single transfers; (8-9) single-edge minimal-volume pass-throughs; (10-14) diverse mid-sized eth/usdt exit wallets; (15) large hub (530C18A\u201427 "
+}

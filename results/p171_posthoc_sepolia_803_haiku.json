@@ -1,0 +1,42 @@
+{
+  "label": "sepolia_803",
+  "model": "haiku",
+  "nodes": 8554,
+  "edges": 23392,
+  "n_flagged": 8035,
+  "n_common_addrs": 75,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.0465,
+    "fit_time_s": 132.6
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 47,
+      "ari": 0.0098
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.1218
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": -0.0001
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": -0.0034
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": -0.0364
+    },
+    "max_20": {
+      "max_c": 20,
+      "ari": -0.0183
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.1119,
+  "reasoning_preview": "This batch contains 180 flagged addresses (60 per exchange) across three exchanges. Clustering identified 47 distinct campaigns. The primary signals include: (1) identical fingerprints across exchanges (e.g., 0xa6b4832722f0455a763baf4a118deb47b4618681 appearing on both A and B with elevated mixer engagement, forming cluster 15); (2) near-identical on-exchange patterns (clusters 0, 1, 2 grouping ad"
+}

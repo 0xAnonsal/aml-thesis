@@ -1,0 +1,43 @@
+{
+  "label": "anvil_830",
+  "model": "haiku",
+  "nodes": 680,
+  "edges": 12174,
+  "n_flagged": 154,
+  "n_common_addrs": 101,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.0409,
+    "fit_time_s": 109.51
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 15,
+      "ari": -0.0103
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.1368
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.0822
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": 0.0468
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": -0.0078
+    },
+    "max_20": {
+      "max_c": 15,
+      "ari": -0.0103,
+      "note": "no merge needed"
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.1471,
+  "reasoning_preview": "The batch contains 14 distinct actor clusters identified by behavioral and volumetric fingerprint similarities. Cluster 0 is the dominant mixer-reliant address flagged across all three exchanges with varying profile views (in_degree=7\u21921, mixer patterns shifting). Cluster 1 comprises two identical cross-exchange USDT-heavy swap+mixer addresses (0x3e35AEF... and 0x3d0D176...), indicating a tightly-c"
+}

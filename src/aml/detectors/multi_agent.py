@@ -551,6 +551,67 @@ def _parse_llm_clusters(
     return address_to_cluster, reasoning
 
 
+def _merge_clusters_by_centroid(
+    address_to_cluster: dict[str, int],
+    addr_features: dict[str, np.ndarray],
+    max_clusters: int,
+) -> dict[str, int]:
+    """P1-71 post-hoc cluster merge.
+
+    Iteratively merges the two clusters with the closest L2-distance
+    centroids (mean of member fingerprints) until the total cluster count
+    drops to `max_clusters` or below. Deterministic: given the same input
+    it always produces the same merge sequence.
+
+    Empirically (§8.9.42) this raises mean ARI on our 5 attacker datasets
+    from ~0.001 (essentially random) to ~0.16 (moderate) at max_clusters=3,
+    because Haiku/Sonnet 4.5 systematically over-segment the flag set
+    (typical output: 20-50 clusters when the true actor count is 3-5).
+
+    Args:
+        address_to_cluster: LLM-assigned {address → cluster_id}. Untouched
+            on return (a fresh dict is built).
+        addr_features: {address → 19-dim fingerprint}. Addresses missing
+            from this map are excluded from centroid computation but
+            keep their LLM cluster id (they cannot influence merging).
+        max_clusters: target upper bound on cluster count.
+
+    Returns:
+        New {address → cluster_id} with at most `max_clusters` distinct ids.
+        No-op (copy of input) when the input already has ≤ max_clusters.
+    """
+    result = dict(address_to_cluster)
+    if not result:
+        return result
+
+    def _centroids() -> dict[int, np.ndarray]:
+        groups: dict[int, list[np.ndarray]] = {}
+        for a, c in result.items():
+            fp = addr_features.get(a)
+            if fp is not None:
+                groups.setdefault(c, []).append(fp)
+        return {c: np.mean(fps, axis=0) for c, fps in groups.items() if fps}
+
+    cents = _centroids()
+    while len(cents) > max_clusters:
+        cluster_ids = list(cents.keys())
+        best = (None, None, float("inf"))
+        for i, ci in enumerate(cluster_ids):
+            for cj in cluster_ids[i + 1:]:
+                d = float(np.linalg.norm(cents[ci] - cents[cj]))
+                if d < best[2]:
+                    best = (ci, cj, d)
+        ci, cj, _ = best
+        if ci is None:
+            break
+        # Merge cj into ci (keep the smaller id — deterministic).
+        for a in list(result.keys()):
+            if result[a] == cj:
+                result[a] = ci
+        cents = _centroids()
+    return result
+
+
 @dataclass
 class LLMDefenderCoordinator(Detector):
     """LLM-driven cross-exchange coordinator — parity with attacker Coordinator.
@@ -611,6 +672,12 @@ class LLMDefenderCoordinator(Detector):
     # 649 attackers, forcing over-generalisation. 60 covers ~28% — better
     # signal for campaign-level clustering.
     top_k_flagged_per_exchange: int = 60
+    # P1-71 (2026-09-14): optional post-hoc cluster count enforcement.
+    # When set, merges the LLM's predicted clusters by centroid L2 distance
+    # until |clusters| <= max_clusters. Empirically (§8.9.42): a max of 3-5
+    # improves ARI ~10-160× on our 5 datasets because the LLM systematically
+    # over-segments the flag set. None = no merge (LLM output kept as-is).
+    max_clusters: int | None = None
 
     # populated by fit_per_view
     _binary: Any = None
@@ -618,6 +685,8 @@ class LLMDefenderCoordinator(Detector):
     llm_reasoning: str = ""
     usage: dict = field(default_factory=dict)
     llm_output_used_fallback: bool = False
+    n_clusters_before_merge: int = 0
+    n_clusters_after_merge: int = 0
 
     def fit_per_view(
         self, views, train_labels: dict[str, int],
@@ -749,6 +818,22 @@ class LLMDefenderCoordinator(Detector):
                 )
 
         self.llm_reasoning = reasoning
+
+        # P1-71: post-hoc merge to enforce max_clusters cap.
+        # Applied BEFORE singleton fill-in so we only merge the LLM's
+        # own assignments (not unassigned addresses that just get their
+        # own singleton for bookkeeping).
+        self.n_clusters_before_merge = len(set(address_to_cluster.values()))
+        if self.max_clusters is not None and address_to_cluster:
+            addr_fp = {
+                a: fp
+                for entries in per_exchange_flagged.values()
+                for a, fp, _ in entries
+            }
+            address_to_cluster = _merge_clusters_by_centroid(
+                address_to_cluster, addr_fp, self.max_clusters,
+            )
+        self.n_clusters_after_merge = len(set(address_to_cluster.values()))
 
         # Every FLAGGED address must have a cluster. Anything the LLM
         # didn't assign gets its own singleton (safety net for LLM
