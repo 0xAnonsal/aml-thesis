@@ -1,0 +1,70 @@
+{
+  "n_attackers_combined": 7,
+  "n_nodes": 34578,
+  "n_edges": 56648,
+  "n_true_role_clusters": 3,
+  "n_true_role_x_campaign_clusters": 18,
+  "phase1": {
+    "louvain_f1": 0.9545,
+    "precision": 1.0,
+    "recall": 0.913
+  },
+  "phase2": {
+    "llm_model": "haiku",
+    "llm_cost_usd": 0.0455,
+    "llm_fit_time_s": 118.4867,
+    "n_flagged": 33981,
+    "baseline_ari_role": 0.0008,
+    "baseline_ari_campaign": 0.0115,
+    "sweep": {
+      "baseline": {
+        "max_c": 30,
+        "ari_role": 0.0008,
+        "ari_camp": 0.0115
+      },
+      "max_3": {
+        "max_c": 3,
+        "ari_role": 0.4264,
+        "ari_camp": 0.0117
+      },
+      "max_5": {
+        "max_c": 5,
+        "ari_role": 0.2736,
+        "ari_camp": 0.0113
+      },
+      "max_8": {
+        "max_c": 8,
+        "ari_role": 0.1824,
+        "ari_camp": 0.0081
+      },
+      "max_12": {
+        "max_c": 12,
+        "ari_role": 0.0412,
+        "ari_camp": 0.0121
+      },
+      "max_20": {
+        "max_c": 20,
+        "ari_role": 0.0019,
+        "ari_camp": 0.0041
+      },
+      "max_30": {
+        "max_c": 30,
+        "ari_role": 0.0008,
+        "ari_camp": 0.0115,
+        "note": "no merge"
+      },
+      "max_50": {
+        "max_c": 30,
+        "ari_role": 0.0008,
+        "ari_camp": 0.0115,
+        "note": "no merge"
+      }
+    },
+    "silhouette": {
+      "picked_k": 3,
+      "n_clusters_after": 3,
+      "ari_role": 0.4264,
+      "ari_campaign": 0.0117
+    }
+  }
+}
