@@ -1636,3 +1636,147 @@ motivación de tres de las constantes merece resaltarse:
   de recuperación (versión pre-fix: 198 % nominal por incluir el
   balance del deployer al final).
 
+---
+
+## 5.E Planificación del proyecto y metodología de trabajo
+
+### 5.E.1 Metodología aplicada
+
+El desarrollo del TFM siguió una **metodología iterativa incremental**
+adaptada al perfil experimental del proyecto. Cada iteración cierra
+con validación empírica en Anvil (sandbox local, cost cero) antes de
+promoción a Sepolia (testnet pública, cost real ETH testnet). Este
+patrón Anvil-dev → Sepolia-prod permite iteración rápida en la fase
+de exploración y garantiza validez externa en la fase final.
+
+Las cinco fases del proyecto se ejecutaron secuencialmente con
+solapamiento parcial en las fases 2-3 (implementación atacante) y
+4-5 (implementación defensor). Los hitos entregables (contratos
+verificados, datasets consolidados, ablations documentadas)
+delimitan cada fase.
+
+### 5.E.2 Fases del proyecto y recursos
+
+| Fase | Descripción | Duración estimada | Duración real | Recursos empleados |
+|------|-------------|------------------:|--------------:|--------------------|
+| **F1 — Análisis y diseño** | Revisión bibliográfica, taxonomía FATF, diseño arquitectura dual multi-agente | 3 semanas | 3 semanas | 45 h autor + 5 h tutor |
+| **F2 — Simulador ofensivo** | Contratos Solidity, herramientas on-chain, agente coordinador atacante | 5 semanas | 6 semanas | 90 h autor + $8 USD LLM Opus |
+| **F3 — Validación Anvil-dev** | 15 campañas Anvil (seeds 500-606) con iteraciones P1-XX bug fixes y refinamientos | 3 semanas | 4 semanas | 60 h autor + $6 USD LLM |
+| **F4 — Despliegue Sepolia** | 6 contratos verificados en Etherscan + 8 campañas oficiales (seeds 800-830) | 3 semanas | 3 semanas | 45 h autor + $9 USD LLM + 8 ETH testnet |
+| **F5 — Defensor + ablations** | Pipeline defensivo Louvain + LLM + ablations (P1-55/56/70/71/72/73/74) + cross-domain + held-out + LOCO | 4 semanas | 4 semanas | 60 h autor + $2 USD LLM Haiku |
+| **F6 — Redacción memoria + preparación defensa** | Draft TFM + docx + defensa | 3 semanas | 2 semanas | 45 h autor |
+| **TOTAL** | | **21 semanas** | **22 semanas** | **~345 h autor + $25 USD LLM** |
+
+### 5.E.3 Diagrama Gantt textual
+
+```
+Semana         1   2   3   4   5   6   7   8   9   10  11  12  13  14  15  16  17  18  19  20  21  22
+F1 Análisis    ████████████                                                                        
+F2 Atacante             ████████████████████████                                                   
+F3 Anvil dev                            ████████████████████                                       
+F4 Sepolia                                          ████████████                                   
+F5 Defensor                                                      ████████████████                   
+F6 Redacción                                                                     ████████████     
+```
+
+### 5.E.4 Recursos y hardware empleados
+
+**Recursos humanos**: 1 estudiante autor (Saleh Sinawi), dedicación
+estimada 180 h presenciales + no-presenciales conforme al plan de
+estudios UC3M (6 ECTS × 30 h/ECTS = 180 h). Real: ~345 h por el
+alcance experimental extendido — el excedente sobre lo previsto es
+parte del aprendizaje personal del autor y no se contabiliza en el
+presupuesto oficial.
+
+**Recursos técnicos**:
+
+- Portátil de desarrollo: Intel Core i7-11800H, 32 GB RAM DDR4,
+  NVIDIA RTX 3060 6 GB, WSL2 Ubuntu 22.04.
+- Foundry (Anvil + Forge) para sandbox on-chain local.
+- Sepolia testnet (Ethereum). Wallet deployer:
+  `0x54539B5ef33cfC3C57b9b572fc77d1e5F1CFf4c4`.
+- API Anthropic Claude (Opus 4.7 atacante, Sonnet 4.6 defensor
+  headline, Haiku 4.5 defensor bulk).
+- CoinGecko API (precios ETH/USDT diarios en cache).
+- Alchemy + Infura RPC providers (Sepolia).
+- GitHub (control de versiones + repo público MIT).
+
+### 5.E.5 Plan de gestión de riesgos
+
+| Riesgo | Probabilidad | Impacto | Mitigación aplicada |
+|--------|:------------:|:-------:|---------------------|
+| LLM API rate-limit o timeout durante campaña larga | Media | Alto | P1-67 timeout+retry en llm_client.py; máx 300s read + 5 retries |
+| Sepolia faucet drain / no fondos ETH testnet | Media | Medio | Migración a Anvil para escenarios de scale; Sepolia sólo para validación externa |
+| Bug crítico en contratos con ETH bloqueado | Baja | Alto | 47 tests unitarios de contratos + mixer_recover.py como red de rescate |
+| LLM produce campañas no realistas | Media | Medio | P1-42/43/44 iteraciones de refinamiento con métricas F1 vs. baseline |
+| Overfitting del defensor a seeds de dev | Media | Alto | LOCO-CV (§8.10) + held-out validation seeds 900/901 (§8.9.J) |
+| Budget LLM excedido | Baja | Medio | Pivote a Haiku 4.5 en fase F5; cost tracking en cada eval |
+
+## 5.F Presupuesto del proyecto
+
+### 5.F.1 Coste de personal
+
+Considerando la dedicación real del autor (~345 h) y usando la tarifa
+horaria estándar para un ingeniero informático junior en España
+(sueldo bruto anual medio ~28 000 EUR + 30 % costes sociales ~= 21 EUR/h
+sobre 1 750 h anuales efectivas):
+
+| Concepto | Horas | Tarifa | Coste |
+|----------|------:|-------:|------:|
+| Autor (estudiante ingeniero jr.) | 345 h | 21 EUR/h | **7 245 EUR** |
+| Tutor UC3M (co-supervisión) | 5 h | 65 EUR/h | 325 EUR |
+| **Subtotal personal** |  |  | **7 570 EUR** |
+
+### 5.F.2 Coste de hardware (amortización)
+
+Amortización lineal a 5 años sobre el periodo de 5 meses del TFM:
+
+| Recurso | Precio | Uso | Amortización |
+|---------|-------:|-----|-------------:|
+| Portátil Intel i7-11800H 32 GB RTX 3060 | 1 500 EUR | 5 meses / 60 | **125 EUR** |
+| Monitor externo 27" | 250 EUR | 5 meses / 60 | 21 EUR |
+| **Subtotal hardware** |  |  | **146 EUR** |
+
+### 5.F.3 Coste de servicios cloud y APIs
+
+| Servicio | Uso | Coste real |
+|----------|-----|-----------:|
+| Anthropic API (Opus 4.7 atacante, ~13 campañas oficiales) | 26 campañas × ~$1 USD | 25 USD |
+| Anthropic API (defensor Haiku + Sonnet ablations) | 15 evals × ~$0.15 USD | ~2 USD |
+| CoinGecko API (free tier) | 5 meses | 0 USD |
+| Alchemy / Infura RPC (free tier Sepolia) | 5 meses | 0 USD |
+| GitHub (repo público) | 5 meses | 0 USD |
+| **Subtotal servicios** (~$27 USD ≈ 25 EUR al cambio) |  | **25 EUR** |
+
+### 5.F.4 Coste de electricidad y overhead
+
+| Concepto | Cálculo | Coste |
+|----------|---------|------:|
+| Electricidad (300W × 345h × 0.20 EUR/kWh) | 20.7 kWh × 0.20 | **21 EUR** |
+| Conectividad internet (5 meses × 40 EUR) | 200 EUR × 30% imputable | 60 EUR |
+| **Subtotal overhead** |  | **81 EUR** |
+
+### 5.F.5 Presupuesto total
+
+| Concepto | Coste (EUR) |
+|----------|------------:|
+| Personal | 7 570 |
+| Hardware (amortización) | 146 |
+| Servicios cloud + APIs | 25 |
+| Electricidad + overhead | 81 |
+| **Subtotal directo** | **7 822** |
+| IVA (21 %) | 1 643 |
+| **TOTAL con IVA** | **9 465 EUR** |
+
+**Nota sobre coste real vs. presupuesto**: el coste directo de los
+recursos técnicos (hardware amortizado + APIs + electricidad) fue de
+**252 EUR** — una fracción muy pequeña del total. El grueso del coste
+(7 570 EUR, 97 %) corresponde a las horas de trabajo del autor. En
+un contexto académico donde este coste no se factura, el **presupuesto
+efectivo desembolsado** para completar el TFM fue de aproximadamente
+**252 EUR**, lo cual constituye uno de los findings publishable del
+proyecto: un pipeline AML multi-agente reproducible con budget
+< 300 EUR es viable en 2026 gracias a la disponibilidad de LLMs
+frontera a coste marginal.
+
+

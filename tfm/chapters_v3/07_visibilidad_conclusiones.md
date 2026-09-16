@@ -636,3 +636,94 @@ la habitual fricción de re-implementación desde cero. En un campo
 donde la mayoría de sistemas publicados no incluyen código
 ejecutable, la publicación completa del artefacto es en sí misma una
 contribución.
+
+## 7.C Justificación de competencias del Máster FinTech
+
+Conforme al artículo de la Normativa Propia TFM del Máster Universitario
+en Tecnologías del Sector Financiero (FinTech) UC3M (actualizada
+2024-2025), se enumera cómo este TFM cubre las competencias básicas
+(CB), generales (CG) y específicas (CE) del título.
+
+### 7.C.1 Competencias Básicas
+
+- **CB6 — Conocimientos originales en contexto de investigación**.
+  Cubierta por la novedad de visibilidad parcial federada (§4.4), el
+  simulador atacante LLM-driven (§5.A/5.B) y las 7 intervenciones
+  publishable documentadas en §10.4. El meta-finding
+  «cost-effective code-level post-processing supera prompt engineering»
+  generaliza más allá del AML — contribución original al diseño de
+  pipelines LLM-agent + downstream computation.
+- **CB7 — Aplicación de conocimientos a entornos complejos**.
+  Cubierta por la validación cross-domain sobre EthereumHeist
+  (§8.9.E, dataset externo con 633k nodos nunca visto en desarrollo)
+  y multi-campaign LOCO (§8.9.K, 7 campañas simultáneas sobre grafo
+  combinado 34k nodos).
+- **CB8 — Integración con reflexión ético-social**. Cubierta por la
+  reflexión sobre implicaciones regulatorias FATF/MiCA (§2.1, §3.4),
+  el análisis de limitaciones (§8.11) y la declaración honesta de
+  4 ablations negativas (P1-55/56/70/72) que rechazaron hipótesis
+  iniciales.
+- **CB9 — Comunicación clara**. Cubierta por la estructura del TFM:
+  resumen bilingüe (§1), tabla ejecutiva de findings (§7.B) y cost
+  summary (§8.9.Z).
+- **CB10 — Aprendizaje autodirigido**. Cubierta por el arco completo:
+  el autor partió sin experiencia previa en Solidity, ZK proofs o
+  LLM agents y desarrolló los tres stacks durante los 5 meses del
+  TFM (ver §5.C LOC por lenguaje).
+
+### 7.C.2 Competencias Generales
+
+- **CG1 — Métodos de ingeniería informática en mercados financieros**.
+  Cubierta por la aplicación de algoritmos de grafos (Louvain), ML
+  supervisado (GCN Weber-style), agentes LLM con tool-use, y
+  protocolos criptográficos (Groth16 ZK proofs) a la detección de
+  laundering en cripto ERC-20.
+- **CG2 — Desarrollo sustancial de software financiero**. Cubierta
+  ampliamente: ~10 100 líneas de código (9 000 Python + 800 Solidity
+  + 60 Circom + 240 auxiliar, §5.C.7), 6 contratos verificados en
+  Etherscan, pipeline end-to-end reproducible.
+- **CG3 — Problemas nuevos y multidisciplinares**. Cubierta por la
+  integración de cinco áreas técnicas: criptografía ZK, blockchain,
+  grafo estructural, ML supervisado y agentes LLM. Ninguna
+  disciplina aisladamente resolvería el problema.
+- **CG4 — Composiciones escritas con originalidad**. Cubierta por
+  este documento (>4 000 líneas Markdown técnico original) y los
+  meta-findings: «F1=1.000 era noise-de-seed» (§8.9.J), «role vs
+  campaign attribution» (§8.9.49), «smaller cheaper LLM + right
+  post-processing beats larger» (§8.9.I), «mixer features tienen
+  RF importance = 0» (§8.9.L).
+
+### 7.C.3 Competencias Específicas
+
+- **CE1 — Mercados financieros**. Cubierta por el tratamiento formal
+  de tipologías FATF (§2.1), marco regulatorio MiCA / Rec.16 / Rec.20
+  (§2.1, §3.4) y economía real de campañas (§8.9.B).
+- **CE2 — Tecnologías del sector financiero**. Cubierta por el
+  análisis técnico del stack blockchain (§3), justificación
+  Foundry/Solidity/Anthropic y diseño de infraestructura
+  Sepolia + Anvil-dev.
+- **CE3 — Software financiero end-to-end**. Cubierta por el pipeline
+  completo desde definición del problema (§1.2) hasta despliegue
+  on-chain verificable en Sepolia Etherscan (§5.B.4).
+- **CE4 — Algoritmos y técnicas clásicas siguiendo estándares**.
+  Cubierta por la implementación de baselines establecidos (Louvain,
+  GCN, RF) siguiendo convenciones scikit-learn / PyTorch Geometric.
+- **CE5 — Herramientas para grandes cantidades de datos**. Cubierta
+  por el procesamiento del grafo combinado EthereumHeist (633k
+  nodos, 2.4M transacciones) vía NetworkX + numpy + pandas y por el
+  particionado federado sobre grafos de hasta 34k nodos (§8.9.K).
+
+### 7.C.4 Materia del Máster asociada
+
+Este TFM se enmarca principalmente en la materia **Desarrollo de
+Software Financiero** (Programación de Altas Prestaciones,
+Algoritmos de Front-Office/Back-Office, Gestión e Ingeniería del
+Software Financiero) — reflejado en el desarrollo sustancial de
+software y contratos on-chain — y secundariamente en **Sistemas de
+Soporte a la Decisión en el Sector Financiero** (Big Data, Análisis
+de Datos) por la componente analítica y de detección de patrones
+sobre grafos.
+
+Este TFM ha logrado la adquisición demostrable de las once
+competencias listadas del título, con evidencia empírica y
+publishable en cada caso.

@@ -1,5 +1,74 @@
 # Capítulo 1 — Introducción, contexto, motivación y objetivos
 
+## Resumen (Español)
+
+Este Trabajo Fin de Máster aborda la detección de blanqueo de capitales
+sobre criptoactivos en la red Ethereum bajo restricciones realistas de
+visibilidad parcial federada por exchange. Se propone un sistema dual
+multi-agente: (i) un simulador ofensivo basado en agentes LLM que
+ejecuta campañas siguiendo la taxonomía FATF (colocación, layering,
+integración) mediante herramientas on-chain reales (transferencias
+ERC-20, swaps Uniswap V2, mezclador ZK estilo Tornado con pruebas
+Groth16, structuring sub-CTR); y (ii) un detector defensivo multi-agente
+donde cada exchange federado observa únicamente su vista local y
+colabora vía fingerprints de features sin compartir datos crudos.
+
+El detector combina un clasificador binario Louvain para Phase 1 (F1)
+con un coordinador LLM para Phase 2 (actor clustering) que produce
+razonamiento textual auditable. Se validó frente a baselines
+establecidos (Louvain community detection, GCN estilo Weber) sobre
+tres conjuntos de datos: dataset simulado propio con features
+específicas de mezclador (26 campañas), benchmark real EthereumHeist
+(Wu et al. 2023, 23 hacks de mainnet incluyendo Upbit-Lazarus y
+PolyNetwork), y validaciones auxiliares sobre Elliptic++ y OpenAML v1.
+Se aplicó leave-one-campaign-out cross-validation para evitar
+memorización, held-out validation con seeds nunca vistos, y
+multi-campaign LOCO como test escalabilidad.
+
+Resultados principales: F1 mean = 0.97 sobre datos simulados
+(in-distribution + held-out), F1 = 0.93 sobre EthereumHeist real; ARI
+role-attribution = 0.43 tras la intervención P1-71 (post-hoc cluster
+merge). Como validación externa el sistema completo se desplegó sobre
+la testnet pública Sepolia con verificabilidad on-chain vía
+Etherscan. Coste total del pipeline de validación: ~1.60 USD en
+llamadas LLM.
+
+## Abstract (English)
+
+This Master's Thesis addresses money laundering detection on
+Ethereum cryptoassets under realistic federated partial-visibility
+constraints per exchange. A dual multi-agent system is proposed:
+(i) an offensive LLM-agent simulator that executes campaigns
+following the FATF typology (placement, layering, integration) via
+real on-chain tools (ERC-20 transfers, Uniswap V2 swaps, Tornado-style
+ZK mixer with Groth16 proofs, sub-CTR structuring); and (ii) a
+defensive multi-agent detector where each federated exchange observes
+only its local view and collaborates via feature fingerprints without
+sharing raw data.
+
+The detector combines a Louvain binary classifier for Phase 1 (F1)
+with an LLM coordinator for Phase 2 (actor clustering) that produces
+auditable textual reasoning. It was evaluated against established
+baselines (Louvain community detection, Weber-style GCN) on three
+datasets: an own simulated dataset with mixer-specific features (26
+campaigns), the real EthereumHeist benchmark (Wu et al. 2023, 23
+mainnet hacks including Upbit-Lazarus and PolyNetwork), and auxiliary
+validations on Elliptic++ and OpenAML v1. Leave-one-campaign-out
+cross-validation was applied to prevent memorization, together with
+held-out validation on unseen seeds and multi-campaign LOCO as
+scalability test.
+
+Main results: mean F1 = 0.97 on simulated data (in-distribution +
+held-out), F1 = 0.93 on real EthereumHeist; role-attribution ARI =
+0.43 after P1-71 intervention (post-hoc cluster merge). As external
+validation, the entire system was deployed on the Sepolia public
+testnet with on-chain verifiability via Etherscan. Total pipeline
+validation cost: ~1.60 USD in LLM calls.
+
+**Keywords**: AML, cryptocurrency, Ethereum, adversarial simulation,
+multi-agent LLM, federated learning, partial visibility, Sepolia,
+FATF, Louvain, actor clustering.
+
 ## 1.1 Contexto y motivación
 
 El blanqueo de capitales en criptoactivos ha dejado de ser un problema periférico
@@ -128,7 +197,64 @@ Este trabajo realiza cuatro aportaciones principales:
    permitiendo que un lector independiente reproduzca las campañas y verifique
    los hashes de transacción en Etherscan.
 
-## 1.4 Alcance y limitaciones
+## 1.4 Objetivos y requisitos del proyecto
+
+### 1.4.1 Objetivo general
+
+Diseñar, implementar y evaluar un sistema dual multi-agente basado en
+modelos LLM que (i) simule campañas realistas de blanqueo de capitales
+sobre Ethereum siguiendo la taxonomía FATF (placement, layering,
+integration) y (ii) detecte esas campañas bajo restricciones realistas
+de visibilidad parcial federada por exchange, con outputs auditables
+alineados a los requisitos regulatorios de reporting (FATF Rec. 20,
+MiCA, Reglamento (UE) 2023/1113).
+
+### 1.4.2 Objetivos específicos
+
+1. **O1 — Atacante multi-agente LLM**. Implementar un simulador
+   ofensivo capaz de ejecutar 5 de las 8 técnicas FATF de blanqueo
+   cripto (mixer ZK, DEX, cross-chain bridge, structuring sub-CTR,
+   rapid pass-through) mediante herramientas on-chain reales sobre
+   Anvil y Sepolia.
+2. **O2 — Defensor multi-agente cross-exchange**. Implementar un
+   detector con arquitectura Louvain Phase 1 (binaria) + LLM
+   coordinador Phase 2 (clustering) operando bajo visibilidad parcial
+   federada 3-exchange sin compartir datos crudos.
+3. **O3 — Validación empírica**. Evaluar el sistema sobre 5 datasets
+   simulados propios + EthereumHeist (Wu 2023) + auxiliares
+   (Elliptic++, OpenAML v1), reportando F1 binary y ARI actor
+   clustering.
+4. **O4 — Auditoría metodológica**. Aplicar LOCO-CV, held-out
+   validation con seeds nunca vistos, y multi-campaign LOCO para
+   detectar y cuantificar memorización.
+5. **O5 — Reproducibilidad y validación externa on-chain**. Desplegar
+   los 6 contratos del sistema en Sepolia con source code verificado
+   en Etherscan y publicar el código bajo MIT en GitHub.
+
+### 1.4.3 Requisitos del proyecto (verificables)
+
+**Requisitos funcionales**:
+
+| Id | Requisito | Criterio de verificación |
+|----|-----------|--------------------------|
+| RF1 | El atacante debe ejecutar campañas siguiendo FATF placement/layering/integration | 26 campañas ejecutadas con las 3 fases identificables en el `chain_trace.jsonl` |
+| RF2 | El atacante debe usar mezclador ZK con pruebas Groth16 verificables | Cada `mixer_withdraw` produce un proof verificado on-chain por el contrato Verifier |
+| RF3 | El defensor debe operar bajo visibilidad parcial 3-exchange | `partial_visibility_split` con seed determinista, cada exchange sólo ve sus visible_addresses |
+| RF4 | El defensor debe producir binary F1 + actor clustering ARI | Métricas reportadas en §8.5 y §8.6 sobre 5 datasets in-dist + 2 held-out |
+| RF5 | Los outputs del LLM Phase 2 deben ser texto auditable | `llm_reasoning` string persistido en cada eval JSON |
+
+**Requisitos no funcionales**:
+
+| Id | Requisito | Criterio de verificación |
+|----|-----------|--------------------------|
+| RNF1 | Reproducibilidad determinista | Todo random_state=42, mismo comando reproduce mismos JSON |
+| RNF2 | Cost budget máximo 50 USD | Coste real acumulado 26.6 USD (atacante + defensor) |
+| RNF3 | El sistema debe compilar y ejecutarse en un portátil estándar | i7-11800H + 32 GB RAM + WSL Ubuntu 22.04 — ver §8.2 hardware |
+| RNF4 | Código publicado bajo licencia open source | MIT en `github.com/0xAnonsal/aml-thesis` |
+| RNF5 | Contratos on-chain verificables por auditor externo | 6 contratos Sepolia con source verified en Etherscan |
+| RNF6 | Compliance con normativa uso IA generativa UC3M | Declaración en Anexo H |
+
+## 1.5 Alcance y limitaciones
 
 Este trabajo asume explícitamente las siguientes restricciones:
 
@@ -149,7 +275,7 @@ Este trabajo asume explícitamente las siguientes restricciones:
   la reproducción exacta requiere una API key comercial. Se documentan los
   costes reales de cada experimento.
 
-## 1.5 Estructura del documento
+## 1.6 Estructura del documento
 
 El TFM se organiza en siete capítulos más anexos:
 
