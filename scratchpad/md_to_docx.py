@@ -22,7 +22,7 @@ from docx.shared import Cm, Pt, RGBColor
 
 
 REPO = Path(__file__).resolve().parents[1]
-CHAPTERS_DIR = REPO / "tfm" / "chapters_v2"
+CHAPTERS_DIR = REPO / "tfm" / "chapters_v3"
 OUTPUT = REPO / "tfm" / "TFM_Sinawi_UC3M.docx"
 
 TITLE = (
@@ -37,15 +37,12 @@ YEAR = "2026"
 
 CHAPTER_ORDER = [
     "01_introduccion.md",
-    "02_analisis_comparaciones.md",
-    "03_tecnologias.md",
-    "04_diseno_diagrama.md",
-    "05_lenguajes_usados.md",
-    "06_arquitectura_software.md",
-    "07_decisiones.md",
-    "08_implementacion_pruebas.md",
-    "09_datasets_parametros.md",
-    "10_conclusiones.md",
+    "02_estado_arte_conceptos.md",
+    "03_limitaciones_previas.md",
+    "04_analisis_tecnologias.md",
+    "05_diseno_dataset.md",
+    "06_experimentos_resultados.md",
+    "07_visibilidad_conclusiones.md",
     "A_anexos.md",
 ]
 
