@@ -438,996 +438,138 @@ implementaciones opacas.
 
 ## 10.4 Trabajo futuro
 
-Las cuatro limitaciones identificadas en el Capítulo 8 §8.11 se
-traducen en un programa de trabajo futuro concreto.
-
-### 10.4.1 Extensión temporal del pipeline
-
-**Motivación**: el clasificador GCN actual opera sobre snapshots
-estáticos del grafo. Un atacante consciente del detector puede
-explotar la temporalidad para dispersar transacciones a lo largo de
-meses, quedando por debajo del umbral de detección por ventana
-temporal.
-
-**Propuesta**: sustitución del GCN por una arquitectura *temporal
-graph network* (TGN, Rossi et al. 2020) o *dynamic graph neural
-network* que incorpore *timestamps* como features nativas y mantenga
-memoria por nodo entre ventanas. La incorporación es incremental
-—el resto del pipeline (`partial_visibility_split`, `LLMDefenderCoordinator`)
-es agnóstico al detector local—.
-
-**Esfuerzo estimado**: 3-4 meses de trabajo adicional, incluyendo un
-generador de campañas atacantes temporalmente distribuidas para
-evaluar la ganancia.
-
-### 10.4.2 Simetría LLM completa: Opus-vs-Opus
-
-**Motivación**: la evaluación reportada emplea Opus 4.7 en el
-atacante y Sonnet 4.6 en el defensor por constricciones de presupuesto
-del TFM (≈ 50 USD totales). Un experimento simétrico Opus-vs-Opus
-permitiría evaluar el efecto de tamaño de modelo aislado de la
-asimetría de rol.
-
-**Propuesta**: replicar las evaluaciones del Capítulo 8 §8.6 con Opus
-4.7 en ambos roles. Estimación de coste extrapolando linealmente:
-≈ 6 USD por corrida de 20 campañas simuladas + ≈ 3 USD por
-corrida EthereumHeist con `--exclude-big-hacks`. Con cinco
-repeticiones para varianza, el experimento cuesta ≈ 45 USD.
-
-**Esfuerzo estimado**: 1-2 semanas de trabajo, con la mayor parte del
-tiempo en re-ejecución y análisis.
-
-### 10.4.3 Escalado a régimen ≥ 100 campañas
-
-**Motivación**: el *dataset* simulado propio contiene 20 campañas
-atacantes sobre 10 311 nodos, comparativamente pequeño frente a los
-10⁷ nodos de AMLWorld (Altman et al. 2023). La extrapolación de
-las conclusiones a regímenes de mayor escala requiere experimentación
-adicional.
-
-**Propuesta**: generar 100-500 campañas atacantes adicionales,
-combinando: (i) escenarios pre-definidos existentes con variaciones
-paramétricas; (ii) escenarios nuevos que cubran las tipologías FATF
-5-8 (privacy coins, jurisdicciones no cooperativas, rapid pass-through,
-P2P/OTC cash-out) actualmente no simuladas.
-
-**Esfuerzo estimado**: 4-6 semanas, con coste LLM estimado en
-150-300 USD para el pipeline atacante y50-100 USD para las
-evaluaciones defensivas.
-
-### 10.4.4 Extensión cross-chain y multi-token
-
-**Motivación**: el sistema actual opera exclusivamente sobre
-Ethereum con un único ERC-20 (`MockUSDT`). Las tipologías reales
-modernas combinan múltiples cadenas (Ethereum, Tron, Solana) y
-múltiples tokens (USDT, USDC, ETH, WBTC).
-
-**Propuesta**: extensión del grafo a un grafo heterogéneo con nodos
-por (cadena, token) y aristas que codifican transferencias
-intra-cadena, swaps DEX y bridges cross-chain reales. Requiere:
-(i) implementación de adapters `src/aml/chains/tron.py` y análogos
-para las cadenas objetivo; (ii) sustitución del GCN por una
-*heterogeneous graph neural network* (HGT, Hu et al. 2020); (iii)
-extensión del catálogo de herramientas atacante con primitivas
-cross-chain reales (no mock).
-
-**Esfuerzo estimado**: 6-9 meses, más presupuesto significativamente
-mayor (>$500 USD) por el volumen de datos multi-cadena.
-
-### 10.4.5 Memoria histórica del defensor
-
-**Motivación**: cada evaluación del pipeline defensivo actual es
-independiente —el detector no aprende de flags previos. Un defensor
-productivo mantendría estado entre bloques y podría refinar sus
-decisiones basándose en direcciones flageadas históricamente.
-
-**Propuesta**: incorporación de una capa de memoria persistente al
-`LLMDefenderCoordinator` mediante *retrieval-augmented generation*
-(RAG) sobre una base de datos de flags históricos. El coordinador
-consultaría, para cada nueva evaluación, las direcciones o clusters
-similares vistos anteriormente y su resolución final (confirmado
-como ilícito / falso positivo).
-
-**Esfuerzo estimado**: 2-3 meses, con el reto principal en el diseño
-del sistema de embeddings + retrieval que preserve la restricción de
-visibilidad parcial federada.
-
-### 10.4.6 Arquitectura para despliegue en producción
-
-**Motivación**: el pipeline actual se ejecuta como *scripts batch*
-locales (entorno conda + Python + API LLM remota). No existe
-`FastAPI`, no hay `Docker`, no hay servicios corriendo en background:
-cada evaluación arranca los procesos, entrena los GCN de novo,
-consulta el LLM vía HTTPS y termina. Este *setup* es adecuado para
-research reproducible pero insuficiente para un despliegue operativo
-en entidades reguladas (exchanges centralizados, VASP, unidades de
-inteligencia financiera) que requieren latencia acotada,
-disponibilidad continua y trazabilidad auditable.
-
-**Propuesta**: encapsular el pipeline en una arquitectura de
-microservicios con las siguientes capas:
-
-1. **API REST** (`FastAPI`): endpoint `POST /detect` que recibe una
-   lista de direcciones más el subgrafo relevante y devuelve las
-   alertas junto con el *reasoning* del coordinador LLM; endpoint
-   `GET /alerts` para consulta histórica y compliance auditing.
-2. **Persistencia de modelos GCN**: entrenamiento único por exchange
-   con `torch.save` y *hot-swap* en el servicio, eliminando el
-   re-entrenamiento por *request* (actualmente ~5 min por exchange).
-3. **Cache de respuestas LLM** (`Redis`): *responses* del coordinador
-   cacheadas por *hash* del prompt para reducir coste API en
-   consultas repetidas sobre las mismas direcciones flageadas.
-4. **Base de datos de alertas** (`PostgreSQL`): persistencia auditable
-   de decisiones + prompts + *timestamps* + resolución final, requerida
-   por la Recomendación FATF 11 (*record keeping*) y por MiCA Art. 68
-   sobre trazabilidad de sistemas automatizados.
-5. **Cola asíncrona** (`Celery` + Redis, o `Kafka` para *streaming*):
-   procesamiento *batch* nocturno de lotes grandes, o pipeline
-   *streaming* en tiempo casi real para exchanges con SLA de
-   detección < 10 min.
-6. **Contenedores**: `Dockerfile` por servicio + `docker-compose` para
-   desarrollo local + `Helm charts` para despliegue en `Kubernetes` de
-   producción, con réplicas horizontales para los servicios de
-   inferencia GCN.
-7. **Observabilidad**: `Prometheus` para métricas (latencia por
-   *request*, coste LLM por día, *precision drift* sobre alertas
-   confirmadas) y `Grafana` dashboards para el equipo *compliance*.
-
-**Contraste con el estado actual del TFM**. El sistema descrito en
-los Capítulos 3 y 4 no incluye ninguno de estos componentes: los
-seis modelos (Louvain, GCN, GAT, cosine, LLM coordinator) viven en
-Python *in-process*, los resultados se serializan a JSON en disco y
-la evaluación termina en un exit code. Esta simplicidad es
-deliberada —el objetivo es reproducibilidad académica, no
-producción— pero implica que un adoptante industrial debería
-construir toda la capa de servicio antes de operar el sistema en
-un exchange real.
-
-**Esfuerzo estimado**: 6-9 meses de trabajo *full-stack* adicional
-(Python backend + DevOps + integración con los proveedores KYC del
-exchange objetivo), con presupuesto de infraestructura 100-500
-USD/mes según carga. La extensión no aporta contribución académica
-pero es el paso natural para transferir el trabajo a un proveedor
-comercial de *compliance* (Chainalysis, TRM Labs, Elliptic) o a la
-capa AML interna de un exchange centralizado.
-
-### 10.4.7 Cobertura regulatoria ampliada
-
-**Motivación**: este trabajo aborda las Recomendaciones FATF 16
-(*travel rule*) y 20 (transparencia SAR) explícitamente, pero no las
-Recomendaciones 10 (customer due diligence) ni 11 (record keeping), y
-sólo parcialmente MiCA.
-
-**Propuesta**: extensión del pipeline con componentes que aborden
-CDD (integración con proveedores de identidad on-chain como
-Chainlink Identity o Polygon ID), record keeping (persistencia
-auditable de decisiones + prompts en formato IPFS o similar), y
-generación automática de reportes SAR en el formato requerido por
-las UIF europeas.
-
-**Esfuerzo estimado**: proyecto autónomo de doctorado o
-industria-academia, no encaja en el alcance de un TFM.
-
-### 10.4.8 *Mock pool* con precio conectado a oráculo
-
-**Motivación**: el `MockUniswapV2Pool` desplegado en Sepolia usa la
-matemática *constant-product* estándar de Uniswap V2 (`x · y = k`), y
-su *spot price* queda **congelado** en el ratio de reservas fijado
-durante el `bootstrap()` — no consulta ningún oráculo externo. En
-Uniswap V2 real este mecanismo funciona porque una capa continua de
-arbitrajistas mantiene el *spot* del *pool* alineado con el precio
-verdadero de los agregadores (Chainlink, DEX Screener) — cualquier
-desvío es explotado en segundos. En el *mock*, sin esa capa de
-arbitraje, el *spot* solo se corrige (a) por los *swaps* del propio
-atacante durante la campaña, o (b) redesplegando el contrato con
-reservas nuevas alineadas al oráculo.
-
-Durante esta memoria se ha adoptado el enfoque (b) — el *script*
-`scripts/topup_sepolia_pool.py` lee `data/prices/eth.csv` (oráculo
-CoinGecko) y calcula la reserva USDT como `eth_amount ×
-oracle_price` para que el `bootstrap()` produzca un *spot* consistente
-con el mercado del día. La consecuencia es que **cada vez que el
-precio real deriva más del ~15% desde el último despliegue**, hay
-que ejecutar `drain_sepolia_pool.py` + `topup_sepolia_pool.py` para
-resincronizar. Es funcional pero manual, y consume ETH del deployer
-en cada redespliegue (recuperable al final del TFM).
-
-**Propuesta**: reemplazar el *mock pool* actual con una de las
-siguientes tres alternativas, ordenadas por rigor creciente:
-
-1. *Owner-triggered reset* (bajo esfuerzo, 15 min de desarrollo).
-   Añadir al contrato una función `resetReserves(uint256 newEth,
-   uint256 newUsdt)` protegida por `onlyOwner` que actualice los
-   *reservas* sin necesidad de redeploy. El operador ejecuta esta
-   función pre-corrida en lugar de desplegar un contrato nuevo,
-   ahorrando ~0,003 ETH de gas de deploy y preservando la dirección
-   del *pool* entre corridas (importante para el análisis histórico
-   on-chain de la campaña).
-
-2. *Chainlink integration* (esfuerzo medio, ~2 h de desarrollo +
-   configuración) — **IMPLEMENTADO durante el desarrollo del TFM,
-   véase §8.9.18**. El contrato `MockOraclePool.sol` incorpora una
-   referencia inmutable a un `AggregatorV3Interface` (Chainlink
-   ETH/USD feed en Sepolia,
-   `0x694AA1769357215DE4FAC081bf1f309aDC325306`) y calcula cada
-   *swap* al *spot rate* exacto reportado por
-   `latestRoundData()`. USDT se mintea *on-demand* vía
-   `MockUSDT.mint()` permissionless en la dirección de *ETH→USDT*;
-   ETH sale del *reserve* del contrato en la dirección inversa
-   (*bootstrap* mínimo de 0,5 ETH). El *zero slippage* elimina por
-   completo el sesgo metodológico documentado en §10.4.9. Coste
-   extra: ~30-40k gas por *swap* (~$0,30) por la llamada al
-   oráculo. Coste ahorrado: ~$2 500-4 800 por campaña de 20 ETH
-   por eliminación del *slippage-artefacto*.
-
-3. *Simulated arbitrageur bot* (esfuerzo alto, ~1 semana). Un
-   servicio externo que monitoriza el *pool* on-chain y ejecuta
-   *swaps* correctivos cuando el *spot* del *pool* se desvía > 1%
-   del *spot* de Chainlink. Reproduce fielmente la dinámica de
-   mercado real y permite estudiar cómo un atacante LLM interactúa
-   con arbitrajistas competidores (interesante línea de
-   investigación aparte).
-
-**Esfuerzo estimado**: (1) 15 min, (2) 2 h, (3) 1 semana. La opción
-(1) es candidata inmediata para un *pull request* de mejora
-operativa; (2) y (3) merecen un TFM propio o proyecto industria.
-
-### 10.4.9 *Mock pool* con profundidad realista para *swaps* a escala real
-
-**Motivación**: relacionado pero distinto del anterior. El
-`MockUniswapV2Pool` desplegado tiene profundidad **finita**
-(típicamente 5 ETH + reserve equivalente en USDT), impuesta por el
-*budget* del *deployer* en Sepolia (∼22 ETH totales). En Uniswap V2
-mainnet, en cambio, el par ETH/USDT tiene profundidad del orden de
-**10 000 ETH** — un *swap* de 10 ETH representa 0,1% de las reservas
-y produce *slippage* < 0,05%. En el *mock*, un *swap* de 10 ETH
-representaría el 200% de las reservas (imposible: la fórmula
-*constant-product* lo rechaza).
-
-Consecuencia práctica: para campañas de escala real (≥ 10 ETH
-laundered), el atacante debe fragmentar los *swaps* en decenas de
-*chunks* pequeños (0,1-0,3 ETH cada uno) para mantener el *slippage*
-por operación bajo. Cada *chunk* paga las fees Uniswap del 0,3%, y
-los *chunks* consecutivos empeoran la posición del *pool* (después
-de meter 1 ETH, el ratio se ha movido y el siguiente *chunk* enfrenta
-*slippage* mayor que el anterior). Empíricamente, un *swap* fraccionado
-de 15 ETH en el *mock* de 5 ETH de profundidad genera *slippage*
-efectivo agregado del ∼10-15% — vs. el ∼0,05% que tendría en Uniswap
-mainnet con la misma cantidad. Ese ∼10-15% se manifiesta en la
-métrica `economically_lost_pct` de la campaña (documentada en
-§8.9.16) y es artefacto del *mock*, no señal de una campaña
-subóptima.
-
-Este *finding* tiene dos implicaciones metodológicas:
-
-1. **Las métricas de eficiencia económica** (`delivered_to_exits_pct`,
-   `economically_lost_pct`) reportadas para *runs* Sepolia deben
-   interpretarse **con la profundidad del pool como covariable**. Un
-   82% de *delivered* con un *pool* de 5 ETH no equivale al 82% con
-   un *pool* de 500 ETH — el primero incorpora 10-15 puntos
-   porcentuales de *slippage-artefacto*; el segundo estaría cerca
-   del 95-97% para el mismo comportamiento del atacante.
-
-2. **El *dataset* Anvil resulta epistemológicamente superior para
-   *ablations*** de la política del atacante: en Anvil no hay
-   restricción de *budget* sobre las reservas del *pool*, así que se
-   puede desplegar un *mock* con 10 000 ETH + 25M USDT y evaluar el
-   comportamiento del atacante bajo *slippage* ~0. Sepolia queda como
-   demostración de *end-to-end* on-chain, con la advertencia
-   explícita de que sus métricas económicas están sesgadas por la
-   profundidad del *pool*.
-
-**Propuesta**: cuatro opciones no exclusivas:
-
-1. **Escalar el *mock pool* en Anvil** al orden de 10⁴ ETH (posible
-   sin coste real) y reportar la métrica `delivered_to_exits_pct`
-   por separado para `run_type ∈ {Sepolia thin pool, Anvil deep
-   pool}`. Permitiría descomponer el efecto de la política del
-   atacante del efecto de la fricción del *pool*.
-
-2. **Sustituir el *pool constant-product* por un *pool de precio
-   constante***: un contrato mock que ejecuta *swaps* a un ratio
-   fijo (leído del oráculo) sin drenar reservas — matemáticamente
-   equivalente a un *market maker* con liquidez infinita. Rompe la
-   analogía con Uniswap V2 pero elimina el sesgo de profundidad para
-   experimentos donde el *slippage* no es la variable de estudio.
-
-3. **Modelar el *slippage* explícitamente en el análisis**: incluir
-   en `run_sepolia_campaign.py` un post-cálculo que estime cuánto
-   *slippage* habría en Uniswap V2 mainnet (según profundidad
-   pública actual) y reporte una métrica *counterfactual*
-   `delivered_to_exits_pct_at_mainnet_depth` junto a la métrica
-   *mock*. Barato de implementar (unas 30 líneas), permite comparar
-   *mock* vs realidad sin cambiar el contrato.
-
-4. **Publicar la relación empírica *slippage-artefacto* vs. razón
-   `campaign_amount / pool_depth`** como un *finding* metodológico
-   independiente. Cualquier estudio futuro que use un *pool mock*
-   para simulaciones AML tendría una tabla de referencia para
-   dimensionar sus experimentos.
-
-**Esfuerzo estimado**: (1) 1 día, (2) 2-3 h, (3) 1 h, (4)
-compatible con este TFM (una tabla adicional en §8.9). Recomendación:
-implementar (3) como mejora inmediata para el próximo *release* del
-*pipeline*, y (1) + (4) como líneas de trabajo futuro más rigurosas.
-
-### 10.4.10 Auditoría formal de mecanismos de *automated cleanup* en pipelines AML multi-agente
-
-**Motivación**: §8.9.21 documenta un *finding* metodológico
-independiente del sistema propuesto — el *anti-strand co-funding
-leak* — en el que un mecanismo automático de recuperación de fondos
-introdujo una firma criminalística (Alice → 47 salidas directas) que
-ninguna métrica económica estándar (`delivered_pct`, `recovery_pct`,
-`slippage`) detectaba. La lección generalizable es que **cualquier
-capa de gestión de estado post-hoc en un sistema AML de agentes
-puede reintroducir *trazabilidad* que las etapas de *placement* +
-*layering* + *integration* habían roto**, y este riesgo no aparece
-en la evaluación estándar porque las métricas de éxito son
-económicas (¿cuánto llegó a las salidas?) mientras que la
-vulnerabilidad es criminalística (¿quién financió a quién?).
-
-**Propuesta**: definir formalmente un *audit protocol* que todo
-sistema de laundering multi-agente debería pasar antes de reportar
-sus métricas de evasión. El protocolo mínimo debería verificar:
-
-1. **No hay wallet con nonce anómalamente alto en el rango temporal
-   de la campaña** (identifica funders forzados).
-2. **No hay clusters `k-core > 1` centrados en la fuente original**
-   (identifica co-funding leaks).
-3. **La distribución empírica de gas dust recibido por las salidas
-   no forma una moda estrecha** (0.005 ETH exacto en 47 salidas es
-   evidencia de un script, no de un humano rebalanceando).
-4. **La ventana temporal de financiamiento de salidas no está
-   contenida en < 100 bloques** (indica script automatizado post-hoc,
-   no dispersión temporal humana).
-
-**Aportación al campo**: sería, hasta donde se conoce, la primera
-propuesta de *audit protocol* específico para pipelines LLM
-adversarial AML. Formaría un anexo directamente publicable como
-short paper en un venue de *security* (USENIX Security workshop
-sería el candidato natural).
-
-**Esfuerzo estimado**: 2 semanas — diseño formal del protocolo +
-implementación como *linter* automático que corre sobre `chain_trace.jsonl`
-+ evaluación cruzada sobre las 20 corridas del *dataset*.
-
-### 10.4.11 Meta-transacciones (EIP-4337) para eliminar el *gas dust leak*
-
-**Motivación**: §8.9.22 identifica el mecanismo que forzó el
-*co-funding leak*: cada wallet de salida en un pipeline AML clásico
-necesita ETH nativo propio para poder emitir su primera
-transacción. Sin ese *gas dust*, la wallet retiene USDT pero es
-incapaz de moverlo (*stranded*). El *fix* P1-41 mueve la fuente del
-gas desde Alice a un pool de funders aleatorios, lo cual rompe el
-cluster co-funding pero **no elimina la señal**: el detector aún ve
-que 47 wallets recibieron 0.005 ETH cada una desde un conjunto
-pequeño de fuentes.
-
-**Propuesta**: reemplazar el modelo de *externally-owned accounts*
-(EOA) por *smart contract accounts* (SCA) compatibles con
-**EIP-4337 (Account Abstraction)**. En este modelo, la wallet de
-salida:
-
-- No tiene ETH nativo propio.
-- Firma una `UserOperation` (no una transacción convencional).
-- Un *bundler* (Pimlico, Biconomy, Gelato) empaqueta la operación
-  y paga el gas al validador.
-- Un *paymaster* — que puede ser el mismo *bundler*, un contrato
-  patrocinador, o un contrato que cobra en el token que se está
-  moviendo (USDT en nuestro caso) — reembolsa al *bundler*.
-
-**Ganancia AML-adversarial**: cero pistas on-chain de que las 47
-salidas están relacionadas por origen de gas. El detector
-Louvain sobre el subgrafo ETH deja de tener aristas dust-funding, y
-la única señal restante es semántica (patrón sub-\$999) — que es
-exactamente la que se pretende que el LLM defensor detecte.
-
-**Ganancia AML-defensor**: si se demuestra que ataques AML
-sofisticados usarán EIP-4337 en próximas generaciones, el defensor
-debe aprender a razonar sobre `UserOperation` events y no solo
-sobre `Transfer(from, to, value)` events. Esto motiva una extensión
-del dataset (Elliptic++ no incluye UserOps porque son de 2023 en
-adelante) y una modificación del *feature extractor* del GCN.
-
-**Esfuerzo estimado**: 3 semanas — integración con SDK del bundler
-Pimlico (2 semanas) + modificación del feature extractor del
-defensor para procesar `UserOperationEvent` (1 semana). Publicable
-como *system paper* en ACM CCS AISec workshop.
-
-### 10.4.12 *Capture-all Sepolia dataset* para evaluación adversarial del defensor
-
-**Motivación**: §8.11 (Limitación 5) documenta que el
-`chain_trace.jsonl` capturado en cada corrida Sepolia se filtra a
-transacciones que involucran wallets del sistema (Alice, deployer,
-funders, burners, exits) y sus contratos (pool, mixer, USDT),
-descartando el tráfico paralelo. Un análisis empírico durante el
-smoke 801 mostró que en un bloque típico (11 643 800) hay 146 tx
-totales, de las cuales sólo 3 son nuestras; extrapolado al *span*
-completo de una campaña son del orden de 19 000 tx benignas
-concurrentes no indexadas. El defensor evaluado sobre nuestros
-datasets Sepolia obtendría un F1 trivial de 1.0 porque el 100% del
-subgrafo capturado es atacante.
-
-**Propuesta**: implementar un pipeline `capture_all_sepolia.py`
-que, durante o después de una campaña, indexe **todas** las
-transacciones del rango de bloques (no sólo las nuestras),
-etiquetando:
-
-- `label = "attacker"` para las 100–300 wallets registradas en
-  `addresses.json` (Alice, deployer, funders, burners, exits) más
-  las contract calls a nuestros `pool` / `mixer` / `USDT`.
-- `label = "benign"` para todo el resto del tráfico Sepolia
-  concurrente.
-
-**Beneficio metodológico**:
-
-1. **Primer *dataset* AML adversarial con tráfico *testnet* real**
-   —hasta donde se conoce, ninguna publicación previa combina un
-   pipeline atacante multi-agente LLM con un *background* de
-   testnet en vivo. Es un artefacto publicable
-   independientemente del defensor propuesto en este TFM.
-
-2. **Evaluación del defensor con clase desequilibrada realista**
-   (aguja en un pajar de ~19 000 : 300). El F1 sobre esta
-   distribución es informativo del rendimiento en producción,
-   donde el ratio ilícito/benigno mainnet es del orden de 0.5%–2%.
-
-3. **Robustez de la comparación con *baselines***. El *baseline*
-   coseno de §8.5 obtiene métricas altas sobre Elliptic++ porque el
-   *dataset* está pre-etiquetado; enfrentarlo a un subgrafo Sepolia
-   sin etiquetas iniciales expone su dependencia de features
-   pre-computadas y motiva el diseño del defensor híbrido GCN+LLM.
-
-**Caveat metodológico obligatorio**: el tráfico benigno de Sepolia
-es *dev-testnet* (despliegues, faucet claims, tests aleatorios), no
-representativo del tráfico de usuarios en producción (transferencias
-P2P, *swaps*, *staking*, uso de exchanges). Cualquier publicación
-sobre este *dataset* debe incluir un *disclaimer* explícito y
-reportar métricas separadas para (a) Sepolia como stress-test de
-generalización, (b) Elliptic++ / OpenAML como benchmark de dominio.
-
-**Esfuerzo estimado**: 1–2 semanas — implementar el
-`capture_all_sepolia.py` con paginación de bloques vía
-`eth_getLogs` + Alchemy `getAssetTransfers` (2–3 días), diseño del
-esquema de etiquetado y almacenamiento (~5 GB / campaña, ~50 GB para
-20 campañas, 1 día), evaluación del defensor sobre el nuevo
-*dataset* (3–5 días). Publicable como *dataset paper* en NeurIPS
-Datasets & Benchmarks track.
-
-### 10.4.13 Humanización temporal del atacante (P1-45 / P1-46 / P1-51)
-
-**Motivación**: §8.9.24 documenta que el pipeline atacante actual
-completa una campaña 22.6 ETH en ~60 min de wall-clock con
-transacciones espaciadas por `advance_blocks(2-5)` uniforme
-(~24-60 s entre tx). Esta cadencia regular es en sí misma un
-fingerprint automation — humanos operan en ráfagas irregulares
-con pausas 0-24 h entre acciones. Además, todas las tx pagan el
-mismo priority fee (2 gwei), otro fingerprint.
-
-**Propuesta**: tres refinamientos temporales:
-
-- **P1-45 — Jittered inter-tx delays**. Reemplazar
-  `advance_blocks(2-5)` uniforme por
-  `sleep(random.exponential(scale=300))` con outliers hasta 24 h
-  para el 5 % de tx. La distribución exponencial replica el patrón
-  Poisson de arribos humanos observado en Chainalysis 2024.
-
-- **P1-46 — Human-hour operating window**. Los `run_sepolia_campaign.py`
-  fires 24/7. Real launderers concentran actividad en horas laborables
-  regionales (08:00-22:00 UTC±3). Requiere gating por
-  `datetime.utcnow().hour` en el dispatcher.
-
-- **P1-51 — Variable priority fee**. Reemplazar `priority = 2 gwei`
-  constante por sampled `random.choice([0.5, 1, 1.5, 2, 3, 5])`.
-  Un usuario real varía prioridad según urgencia percibida.
-
-**Alcance**: NO se implementa en Sepolia para el TFM actual — el
-deadline no permite validación empírica temporal (necesitaría corridas
-multi-día). Sí se implementará y validará en **Anvil**, donde el
-control de tiempo es total (chain clock advanciable). El impacto forense
-en Anvil se documentaría como *ablation study* separado.
-
-**Esfuerzo estimado**: 3-5 días código + 1 semana ablation Anvil.
-
-### 10.4.14 Cross-chain bridge integration (P1-53)
-
-**Motivación**: los perfiles Lazarus / Ronin / Nomad reales mueven
-20-30 % del volumen lavado a través de puentes cross-chain (Wormhole,
-Nomad, Ronin Bridge, LayerZero). Nuestro pipeline actual es 100 %
-ETH-only en Sepolia — un fingerprint «no bridge usage» que un
-detector avanzado detecta como amateur. Ya tenemos `MockBridge.sol`
-deployed pero no utilizado por Sonnet.
-
-**Propuesta**: añadir al `LAYERING_SYSTEM` prompt una nueva Route E
-(bridge) con budget 10-15 % del `alice_amount`, e implementar la
-`bridge_deposit` / `bridge_withdraw` tool que interactúe con
-`MockBridge`. Extender el dispatcher para trackear cross-chain flows
-(`from_chain`, `to_chain`, `bridge_tx`) en el `chain_trace.jsonl`.
-
-**Alcance**: fuera del scope del TFM actual pero recomendado como
-próximo release. **Esfuerzo estimado**: 1 semana desarrollo + 3 días
-validación empírica. Publicable como extensión del pipeline para
-representar Lazarus-tier sophistication (~ Ronin Bridge hack 2022).
-
-### 10.4.15 Simulated operator mistakes (P1-50)
-
-**Motivación**: nuestro pipeline ejecuta el 100 % de sus tx sin
-errores. Real humanos comenten errores realistas: enviar a wrong
-address y luego mandar dust request (~1 % de campaigns Chainalysis),
-retry con higher gas (~5 %), cancel un pending tx (~2 %), over-slippage
-por error de cálculo (~3 %). **Cero errores** en 20 corridas es un
-fingerprint estadísticamente detectable.
-
-**Propuesta**: inyectar errores realistas con probabilidad tunable:
-
-- 3-5 % de `transfer_usdt` calls con typo simulado en `to_address`
-  (enviar a `0x…41` cuando debía ir a `0x…4F`), seguido de una
-  segunda tx corrigiendo (recall pattern).
-- 2-4 % de tx con `min_out` demasiado agresivo → revert, retry
-  con mejor slippage.
-- 1-2 % de `mixer_deposit` con recovery-note perdida (Sonnet
-  intenta withdraw pero encuentra note ya spent).
-
-**Riesgo**: puede degradar reliability del run (más iteraciones, más
-budget). Requiere validación cuidadosa de que las «mistakes» no
-inflan artificialmente `economic_loss_pct` más allá de baseline.
-
-**Esfuerzo estimado**: 1 semana implementación + 1 semana ablation.
-
-### 10.4.16 Time-lagged multi-week exchange distribution (P1-52)
-
-**Motivación**: Sonnet fondea las 3-4 exchanges (Binance, Coinbase,
-Kraken) en la misma window de ~60 min. Real Lazarus ops distribuyen
-across days: fondean Binance esta semana, Coinbase la próxima, Kraken
-la tercera. Cero temporal spread es fingerprint automation.
-
-**Propuesta**: multi-campaign coordination donde el Coordinator
-persiste estado entre `run_sepolia_campaign.py` invocaciones y ejecuta
-la misma campaign lógica en 3-5 ventanas separadas por 3-7 días
-cada una. Requiere estado atómico persistente (extension del
-`dispatcher_state.json`) + orquestador cron externo.
-
-**Alcance**: fuera del scope del TFM (requiere runs multi-semana).
-Publicable como extension propuesta.
-
-**Esfuerzo estimado**: 2 semanas coordination framework + 2 semanas
-validación empírica.
-
-### 10.4.17 P1-55 — Enforcement en código de patterns críticos
-
-**Motivación**: §8.9.28 documenta que Sonnet ejecutó 0 llamadas a
-`distribute_to_exits` (la nueva *tool* atómica P1-43) durante seed 803,
-a pesar de que el prompt de `INTEGRATION_SYSTEM` fue actualizado con la
-instrucción explícita «PREFER distribute_to_exits over manual
-consolidation». En su lugar, Sonnet ejecutó 66 llamadas individuales
-a `transfer_usdt` que replicaron el patrón hub-and-spoke que
-`distribute_to_exits` fue diseñado para prevenir.
-
-**Finding metodológico generalizable**: prompt engineering, incluso con
-lenguaje directivo («PREFER», «MUST»), NO garantiza adopción en
-sub-agentes LLM cuando existe un patrón conocido más simple que
-el modelo puede ejecutar autonómamente. La **default policy learned**
-sobrepasa la instrucción textual. Este finding es publishable
-independientemente del sistema propuesto — implicaciones para
-cualquier operator que despliegue LLM-driven pipelines con features
-nuevas.
-
-**Propuesta P1-55**: implementar *code-level enforcement* que
-redirija a Sonnet cuando use el patrón subóptimo:
-
-```python
-def _transfer_usdt(self, from_addr, to_addr, amount_usdt):
-    # P1-55: soft-block direct transfer_usdt to registered exits
-    # when there are unfunded exits pending. Redirige a
-    # distribute_to_exits vía error message educativo.
-    exits = self.registered_clean_exits
-    unfunded = [e for e in exits
-                if self.w3.eth.get_balance(e['address']) == 0
-                and self.usdt.functions.balanceOf(e['address']).call() == 0]
-    if to_addr.lower() in {e['address'].lower() for e in exits}:
-        if len(unfunded) >= 5:  # only enforce when batch worth it
-            return ToolResult(error=(
-                "P1-55 SOFT BLOCK: 5+ registered exits still unfunded. "
-                "Use distribute_to_exits(source_wallets=[...]) instead "
-                "of individual transfer_usdt calls — it partitions the "
-                "exits across sources, reserves gas per source, and "
-                "distributes atomically. Overrides fragmentado producen "
-                "el hub-and-spoke pattern P1-43 was designed to prevent."
-            ))
-    # ... normal flow
-```
-
-**Consideraciones**:
-
-- El bloqueo debe ser *soft* (recomendación) para no romper legitimate
-  edge cases (e.g., corrections como fase 5 de seed 803).
-- El threshold (`5+ unfunded exits`) evita disparar el bloqueo cuando
-  solo quedan 1-2 exits por fondear (donde individual transfer_usdt
-  es apropiado).
-- Publicable como **finding metodológico sobre governance de LLM-driven
-  pipelines**: cuando adoptar un feature vía prompt vs. vía code
-  enforcement.
-
-**Esfuerzo estimado**: 30 min de código + 30 min de validación en
-Anvil + un run empírico en Sepolia para confirmar que Sonnet ahora usa
-`distribute_to_exits` post-P1-55.
-
-### 10.4.18 P1-56 — Minimum-quotas para técnicas underused en balanced mix
-
-**Motivación**: §8.9.28 documenta que P1-44 (balanced technique mix)
-funcionó parcialmente en seed 803: el uso del mixer bajó exitosamente
-de 98% (seed 802) a 40% (dentro del banda 30-45%), pero
-`peel_chain` quedó en 8% (bajo del objetivo 25-35%) y `swap_direct`
-disparó a 52% (sobre el objetivo 15-25%). Sonnet **compensó** la
-reducción del mixer con más swaps ETH↔USDT (una técnica más simple
-mecánicamente) en lugar de absorber la reducción con peel_chain.
-
-**Hipótesis explicativa**: `peel_chain` es cara cognitivamente para
-el sub-agente porque una sola llamada ejecuta 6-8 hops como una unidad
-atómica que requiere planning inicial completo (num_hops, peel_pct,
-peel_jitter, asset choice). Múltiples swaps atómicos simples son más
-fáciles de emitir individualmente.
-
-**Propuesta P1-56**: reemplazar las bandas objetivo actuales (que
-Sonnet interpreta como "sugerencias") con **minimum quotas hard-cap**
-en la instrucción de layering:
-
-```
-BALANCED TECHNIQUE MIX P1-56 (mandatory MINIMUMS):
-  MINIMUM 4 peel_chain calls  (each 5-8 hops, 2-4 % peel_pct)
-  MINIMUM 8 mixer_deposit calls
-  MINIMUM 3 swap ETH→USDT calls
-  MINIMUM 1 cycle back-edge
-  If any minimum is unmet before finish_task, the Coordinator
-  MUST re-delegate Layering with an explicit reminder.
-```
-
-Con minimums en lugar de bandas porcentuales, Sonnet no puede
-"omit" una técnica declarando que otra la cubre. También añadir un
-**check automático** post-Layering que valide los conteos y
-force retry si no se cumplen.
-
-**Esfuerzo estimado**: 20 min de prompt update + 20 min de
-`_validate_layering_mix` code + 1 run empírico. Publicable como
-extensión metodológica de P1-44.
-
-### 10.4.19 P1-59 — Funder bootstrap via clean-history simulator
-
-**Motivación**: §8.9.32 documenta que en el chain trace de seed 830
-aparecen 5 aristas visibles `Deployer → funder wallet` (blocks 10-14,
-montos 0.15-0.34 ETH cada uno). Aunque el deployer está tagged como
-`operator_wallet` en `addresses.json` (infrastructure, no attacker),
-estas aristas SÍ crean un patrón detectable: cualquier defensor que
-mire el subgrafo verá 5 wallets recibiendo ETH de una fuente central
-y luego funcionando como funders de burners aguas abajo — un patrón
-característico de operación coordinada.
-
-En un ataque real, los funders serían **wallets con historia previa**
-que el atacante creó semanas/meses antes: recibieron fondos de un
-exchange withdrawal, de un OTC purchase, o de un mixer previo con
-notas orphaned. No aparecen out-of-nowhere en el chain trace de la
-campaña.
-
-**Propuesta**: implementar un `funder_bootstrap_simulator.py` que,
-antes de la fase de placement, ejecute para cada funder:
-
-1. Recibe ETH de un "clean source wallet" (fondeado 2-4 semanas
-   simuladas antes vía advance_blocks large).
-2. Ejecuta 5-15 tx no-relacionadas (transfers a wallets random,
-   swaps pequeños ETH↔USDT, quizás una interacción con un
-   contract legítimo simulado).
-3. Sólo después empieza a operar como funder del pipeline atacante.
-
-**Efecto forense**: la arista Deployer → funder ya NO existe.
-Reemplazada por: Deployer → clean_source → funder (después de 5-15
-tx history de por medio). El defensor no puede clusterizar los 5
-funders como "grupo bootstrap coordinado" porque cada uno tiene
-historia individual.
-
-**Esfuerzo estimado**: 2-3 días código + 1 día validación empírica
-con re-run seed 830. Publishable como
-`funder_provenance_obfuscation` metodológico.
-
-### 10.4.20 P1-62 — Anvil auto-recovery pipeline
-
-**Motivación**: §8.9.32 empíricamente reveló que Sonnet's Layering
-sub-agent, presionado por `max_iterations`, deja notas Groth16
-orfanas en el mixer (4 notas = ~14 ETH en seed 830). En Sepolia
-existe un pipeline post-hoc (`mixer_recover.py` + `sweep_sepolia.py`)
-que recupera estos fondos, pero **Anvil no tiene equivalente
-integrado en `run_campaign.py`** — el chain se destruye al final,
-dejando la aparente pérdida en las métricas del dataset.
-
-**Propuesta**: extender la fase post-coordinator existente en
-`aml.attackers.run_campaign` (líneas 269-292) con dos pasos
-adicionales, ejecutados sólo si chain_id == 31337 (Anvil):
-
-1. **`mixer_recover_orphans()`**: escanea `dispatcher._mixer_notes`
-   por notas con `spent=False`, ejecuta `mixer_withdraw` para cada
-   una hacia un fresh recipient. Recupera al mixer contract residual.
-2. **`sweep_pool_to_exits()`**: reverse-swap del pool residual
-   (USDT balance > threshold) → ETH → distribute a exits ya
-   registrados como funded amounts adicionales.
-
-**Efecto empírico esperado**: seed 830 delivered % subiría de 45.2 %
-a ~85 % (14 ETH recovered + ~4 ETH del pool distribuidos post-hoc).
-Esto matches mejor el baseline Chainalysis 2024 para operaciones
-profesionales completadas (80-95 % delivery).
-
-**Trade-off**: el defensor evaluado sobre estos datasets ya no verá
-"orphan notes" como signal de amateur — el dataset queda más
-homogéneo hacia el patrón "professional attacker + post-hoc
-cleanup". Esto es deseable para F1 metrics stratified (§8.5-8.6)
-porque prevents el defensor de sobre-fittear a artifacts del LLM
-sub-agent's max_iterations hits.
-
-**Esfuerzo estimado**: 4-6 horas código + validación. Bajo riesgo
-(las funciones de recovery ya existen como scripts standalone —
-sólo hay que integrarlas al pipeline `run_campaign.py`).
-
-### 10.4.21 P1-63 — Streaming API + context compression para prevenir APITimeout crashes
-
-**Motivación**: §8.9.34 documenta que los intentos v1 y v2 de la
-corrida Anvil seed 840 (stablecoin-scam 41 672 USDT) fallaron con
-`anthropic.APITimeoutError` durante el coordinator loop. El
-root-cause fue **context inflation**: el scenario requería ~63
-exits sub-$999, forzando muchas delegaciones y accumulando >100k
-tokens de contexto para el mensaje 65. Sonnet's response al mensaje
-65+ tardó >90 s (nuestro `httpx.Timeout(read=90.0)`), y las 2
-retries también fallaron.
-
-**Tres propuestas complementarias:**
-
-**1. Streaming API con reconnect on drop.**
-
-Reemplazar `messages.create()` (blocking) por `messages.stream()` en
-`aml.attackers.llm_client`. Streaming API:
-- Envía tokens incrementalmente en vez de esperar respuesta completa
-- Sobrevive network blips mid-generation (reconnect a partir del
-  último token recibido)
-- Reduce el timeout aparente a nivel per-token, no per-response
-
-Esfuerzo: 2-3 días para refactorizar `LLMClient.complete()`.
-
-**2. Context compression del coordinator.**
-
-Cuando el coordinator llegue a message >30, comprimir los tool_results
-antiguos:
-- Los primeros N-20 mensajes se sumarizan por un mini-LLM (Haiku)
-- El summary reemplaza los mensajes originales
-- El contexto real enviado a Sonnet queda cap en ~30 mensajes vivos
-
-Esfuerzo: 1 semana. Impacto: contexto del coordinator ~lineal en vez
-de exponencial.
-
-**3. Amount-adaptive `read_timeout`.**
-
-En `llm_client.py`, calcular `read_timeout` basado en el amount:
-
-```python
-def _adaptive_timeout(amount_usd: float) -> float:
-    # Base 90s, +15s por cada 10k USD extra
-    return 90.0 + 15.0 * (amount_usd - 10000) / 10000
-```
-
-Para stablecoin 41 672 USDT: `read_timeout = 90 + 15*3.16 = 137 s`
-en vez de 90 s. Fix trivial (5 líneas) que solo aborda el síntoma,
-no la causa raíz — pero valdría la pena aplicarlo antes que las
-soluciones 1-2 más caras.
-
-**Publicabilidad**: los 3 findings son publishable como paper
-metodológico sobre LLM-driven multi-agent pipelines en el AAAI
-Workshop on Advances in Large Language Models (AdvLLM) o similar.
-El finding «context inflation × read_timeout interaction» está poco
-documentado en la literatura (mayoría de LLM pipelines son
-single-turn o short-horizon).
-
-### 10.4.22 P1-68 — LLM re-scoring bidireccional para reducir background FPR
-
-**Motivación**: §8.9.37 documenta que el pipeline defensor híbrido
-(Phase 1 Louvain + Phase 2 LLM Coordinator) NO reduce el background
-FPR (99 % Sepolia, 43 % Anvil) porque el LLM sólo procesa las
-addresses ya flagged por Phase 1 — el LLM puede clusterizar mejor,
-pero NO puede "unflag" a un false positive.
-
-**Propuesta**: introducir un tercer paso *bidireccional* donde el
-Coordinator emite:
-
-1. **New flag list** con addresses del background que NO estaban
-   flagged por Phase 1 pero que su reasoning identifica como
-   attacker-like.
-2. **Un-flag list** con addresses previamente flagged por Phase 1
-   cuyo reasoning ("this appears to be a legitimate exchange hot
-   wallet based on high in-degree from many small users, no
-   outbound to sub-CTR chunks") justifica removerlas.
-
-**Implementación**: modificar `_build_llm_user_prompt` para incluir
-además de las 60 flagged per exchange, un sample aleatorio de 20-30
-background addresses. El sistema prompt del Coordinator instruye:
-
-> "Emit `actor_clusters` for flagged addresses AND, when evidence is
-> strong, `unflag_addresses` for false positives AND
-> `newly_flagged_addresses` for background addresses that show
-> attacker-consistent behavior."
-
-**Efecto esperado en background FPR**:
-
-- Sepolia bgFPR actual: 99.9 %
-- Sepolia bgFPR post-P1-68: **10-25 %** (LLM identifica dev-testnet
-  patterns como benignos con reasoning: "deploy tx, faucet claim,
-  no mixer interaction → not attacker")
-- Trade-off: recall en attacker puede caer 3-5 pp por unflags erróneos
-
-**Riesgo**: LLM re-scoring introduces subjectivity y potencial para
-gaming (un ataque adversarial que se disfrace como dev-testnet
-pattern). Requiere ablation cuidadosa y comparación con L1-only.
-
-**Esfuerzo estimado**: 1 semana implementación + 3 días validación
-sobre los 5 datasets existentes + regeneración de F1/FPR tables.
-Publishable como *system paper* en ACM SIGKDD Applied Data Science
-Track.
-
-### 10.4.23 P1-70 — Clustering granularity guidance en el prompt del LLM defender
-
-**Motivación**: §8.9.39 (EthereumHeist cross-domain eval) reveló que
-el LLM defender **over-segmenta clusters**: 22 predichos vs 3 hacks
-reales en el top-60 flagged (ratio 7×). El mismo patrón fue visible
-en §8.9.37 sobre nuestros datasets (19-48 clusters predichos).
-
-**Root cause**: el system prompt actual del defensor pide "cluster
-addresses into distinct actor groups" sin especificar granularidad
-esperada. El LLM interpreta cualquier variación en features (degree,
-volumen, ratio in/out) como actor separado, cuando en realidad la
-misma operación de laundering puede tener muchas sub-topologías.
-
-**Propuesta P1-70**: extender el system prompt con guidance
-explícita sobre coarser clustering:
-
-```
-Real Ethereum hacks typically comprise a single coordinated actor
-even when their addresses show varied behaviors (mixer users, peel
-chains, exit distributors are ALL part of one campaign). Prefer
-FEWER, LARGER clusters over many small ones. Only split a cluster
-when features differ dramatically (>3σ on at least 2 dimensions).
-Aim for 3-10 clusters per 60 flagged addresses, not 20-50.
-```
-
-**Ablation propuesto**: re-run los 6 datasets (5 in-domain + 1
-EthereumHeist) con el prompt P1-70 vs baseline. Metric target:
-
-- LLM ARI **should double**: 0.03 → ~0.06 in-domain; 0.06 → ~0.15
-  EthereumHeist
-- LLM cost: unchanged (~$0.04-0.007 per eval)
-- F1 binary: unchanged (Phase 1 dominates)
-
-**Esfuerzo estimado**: 30 min prompt engineering + 30 min ablation
-run + 30 min analysis. Cost: ~$0.30 total (6 datasets × Haiku).
-
-**Impacto TFM**: convierte el "weak ARI" finding actual en "ARI
-significantly improved by prompt engineering" — resultado
-publishable como contribución metodológica sobre LLM-driven
-graph clustering.
-
-**UPDATE 2026-09-14 — ABLATION EJECUTADA, RESULTADO NEGATIVO**:
-
-El ablation P1-70 se ejecutó (§8.9.40). El LLM **ignoró la guidance**
-y produjo MÁS clusters (29 vs 26 baseline) en lugar de MENOS. ARI
-empeoró: 0.026 → −0.023 (peor que aleatorio).
-
-Esto es un finding metodológico publishable **negativo**: prompt-only
-guidance NO es suficiente para controlar output structure de LLMs.
-3/3 ablations similares fallidas en el TFM (P1-55, P1-56, P1-70)
-sugieren un patrón: **prompt engineering para influir en cuentas /
-categorías cuantitativas es sistemáticamente unreliable en Sonnet /
-Haiku actuales**.
-
-P1-70 REVERTED. Ver §10.4.24 (P1-71) para propuesta alternativa
-code-level.
-
-### 10.4.24 P1-71 — Enforcement code-level de max cluster count (IMPLEMENTED, POSITIVE)
-
-**Estado (2026-09-14)**: **IMPLEMENTADO Y VALIDADO** en `src/aml/detectors/multi_agent.py`.
-Detalle empírico completo en §8.9.42. Resumen:
-
-| Métrica       | Baseline | max_c=3 | max_c=5 |
-|---------------|---------:|--------:|--------:|
-| Mean ARI      |    0.001 |   0.159 |   0.095 |
-| Improvement   |     —    | ~160×   |  ~95×   |
-
-Primer resultado positivo del defensor tras 4 ablations fallidas
-(P1-55, P1-56, P1-70, P1-72). Coste: $0.194 total × 5 datasets.
-
-**Motivación**: P1-70 falló (§8.9.40). Dado que prompt guidance no
-controla output structure LLM, la alternativa efectiva es
-post-processing code-level:
-
-```python
-def _cap_clusters(pred: dict[str, int], max_clusters: int) -> dict[str, int]:
-    """P1-71: merge similar clusters until count <= max_clusters."""
-    if len(set(pred.values())) <= max_clusters:
-        return pred
-    # 1. Compute per-cluster centroids (mean of member features)
-    # 2. Iteratively merge two closest clusters until count == max
-    # 3. Reassign addresses to merged cluster IDs
-    ...
-```
-
-Ventajas vs P1-70:
-- Deterministic (no LLM randomness)
-- Guaranteed cluster count constraint
-- Post-hoc — no re-cost del LLM
-
-Desventaja:
-- Feature-distance heuristic puede merge campañas diferentes que
-  comparten fingerprint superficial. Requiere ablation cuidadosa.
-
-**Esfuerzo real (ex-post)**: 2 h implementación (algoritmo + integración
-en `multi_agent.py`) + 15 min sweep sobre 5 datasets. Coste real: $0.194
-LLM (una llamada por dataset — el merge es post-hoc puro). Impacto real:
-**~160× mejor que baseline** (Δ absoluto +0.157), superando ampliamente
-la estimación conservadora de 2-3×. Ver §8.9.42.
-
-### 10.4.25 P1-72 — Extended graph-native features (attempted, negative)
-
-**Motivación**: complementaria a P1-70. Si el prompt no controla la
-granularidad de output del LLM (P1-55/56/70 todos fallidos), quizá
-enriquecer el input (fingerprints con features de topología global)
-sí lo haga.
-
-**Ejecución (§8.9.41, 2026-09-14)**: extendido fingerprint 19-dim →
-22-dim añadiendo `pagerank_x1e6`, `betweenness_x100` (k=200 aprox),
-`clustering_x100` computados sobre el grafo combinado completo
-(8 554 nodos). Re-run seed 803 con Haiku 4.5.
-
-**Resultado — NEGATIVE**:
-
-| Métrica              | Baseline 19-dim | 22-dim ext. | Δ         |
-|----------------------|----------------:|------------:|----------:|
-| ARI (actor cluster)  |         0.026   |    0.0154   | −0.011 ❌ |
-| Clusters predichos   |            26   |        50   | +24 ❌    |
-| LLM cost             |        $0.043   |    $0.049   | +14 %     |
-
-El LLM **sobre-particionó más** con features extendidas (50 vs 26).
-Cuarto ablation consecutivo (P1-55, P1-56, P1-70, P1-72) sin mejorar
-el ARI del defensor.
-
-**Patrón consolidado**: la granularidad de clustering del LLM parece
-insensible tanto a prompt engineering como a feature engineering. La
-ruta prometedora restante es P1-71 (enforcement code-level post-hoc),
-que sigue pendiente de implementación.
-
-**Estado**: P1-72 REVERTED. `scratchpad/feature_eng_eval.py`
-retenido en repo como registro de reproducibilidad del ablation.
-
-### 10.4.26 P1-73 — Silhouette auto-tune de max_clusters
-
-**Estado (2026-09-14)**: **IMPLEMENTADO Y VALIDADO** en §8.9.44.
-Resuelve el único caveat metodológico de P1-71: la elección del
-hyperparámetro `max_clusters` cuando el true actor count es
-desconocido. Aplica silhouette score data-driven sobre los
-centroides candidatos → selección automática y label-free.
-
-**Resultado empírico (6 datasets: 5 propios + EthereumHeist)**:
-
-| Estrategia                | Mean ARI | Requiere oracle |
-|---------------------------|---------:|:---------------:|
-| Baseline LLM              |   0.020  |       ❌         |
-| max_clusters=3 (oracle)   |   0.150  |       ✓         |
-| **max_c=silhouette (P1-73)** | **0.194** |    ❌       |
-
-Silhouette gana en 4/6 datasets y produce mejor mean ARI que
-cualquier constante fija sin requerir ground truth. Implementación
-en `_auto_pick_max_clusters()`.
-
-### 10.4.27 P1-74 — Sonnet ablation: contraintuitive positive finding
-
-**Estado**: ejecutado (§8.9.45). Sonnet 4.6 tiene mejor baseline ARI
-(0.013 vs Haiku 0.001, ~13×) pero **peor** ARI final con P1-71
-(0.078 vs Haiku 0.159, mitad) y cuesta 3× más ($0.13 vs $0.04 por eval).
-
-**Publishable**: "smaller-and-cheaper + right post-processing beats
-larger-and-more-expensive" — Haiku 4.5 + P1-71 es la configuración
-Pareto-óptima. Deployment cost 3× menor para el mismo ARI.
+El trabajo futuro se organiza en cuatro categorías: (A) extensiones
+inmediatas del scope del TFM, (B) arquitectura de despliegue en
+producción, (C) mejoras del pipeline atacante identificadas durante
+las 26 corridas (referencias P1-XX de commits GitHub), y (D) mejoras
+del pipeline defensor. Las items marcadas **[IMPLEMENTED]** ya
+existen en el código publicado; los demás son propuestas.
+
+### 10.4.A Extensiones inmediatas del scope
+
+**A1 — Extensión temporal**. El pipeline actual opera sobre snapshots
+estáticos. Un atacante consciente del detector podría dispersar
+transacciones a lo largo de meses para quedar bajo el umbral por
+ventana. Incorporar features temporales o GNNs con memoria (T-GCN,
+TGN) queda para trabajo futuro. Impacto esperado: +5-10 pp F1
+adicional en escenarios adversariales temporales.
+
+**A2 — Simetría LLM completa (Opus-vs-Opus)**. El coordinador
+atacante usa Opus 4.7 y el defensor Haiku 4.5 / Sonnet 4.6 por
+presupuesto. Un experimento verdaderamente simétrico Opus-vs-Opus
+está fuera del alcance actual (~$3-5 USD por corrida defensor Opus)
+pero es técnicamente inmediato. Publishable: ¿un defensor de mismo
+tamaño supera al atacante o mantiene la asimetría observada?
+
+**A3 — Escalado a ≥ 100 campañas**. Las 26 campañas actuales cubren
+las 3 typologies FATF (defi-exploit, ransomware, stablecoin-scam)
+pero un régimen de 100+ permitiría análisis estadístico más robusto
+de las brechas per-typology. Coste estimado: 100 × $2 = ~$200 en
+LLM atacante.
+
+**A4 — Extensión cross-chain y multi-token**. El TFM se limita a
+Ethereum + ETH/USDT. Cross-chain (bridge a Polygon/Arbitrum) y
+multi-token (USDC, DAI, WBTC) son extensiones directas que
+diversificarían el simulador y permitirían evaluar detección de
+patterns cross-chain (bridge-based laundering).
+
+**A5 — Memoria histórica del defensor**. El defensor actual procesa
+cada evaluación independientemente. Un defensor productivo tendría
+memoria histórica de patterns previamente flagged, permitiendo
+detección de repeat-offenders y evolución adaptativa a nuevas
+técnicas atacantes.
+
+### 10.4.B Arquitectura de despliegue en producción
+
+**B1 — Sistema productivo AML sobre exchange real**. Un producto
+comercial basado en este pipeline requeriría: (i) integración con
+APIs de exchange (Binance, Coinbase, Kraken) para acceso al ledger
+en tiempo real; (ii) escalado del defensor a millones de addresses/día
+(actual: 30k nodos/eval); (iii) UI para SAR reports generados por
+el LLM; (iv) compliance con MiCA/AMLD5/GDPR (retention, right to
+erasure, audit trails). Estimación: 6-12 meses de ingeniería + equipo
+de 3-5 personas.
+
+**B2 — Meta-transacciones (EIP-4337)**. Actualmente el pipeline
+propaga gas a cada burner via transfer nativo (arquitectura A+B+D+G+,
+§8.9). Con account abstraction (ERC-4337) los burners podrían pagar
+gas en USDT, eliminando el edge topológico `funder→burner` que el
+defensor detecta. Esto haría el pipeline más sofisticado
+adversarialmente y publishable como iteration del atacante.
+
+**B3 — Cobertura regulatoria ampliada**. El TFM aborda FATF Rec. 16
+(travel rule) y Rec. 20 (transparencia SAR) pero no las Rec. 10
+(customer due diligence), Rec. 11 (record keeping), ni la totalidad
+de MiCA. Un sistema productivo debe integrar todas ellas.
+
+### 10.4.C Mejoras identificadas del pipeline atacante
+
+Durante las 26 corridas se identificaron 12 mejoras (P1-XX) del
+pipeline atacante. Todas están registradas en commits del
+repositorio; sólo se sintetizan aquí las relevantes para trabajo
+futuro:
+
+- **P1-42 [IMPLEMENTED]** Arquitectura A+B+D+G+ (self-sovereign gas
+  propagation). Elimina el anti-strand co-funding leak descubierto
+  en seed 800. **Adoptado como default en seeds 802+**.
+- **P1-43/44/47/48/49 [IMPLEMENTED]** Diversificación técnica:
+  distribute_to_exits tool, balanced technique mix (mixer/peel/swap),
+  human-like refinements. **Validado empíricamente en seed 803**.
+- **P1-45/46/51 [FUTURE]** Humanización temporal del atacante —
+  jitter en timing entre transacciones, distribución de horas
+  mainnet-like. Impacto esperado: reducir F1 en 2-5 pp.
+- **P1-50 [FUTURE]** Simulated operator mistakes — inyectar errores
+  humanos realistas (typos, wrong recipient, overpayment) para
+  representar la operativa real vs. la ejecución perfecta actual.
+- **P1-52 [FUTURE]** Time-lagged multi-week exchange distribution.
+  Coordinar cash-outs a través de semanas en múltiples exchanges
+  para evadir detección por ventana temporal.
+- **P1-53 [FUTURE]** Cross-chain bridge integration. Permitiría al
+  atacante lavar via Polygon/Arbitrum y regresar a Ethereum.
+- **P1-59 [FUTURE]** Funder bootstrap via clean-history simulator —
+  darle historial benigno pre-campaña al funder wallet para
+  camuflarlo mejor.
+- **P1-62 [IMPLEMENTED]** Anvil auto-recovery pipeline. Detecta
+  campañas fallidas y ejecuta post-hoc `mixer_recover` sin
+  intervención humana.
+- **P1-63 [FUTURE]** Streaming API + context compression. Elimina
+  el context inflation crash que hizo fallar los intentos
+  stablecoin-scam de 41k USDT (§8.9.B).
+- **P1-64/65 [IMPLEMENTED]** Chain trace completeness bugs fixed
+  (post-2026-09-10). Datasets Anvil generados desde entonces tienen
+  traces completas incluyendo anti-strand + rescue phases.
+- **P1-67 [IMPLEMENTED]** LLM timeout + retry en `llm_client.py`
+  (300s read timeout, 5 retries). Evita cuelgues por Sonnet response
+  slow-path.
+
+### 10.4.D Mejoras del pipeline defensor
+
+- **P1-55/56/70 [ATTEMPTED, NEGATIVE]** Prompt-level guidance para
+  guiar la granularidad de output del LLM. Los tres ablations
+  fallaron consistentemente (§8.9.F). Publishable como
+  meta-finding: prompt engineering no controla output cuantitativo
+  discreto del LLM. Ver §10.4.28 síntesis.
+- **P1-68 [FUTURE]** LLM re-scoring bidireccional. Para reducir el
+  background FPR residual, el LLM re-evalúa las address flagged por
+  Louvain con conocimiento explícito de los otros flagged
+  addresses. Impacto esperado: precision → 1.000 en 5/5 datasets.
+- **P1-69 [IMPLEMENTED]** Hard-negative training (§8.9.D.2). Cerró
+  el label leakage con inyección de 500 background addresses como
+  benigns duros durante fit.
+- **P1-71 [IMPLEMENTED, POSITIVE]** Post-hoc cluster merge por
+  centroid distance. Primera intervención positiva del defensor.
+  Mean ARI 0.001 → 0.159 (~160×). Ver §8.9.G.
+- **P1-72 [ATTEMPTED, NEGATIVE]** Feature enrichment con pagerank
+  + betweenness + clustering coefficient (19→22 dim). ARI empeoró
+  0.011. Confirma que el signal está en features de flow, no en
+  topología global.
+- **P1-73 [IMPLEMENTED, POSITIVE]** Silhouette auto-tune de
+  `max_clusters`. Quita el caveat metodológico de P1-71 (necesitar
+  oracle k). Ver §8.9.H.
+- **P1-74 [ATTEMPTED, ANTI-EXPECTED]** Sonnet 4.6 + P1-71 sobre 5
+  datasets. Sonnet es peor final que Haiku (0.078 vs 0.159) y 3× más
+  caro. Configuración Pareto-óptima confirmada: **Haiku 4.5 + P1-71 +
+  P1-73**. Ver §8.9.I.
 
 ### 10.4.28 Síntesis final — control de LLM output tras 7 intervenciones
 
