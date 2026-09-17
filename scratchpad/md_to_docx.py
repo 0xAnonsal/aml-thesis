@@ -36,6 +36,8 @@ DEGREE = "Trabajo Fin de Máster"
 YEAR = "2026"
 
 CHAPTER_ORDER = [
+    "00_portada.md",
+    "00b_glosario.md",
     "01_introduccion.md",
     "02_estado_arte_conceptos.md",
     "03_limitaciones_previas.md",
@@ -67,18 +69,54 @@ def _add_page_number_field(paragraph):
 
 def _add_toc_field(paragraph):
     """Insert a TOC field that Word populates on open."""
+    _add_field(paragraph, r'TOC \o "1-3" \h \z \u',
+               "Índice — abrir en Word y pulsar F9 para actualizar.")
+
+
+def _add_lof_field(paragraph):
+    """List of Figures — Word field TOC \\c 'Figura'."""
+    _add_field(paragraph, r'TOC \h \z \c "Figura"',
+               "Índice de figuras — pulsar F9 en Word para poblar.")
+
+
+def _add_lot_field(paragraph):
+    """List of Tables — Word field TOC \\c 'Tabla'."""
+    _add_field(paragraph, r'TOC \h \z \c "Tabla"',
+               "Índice de tablas — pulsar F9 en Word para poblar.")
+
+
+def _add_field(paragraph, instr: str, placeholder: str):
     run = paragraph.add_run()
     fldChar1 = OxmlElement("w:fldChar")
     fldChar1.set(qn("w:fldCharType"), "begin")
     instrText = OxmlElement("w:instrText")
     instrText.set(qn("xml:space"), "preserve")
-    instrText.text = r'TOC \o "1-3" \h \z \u'
+    instrText.text = instr
     fldChar2 = OxmlElement("w:fldChar")
     fldChar2.set(qn("w:fldCharType"), "separate")
     fldChar3 = OxmlElement("w:t")
-    fldChar3.text = (
-        "Índice — abrir en Word y pulsar F9 para actualizar."
-    )
+    fldChar3.text = placeholder
+    fldChar4 = OxmlElement("w:fldChar")
+    fldChar4.set(qn("w:fldCharType"), "end")
+    run._r.append(fldChar1)
+    run._r.append(instrText)
+    run._r.append(fldChar2)
+    run._r.append(fldChar3)
+    run._r.append(fldChar4)
+
+
+def _add_seq_field(paragraph, seq_name: str):
+    """SEQ field: auto-increments a counter (e.g. Figura, Tabla)."""
+    run = paragraph.add_run()
+    fldChar1 = OxmlElement("w:fldChar")
+    fldChar1.set(qn("w:fldCharType"), "begin")
+    instrText = OxmlElement("w:instrText")
+    instrText.set(qn("xml:space"), "preserve")
+    instrText.text = f' SEQ {seq_name} \\* ARABIC '
+    fldChar2 = OxmlElement("w:fldChar")
+    fldChar2.set(qn("w:fldCharType"), "separate")
+    fldChar3 = OxmlElement("w:t")
+    fldChar3.text = "?"
     fldChar4 = OxmlElement("w:fldChar")
     fldChar4.set(qn("w:fldCharType"), "end")
     run._r.append(fldChar1)
@@ -154,6 +192,26 @@ def _add_cover(doc: Document) -> None:
     para = doc.add_paragraph()
     _add_toc_field(para)
 
+    # List of figures
+    doc.add_page_break()
+    para = doc.add_paragraph()
+    run = para.add_run("Índice de figuras")
+    run.bold = True
+    run.font.size = Pt(16)
+    para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    para = doc.add_paragraph()
+    _add_lof_field(para)
+
+    # List of tables
+    doc.add_page_break()
+    para = doc.add_paragraph()
+    run = para.add_run("Índice de tablas")
+    run.bold = True
+    run.font.size = Pt(16)
+    para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    para = doc.add_paragraph()
+    _add_lot_field(para)
+
     doc.add_page_break()
 
 
@@ -217,9 +275,19 @@ def _add_code_block(doc: Document, lines: list[str]) -> None:
     run.font.size = Pt(9)
 
 
-def _add_table(doc: Document, rows: list[list[str]]) -> None:
+def _add_table(doc: Document, rows: list[list[str]], caption: str | None = None) -> None:
     if not rows:
         return
+    # Caption BEFORE the table with a SEQ Tabla field (for LOT)
+    if caption is not None:
+        cap_para = doc.add_paragraph()
+        cap_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        run = cap_para.add_run("Tabla ")
+        run.bold = True
+        _add_seq_field(cap_para, "Tabla")
+        if caption:
+            run2 = cap_para.add_run(f": {caption}")
+            run2.italic = True
     ncols = max(len(r) for r in rows)
     table = doc.add_table(rows=len(rows), cols=ncols)
     table.style = "Light Grid Accent 1"
@@ -230,7 +298,6 @@ def _add_table(doc: Document, rows: list[list[str]]) -> None:
             para = cell.paragraphs[0]
             cell_text = row[j] if j < len(row) else ""
             if i == 0:
-                # header — bold
                 run = para.add_run(cell_text.strip())
                 run.bold = True
             else:
@@ -282,11 +349,14 @@ def _render_markdown(doc: Document, md_text: str) -> None:
                         lines[i + 1].strip())
         ):
             rows = [_parse_table_row(stripped)]
-            i += 2  # skip header + separator
+            i += 2
             while i < len(lines) and lines[i].strip().startswith("|"):
                 rows.append(_parse_table_row(lines[i].strip()))
                 i += 1
-            _add_table(doc, rows)
+            # Auto-generate a "Tabla N" caption for every table so it appears
+            # in the LOT (list of tables). Caption itself is empty — users
+            # who want specific captions can add them in prose before/after.
+            _add_table(doc, rows, caption="")
             continue
 
         # Image: ![alt](path) on its own line
@@ -295,7 +365,6 @@ def _render_markdown(doc: Document, md_text: str) -> None:
             from docx.shared import Inches
             alt_text = m_img.group(1)
             img_path = m_img.group(2)
-            # Resolve path relative to repo root
             if not Path(img_path).is_absolute():
                 img_path = str(REPO / img_path)
             try:
@@ -303,12 +372,20 @@ def _render_markdown(doc: Document, md_text: str) -> None:
                 para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 run = para.add_run()
                 run.add_picture(img_path, width=Inches(6.0))
+                # Caption with SEQ Figura field (for LOF)
+                cap = doc.add_paragraph()
+                cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                cap_run = cap.add_run("Figura ")
+                cap_run.bold = True
+                cap_run.font.size = Pt(9)
+                _add_seq_field(cap, "Figura")
                 if alt_text:
-                    cap = doc.add_paragraph()
-                    cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    cap_run = cap.add_run(alt_text)
-                    cap_run.italic = True
-                    cap_run.font.size = Pt(9)
+                    # Strip a leading "Figura N." prefix from alt_text if
+                    # the author put one manually (avoid duplication).
+                    clean_alt = re.sub(r"^Figura\s+\d+\.\s*", "", alt_text)
+                    cap_run2 = cap.add_run(f": {clean_alt}")
+                    cap_run2.italic = True
+                    cap_run2.font.size = Pt(9)
             except Exception as e:
                 doc.add_paragraph(f"[Imagen no disponible: {img_path} — {e}]")
             i += 1
@@ -394,10 +471,36 @@ def _render_markdown(doc: Document, md_text: str) -> None:
 
 # ---------- main ------------------------------------------------------
 
+def _add_indices(doc: Document) -> None:
+    """Add TOC + LOF + LOT on separate pages."""
+    doc.add_page_break()
+    para = doc.add_paragraph()
+    run = para.add_run("Índice de contenidos")
+    run.bold = True
+    run.font.size = Pt(16)
+    para = doc.add_paragraph()
+    _add_toc_field(para)
+
+    doc.add_page_break()
+    para = doc.add_paragraph()
+    run = para.add_run("Índice de figuras")
+    run.bold = True
+    run.font.size = Pt(16)
+    para = doc.add_paragraph()
+    _add_lof_field(para)
+
+    doc.add_page_break()
+    para = doc.add_paragraph()
+    run = para.add_run("Índice de tablas")
+    run.bold = True
+    run.font.size = Pt(16)
+    para = doc.add_paragraph()
+    _add_lot_field(para)
+
+
 def main() -> int:
     doc = Document()
     _configure_styles(doc)
-    _add_cover(doc)
     _add_footer_page_number(doc)
 
     for fname in CHAPTER_ORDER:
@@ -407,8 +510,12 @@ def main() -> int:
             continue
         print(f"[md_to_docx] rendering {fname} ...", file=sys.stderr)
         text = path.read_text(encoding="utf-8")
-        doc.add_page_break()
+        if not fname.startswith("00_portada"):
+            doc.add_page_break()
         _render_markdown(doc, text)
+        # After portada, insert TOC + LOF + LOT
+        if fname.startswith("00_portada"):
+            _add_indices(doc)
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(OUTPUT))

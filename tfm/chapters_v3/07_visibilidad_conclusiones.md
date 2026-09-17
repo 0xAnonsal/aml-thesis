@@ -10,55 +10,309 @@ reflexión final.
 
 ## 7.A Decisiones clave de diseño
 
-Once decisiones mayores del proyecto, cada una con motivación y
-justificación empírica. La tabla resume la decisión y las secciones
-siguientes desarrollan las que tienen impacto directo en la
-reproducibilidad o en la contribución central del TFM.
+Este capítulo consolida las once decisiones de diseño mayores del
+proyecto, cada una con su motivación, alternativas descartadas y
+justificación empírica o teórica. Las decisiones están agrupadas
+por *ámbito*: (i) contratos y stack criptográfico; (ii) arquitectura
+multi-agente LLM; (iii) evaluación del defensor; (iv) reproducibilidad
+y operaciones.
 
-| # | Decisión | Alternativa descartada | Motivación clave |
-|---|----------|-----------------------|------------------|
-| 7.1 | Contratos hand-written | OpenZeppelin / Uniswap importados | Minimizar surface adversarial + control sobre invariants |
-| 7.2 | Simetría LLM-vs-LLM | Defensor supervisado clásico | Paridad arquitectónica atacante/defensor + interpretabilidad |
-| 7.3 | Herramientas batched en catálogo atacante | Herramientas atómicas | Reduce llamadas LLM 8× en structuring sub-CTR |
-| 7.4 | Cinco invariants del `ToolDispatcher` | Sin invariants → validación por caso | Fail-safe determinístico + trazabilidad |
-| 7.5 | Oráculo determinista de precios | Precios random / hardcoded | Reproducibilidad exacta entre runs |
-| 7.6 | Wrapper LLM provider-agnostic | Anthropic SDK directo | Flexibilidad de switching Opus↔Sonnet↔Haiku |
-| 7.7 | Particionado federado hash-based | Random split | Estabilidad entre runs + determinismo por seed |
-| 7.8 | LOCO-CV como métrica primaria | Split 80/20 estándar | Expone memorización (§8.10 Finding 1: ΔF1 = −0.55) |
-| 7.9 | Threshold 0.6 para Louvain | Threshold 0.5 default | Calibrado empíricamente en §8.5 sweep |
-| 7.10 | Persistencia inmediata mixer notes | Persistencia post-hoc | Elimina P1-61 dependency on LLM context memory |
-| 7.11 | Reverse swap USDT → ETH en sweep | Sin sweep | Recupera hasta 5 ETH del pool residual post-campaña |
+## 7.1 Contratos hand-written vs importación de OpenZeppelin / Uniswap
 
-### 7.A.1 Simetría LLM-vs-LLM (decisión pivotal)
+**Decisión**: Escribir a mano `MockUSDT`, `MockUniswapV2Pool` y
+`MockBridge` en lugar de importar `OpenZeppelin/erc20` + `Uniswap V2
+core` + un bridge open source.
 
-La decisión de que **tanto atacante como defensor sean LLMs** es
-el eje conceptual del TFM. Un defensor supervisado clásico (GCN
-sólo) produciría F1 similar pero **sin razonamiento textual
-auditable** — capacidad que FATF Rec. 20 y MiCA art. 63 requieren
-para deployment regulatorio real. El coste marginal de la simetría
-(~$0.04/eval con Haiku 4.5, §8.9.Z) es despreciable comparado con
-la ganancia en interpretabilidad.
+**Motivación**:
+1. Los contratos originales traen ≈ 40 MB de git submodule con
+   dependencias transitivas y features irrelevantes al *research*
+   (blacklists Tether, LP tokens Uniswap, multisig bridges,
+   upgradability por proxy).
+2. El marcado `SPDX-License-Identifier: UNLICENSED` + los comentarios
+   prominentes `NEVER deploy on a real chain` reducen el riesgo de
+   que un tercero re-utilice los mocks en producción.
+3. Reduce la superficie de código a auditar (63-96 líneas por
+   contrato frente a 400+ líneas de las versiones canónicas).
 
-### 7.A.2 LOCO-CV como métrica primaria
+**Alternativa considerada**: importar OpenZeppelin como git submodule.
+Descartada porque añade ≈ 250 ficheros al repo para necesitar 1
+contrato.
 
-Es la decisión metodológica más importante del TFM. Los datasets AML
-pequeños (< 30 campañas) permiten memorización de GCN a nivel de
-identidad de campaña, produciendo F1 estándar > 0.95 que colapsa a
-F1 ≈ 0.42 bajo LOCO-CV (§8.10 Finding 1). La adopción de LOCO como
-métrica principal desde el primer experimento —no como ablation
-posterior— es lo que permitió detectar el problema y proponer
-Louvain como cota inferior confiable de generalización.
+**Excepción**: los tres contratos derivados de Tornado Cash
+(`MockTornado`, `MerkleTreeWithHistory`, `Verifier`) SÍ se
+adaptaron del código original bajo licencia MIT (respetada en el
+header). Motivo: la criptografía DEBE preservarse literalmente para
+que la simulación mantenga las propiedades de *soundness* y
+*zero-knowledge* del sistema real.
 
-### 7.A.3 Post-hoc merge P1-71 sobre outputs LLM
+## 7.2 Simetría LLM-vs-LLM en atacante y defensor
 
-Decisión de diseño derivada empíricamente en §8.9.G: en lugar de
-intentar controlar la granularidad de output del LLM vía prompt
-(P1-55, P1-56, P1-70 fallidos) o features (P1-72 fallido), se
-externaliza la decisión al post-procesamiento code-level. El LLM
-produce señal cualitativa buena; el merge determinístico corrige el
-sesgo cuantitativo (over-segmentation). Meta-finding publishable:
-«post-hoc code-level determinístico > prompt engineering».
+**Decisión**: Estructurar tanto atacante como defensor como sistemas
+multi-agente basados en LLMs, en lugar del patrón asimétrico común
+(atacante clásico gradient-based + defensor LLM, o al revés).
 
+**Motivación**:
+1. **Contribución novel**: hasta donde el autor conoce, la simetría
+   LLM-vs-LLM completa no está publicada en la literatura AML cripto.
+   Trabajos previos (Weber 2019, Cardoso 2022) evalúan detectores
+   contra ataques *gradient-based* (Egressy 2023) o perturbaciones
+   sintéticas.
+2. **Realismo tipológico del atacante**: los ataques *gradient-based*
+   producen perturbaciones que satisfacen objetivos de evasión ML
+   pero no son realistas tipológicamente. Un LLM instrumentado con
+   herramientas on-chain reales genera comportamiento alineado con
+   las tipologías FATF (Placement / Layering / Integration) por
+   diseño.
+3. **Interpretabilidad del defensor**: un LLM coordinador cross-
+   exchange produce clusters de actor con arquetipos AML
+   *nombrables* (*"cross-exchange mixer hub"*, *"pass-through mixer
+   relay"*, etc.), mientras un baseline no supervisado produce
+   grupos sin semántica.
+
+**Alternativa considerada**: LLM solo del lado atacante + GNN clásico
+del lado defensor. Descartada porque no aporta valor semántico al
+defender ni permite el ratio coste-defensa que se reporta en §8.9.5.
+
+## 7.3 Herramientas *batched* en el catálogo del atacante
+
+**Decisión**: Añadir variantes *batched* (`smurf_split`,
+`smurf_eth_split`, `peel_chain`, `mixer_batch_deposit`,
+`mixer_batch_withdraw`) al catálogo del atacante como
+complemento a las primitivas atómicas.
+
+**Motivación**:
+1. **Coste de tokens LLM**: cada llamada al LLM cuesta *input
+   tokens* proporcionales al contexto acumulado. Encapsular N
+   operaciones en un solo *round trip* reduce el consumo de tokens
+   en factor 3-6× frente al bucle atómico.
+2. **No compromete granularidad forense**: cada operación individual
+   dentro del batch aparece como una transacción on-chain
+   independiente en el `chain_trace.jsonl`, indistinguible desde el
+   punto de vista del detector.
+3. **Coordinador razona a granularidad estratégica**: *"quiero hacer
+   10 ciclos por el mezclador"* en lugar de 10 × *"hacer un
+   ciclo"* + 10 × *"hacer el siguiente"*. Más natural para el
+   planning multi-turno.
+
+**Nota metodológica**: en la corrida canónica seed 403 el atacante
+Sonnet privilegió las tools atómicas sobre las batched por
+consideraciones de granularidad forense (evitar el patrón "una
+transacción origen con N destinos" que Louvain identificaría como
+*hub*), produciendo un consumo de tokens ≈ 30-50 % superior
+al mínimo teórico. Este es un *ajuste de prompt* identificado como
+mejora incremental de trabajo futuro.
+
+## 7.4 Cinco invariants estructurales del `ToolDispatcher`
+
+**Decisión**: Aplicar cinco restricciones operativas transversalmente
+en el `ToolDispatcher` (no en cada herramienta individual):
+
+1. **Guardarraíl del deployer**: la dirección
+   `0x54539B5ef33cfC3C57b9b572fc77d1e5F1CFf4c4` (deployer de
+   contratos en Sepolia) NO puede aparecer como `from`, `to`,
+   `gas_payer` ni `recipient` de ninguna llamada.
+2. **Cap dinámico de burners**: el agente no puede solicitar más
+   de max(30, min(250, 3 × ⌈USD/999⌉)) direcciones burner por
+   campaña — es decir, mínimo 30 burners para dar flexibilidad
+   táctica en campañas pequeñas, máximo 250 para evitar bucles
+   patológicos, y una cota intermedia proporcional al volumen
+   USD dividido por el umbral CTR de $999.
+3. **Rotación del funder pool**: `_pick_funder` rota entre wallets
+   del pool y solo solicita *refill* cuando el balance cae por
+   debajo de 0,01 ETH.
+4. **Gas reserve** por defecto de 0,005 ETH sobre cada burner.
+5. **`sweep_funder_pool`** consolida el residual del pool al final
+   de la campaña.
+
+**Motivación**: los invariants derivan de fallos empíricos
+observados en corridas tempranas —seed 306 generó 236 burners para
+1 ETH (bucle patológico); seed 200 metió al deployer en el pool
+operativo (contaminó las métricas de recovery); seeds 202-204
+sobrescribieron balances con reserves inconsistentes—. Codificarlos
+en el dispatcher garantiza que ninguna sub-agente pueda violarlos
+sea cual sea la deriva del prompt.
+
+**Alternativa considerada**: dejar los invariants como
+recomendaciones textuales en el prompt sistema del sub-agente.
+Descartada por la propia experiencia de la deriva de prompt: los
+LLM ignoran recomendaciones textuales bajo presión de tarea.
+
+## 7.5 Uso del oráculo determinista en atacante y defensor
+
+**Decisión**: Ambos jugadores del sistema (atacante Coordinator y
+defensor LLM Coordinator) consumen el mismo helper
+`build_market_context()` para inyectar el precio spot ETH/USDT/TRX
+en su system prompt.
+
+**Motivación**:
+1. **Simetría de información**: sin este mecanismo, el atacante
+   razonaría sobre umbrales USD (999 CTR) mientras el defensor
+   podría estar razonando sobre un régimen de precios distinto,
+   invalidando la comparativa.
+2. **Reproducibilidad byte-idéntica**: el helper `resolve_campaign_ts`
+   fija la fecha a una jornada específica de caché CSV (CoinGecko
+   pre-descargado), garantizando que dos corridas del mismo seed
+   producen el mismo bloque MARKET CONTEXT.
+3. **Sin llamada API en tiempo real**: el CSV local se refresca
+   una vez por sesión de trabajo mediante
+   `scripts/download_prices.py`; las corridas nunca llaman a
+   CoinGecko live, evitando dependencia de red + rate limits.
+
+**Alternativa considerada**: hardcodear precios en el prompt.
+Descartada porque los precios cripto derivan de mercado y hardcodear
+introduciría un artefacto no verosímil (un atacante real razona sobre
+precios de hoy, no de una fecha arbitraria).
+
+## 7.6 Wrapper LLM abstracto (provider-agnostic)
+
+**Decisión**: encapsular el SDK de Anthropic tras una interfaz
+`complete(prompt, system, model, max_tokens) -> LLMResult` en
+`src/aml/attackers/llm_client.py`.
+
+**Motivación**:
+1. **Uniformar cálculo de coste**: los precios por millón de tokens
+   input/output difieren en dos órdenes de magnitud entre Haiku,
+   Sonnet y Opus. El SDK crudo devuelve counts; el wrapper convierte
+   a USD.
+2. **Sustituir proveedor sin tocar el resto del código**: si se
+   quisiera evaluar GPT-4 o Gemini en trabajo futuro, bastaría con
+   reimplementar `complete` sobre el SDK correspondiente.
+3. **Inyectar `MockLLMClient` en tests**: los tests unitarios no
+   consumen créditos API. Corren en ≈ 10 segundos sin depender
+   de la red.
+
+## 7.7 Particionado federado hash-based con semilla determinista
+
+**Decisión**: `partial_visibility_split(combined, num_exchanges=3,
+seed=42)` asigna cada dirección a exactamente un exchange
+mediante `hash(str(v)) % 3`.
+
+**Motivación**:
+1. **Realismo regulatorio**: replica la asimetría post-MiCA descrita
+   en el Capítulo 2 —cada exchange observa sólo transacciones
+   incidentes en sus usuarios KYC, sin acceso a las tablas KYC de
+   competidores—.
+2. **Determinismo**: la misma dirección siempre cae en el mismo
+   exchange sea cual sea la corrida, permitiendo comparar detectores
+   entrenados independientemente.
+3. **n = 3 balance específico**: n = 1 colapsa al escenario
+   centralizado no federado; n ≥ 10 produce subgrafos
+   demasiado ralos para entrenar el GCN local. Con n = 3 cada
+   exchange observa aproximadamente el 33 % de las direcciones
+   y ≈ 55 % de las aristas.
+
+**Alternativa considerada**: asignación basada en volumen (exchanges
+proporcionalmente al *market share* real). Descartada por
+introducir variables confundidoras: el detector tendría más señal
+en el exchange grande solo por tamaño.
+
+## 7.8 LOCO-CV como métrica primaria vs split 80/20
+
+**Decisión**: reportar Leave-One-Campaign-Out cross-validation
+(LOCO-CV) como métrica principal de detección binaria, y limitar
+el split 80/20 a rol de referencia comparativa con la literatura
+previa.
+
+**Motivación**:
+1. **Los benchmarks académicos anteriores sobreestiman**: la
+   literatura AML reporta sistemáticamente F1 > 0,90 sobre
+   datasets con menos de 30 actor clusters. Nuestros propios
+   experimentos muestran que sobre la simulación propia el GCN cae
+   de F1 = 0,97 (split 80/20) a F1 = 0,42 (LOCO-CV) —
+   ΔF1 = -0,55 absoluto—.
+2. **LOCO mide generalización real**: cada campaña C_j actúa como
+   test set con las demás como training, evitando la memorización a
+   nivel de campaña.
+3. **Sobre EthereumHeist real** la degradación es menor
+   (ΔF1 = -0,31) pero sigue siendo significativa y valida el
+   patrón cross-dataset.
+
+**Auditoría publicable**: los cuatro chequeos del script
+`scripts/audit_f1_memorization.py` (solapamiento train/test,
+Cohen's d por feature, LOCO completo, baseline mixer-only) son el
+argumento cuantitativo detrás del *finding* metodológico principal
+del §8.10 del Capítulo 8.
+
+## 7.9 Threshold calibrado (0,6) para Louvain
+
+**Decisión operativa**: el defensor de producción se despliega con
+Louvain (baseline no supervisado) con threshold de clasificación
+0,6 en lugar del 0,5 por defecto.
+
+**Motivación empírica** (§8.9.6 del Capítulo 8):
+1. **Sobre background Sepolia real** (1 779 direcciones seed 100,
+   7 319 seed 500), el threshold 0,5 produce FPR = 99,78 %
+   / 99,95 % respectivamente —completamente inservible—.
+2. **Subir a 0,6 baja el FPR a 0,06 %** manteniendo
+   recall > 92 %. La distribución de scores Louvain es
+   esencialmente binaria: casi todas las addresses reciben 0,5
+   (comunidad no distinguible) o 1,0 (comunidad distintiva);
+   subir el umbral elimina la masa masiva de 0,5 y preserva
+   los atacantes.
+3. **GCN no admite fix comparable**: ni threshold sweep, ni retrain
+   con background, ni más épocas bajan el FPR a < 1 % con
+   recall razonable. Rescate requiere trabajo mayor reservado a
+   §10.4.
+
+**Alternativa descartada**: ensemble Louvain(0,6) AND
+GCN(0,5). Reproduce Louvain(0,6) sin ganancia, con complejidad
+operativa añadida.
+
+## 7.10 Persistencia inmediata de mixer notes (post-2026-08-18)
+
+**Decisión**: el `ToolDispatcher` acepta un parámetro `notes_file:
+Path | None` que, cuando está definido, persiste cada `deposit_note`
+a un fichero JSONL en el instante en que el `receipt` del deposit
+se confirma.
+
+**Motivación empírica** (§8.9.5 seed 500 del Capítulo 8):
+- Sobre Sepolia, 9/10 retiradas del mezclador fallaron por
+  desincronización de raíz Merkle bajo latencia 12s / rate limits
+  del RPC.
+- El sub-agente Layering perdió el `halt` después de los errores
+  repetidos.
+- Las 9 notes correspondientes vivían sólo en el contexto
+  conversacional del sub-agente y desaparecieron con él, dejando
+  $16 870 USD locked permanentemente en el contrato.
+- La persistencia inmediata garantiza que cualquier fallo posterior
+  (halt del sub-agente, crash del runner, eviction de contexto)
+  no puede destruir la información necesaria para reclamar el ETH.
+
+El `scripts/mixer_recover.py` complementario lee el JSONL y ejecuta
+`mixer_withdraw` sobre las notes cuyo nullifier no está aún marcado
+como *spent* on-chain.
+
+## 7.11 Reverse swap USDT → ETH en el sweep operativo
+
+**Decisión**: `scripts/sweep_sepolia.py` incluye una fase opcional
+final (por defecto activa) en la que el deployer, tras acumular
+USDT residual de todas las clean exits swept, aprueba al pool
+`MockUniswapV2Pool` y ejecuta `swapUSDTForETH` para convertir el
+stablecoin de vuelta a ETH.
+
+**Motivación**:
+1. Antes del fix, cada corrida perdía ≈ 1,5 ETH por corrida
+   en el pool (USDT que quedaba en las clean exits, recuperable
+   como USDT pero no como ETH).
+2. Con el reverse swap, la pérdida real cae a ≈ 0,07 ETH
+   (gas + 0,3 % fee del pool + 2 % slippage máximo).
+3. Multiplica por ≈ 20× el número de corridas Sepolia
+   posibles antes de necesitar re-faucet.
+
+## 7.12 Resumen — el hilo conductor
+
+Las once decisiones anteriores comparten un patrón subyacente: cada
+una emerge de un *fallo empírico* concreto (memorización 80/20 en
+seed 200; contaminación deployer en seed 100 pre-fix; bucle
+patológico burners seed 306; colapso FPR sobre Sepolia real seed
+100+500; pérdida de 9 ETH seed 500), no de un requisito abstracto
+*ex ante*. El diseño del sistema es *evidence-driven* —cada
+constante *locked*, cada invariante del dispatcher, cada umbral
+calibrado tiene su corrida experimental de referencia—. Este es el
+patrón metodológico que el §8.10 del Capítulo 8 sistematiza como
+contribución independiente del proyecto.
+
+---
 
 ## 7.B Conclusiones, findings y trabajo futuro
 

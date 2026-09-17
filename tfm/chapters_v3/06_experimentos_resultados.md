@@ -426,6 +426,8 @@ no puede producir.
 
 ![Figura 2. Flujo end-to-end de una campaña attacker + detección defensor. Ejemplo: seed 803 defi-exploit sobre Sepolia real, con métricas empíricas obtenidas.](tfm/figures/end_to_end_flow.png)
 
+![Figura 3. F1 binary por dataset — comparación entre Louvain baseline (Phase 1), GCN entrenado supervisado, y Louvain con hard-negative training (§8.9.38). El F1=0.928 sobre EthereumHeist real es el headline conservador reportado en abstract y defensa.](tfm/figures/f1_by_dataset.png)
+
 ## 8.7.bis Comparación cuantitativa con el estado del arte (SOTA)
 
 Para contextualizar nuestros resultados frente a la literatura previa
@@ -691,6 +693,8 @@ enrichment son cheap pero *unreliable*. La granularidad de output
 del LLM parece insensible a estas intervenciones. La ruta efectiva
 es post-procesamiento code-level (P1-71, §8.9.G).
 
+![Figura 4. Barrido de max_clusters en P1-71 post-hoc merge sobre los 6 datasets (5 sintéticos + EthereumHeist real). Óptimo max_c=3 para sintéticos (círculos verdes), max_c=8 para EthereumHeist real — refleja la diferencia estructural entre los datasets.](tfm/figures/ari_sweep.png)
+
 ### 8.9.G P1-71 post-hoc cluster merge — primera intervención positiva
 
 **Algoritmo** (implementado en `src/aml/detectors/multi_agent.py:_merge_clusters_by_centroid`):
@@ -881,6 +885,9 @@ adicionales.
 
 Los resultados de §8.5 permiten formalizar tres *findings*
 metodológicos publicables independientemente del sistema propuesto.
+
+![Figura 5. Auditoría metodológica de memorización — GCN colapsa bajo LOCO-CV (ΔF1 = −0.55 sobre simulación, −0.31 sobre EthereumHeist real), evidencia característica de memorización a nivel de campaña. Louvain (no supervisado) mantiene su F1 en ambos regímenes por no tener parámetros entrenables susceptibles de memorizar identidades. Finding metodológico publishable independiente del sistema propuesto.](tfm/figures/memorization_audit.png)
+
 
 **Finding 1 — Diferencial GCN estándar vs LOCO sobre simulación**.
 Sobre el *dataset* simulado, el paso de *split* 80/20 a LOCO-CV
