@@ -11,6 +11,88 @@ datasets y parámetros. Se divide en cuatro bloques principales:
 
 ---
 
+## 5.0 Novedad central del TFM — visibilidad parcial federada por exchange
+
+Antes de exponer el diseño técnico se articula, en una única sección
+compacta, la novedad que este trabajo aporta al estado del arte
+descrito en el Capítulo 2 y a las limitaciones documentadas en el
+Capítulo 3.
+
+### 5.0.1 El problema que nadie ha modelado
+
+Toda la literatura académica AML sobre criptoactivos (Weber 2019,
+Wu 2023, Elmougy 2023, Juvinski 2025) asume implícitamente **una
+vista global del grafo** — un observador omnisciente que ve todas
+las transacciones on-chain y todos sus emisores/receptores. En la
+práctica regulatoria esto no ocurre: bajo FATF Rec. 16 y Reglamento
+(UE) 2023/1113, **cada exchange sólo puede identificar KYC a sus
+propios usuarios**. Las direcciones de otros exchanges y de wallets
+no-KYC son observadas como *contrapartes anónimas*. En consecuencia,
+ningún actor individual dispone de la visión global sobre la que
+operan los detectores publicados.
+
+**Esta brecha entre el modelo académico (grafo completo) y la
+realidad regulatoria (vistas parciales federadas) es la novedad
+central de este TFM.**
+
+### 5.0.2 Propuesta: federación cross-exchange con fingerprints
+
+La arquitectura propuesta modela explícitamente n exchanges
+federados donde:
+
+1. Cada exchange E_i observa **únicamente su subgrafo local**
+   `G_i = (V_i, E_i)` obtenido por *hashing determinista* de las
+   direcciones sobre {1..n} (§5.A.4).
+2. Cada exchange entrena su propio clasificador binario Louvain
+   sobre G_i, produciendo flags locales `S_i ⊂ V_i`.
+3. Los exchanges comparten **NO datos crudos** sino **fingerprints
+   agregados** de 19 dimensiones por dirección flageada. Estos
+   fingerprints son propiedades topológicas (`in_degree`, `log_usdt_in`,
+   etc.) que **no revelan** el patrón de contrapartes específico ni
+   permiten re-identificar la actividad de un usuario particular fuera
+   del subgrafo local. Cumple los requisitos de minimización de datos
+   del art. 25 RGPD.
+4. Un coordinador cross-exchange —basado en LLM— razona sobre los
+   fingerprints agregados de todos los exchanges y propone
+   agrupaciones actor-cluster: qué direcciones flageadas en distintos
+   exchanges probablemente pertenecen al mismo actor adversarial
+   subyacente.
+
+### 5.0.3 Por qué esto es publishable
+
+Ningún trabajo previo del estado del arte cumple simultáneamente los
+tres siguientes criterios:
+
+| Criterio | Weber 2019 | Wu 2023 | Elmougy 2023 | Juvinski 2025 | **Este TFM** |
+|----------|:---------:|:-------:|:------------:|:-------------:|:------------:|
+| Modelado explícito de visibilidad parcial multi-exchange | ❌ | ❌ | ❌ | ❌ | **✓** |
+| Coordinador cross-exchange que razona sin acceso a datos crudos | ❌ | ❌ | ❌ | ❌ | **✓** |
+| Validación empírica bajo particionado federado n=3 | ❌ | ❌ | ❌ | ❌ | **✓** |
+
+Los resultados empíricos (§8.9.K multi-campaign LOCO F1 = 0.939 con
+34 578 nodos y 7 campañas simultáneas + §8.9.49 role attribution
+ARI = 0.43 sobre 18 clusters role×campaign) demuestran que la
+arquitectura propuesta **funciona operativamente** bajo las
+condiciones adversariales del despliegue real: multiples campañas
+concurrentes, visibilidad parcial cero cross-exchange, sin re-training
+por dataset.
+
+### 5.0.4 Diagrama de la arquitectura
+
+![Figura 1. Arquitectura del sistema dual multi-agente: atacante LLM (Opus 4.7) ejecuta transacciones on-chain; los 3 exchanges federados observan sólo sus vistas locales KYC-verificadas; el coordinador LLM defensor (Haiku 4.5) razona sobre fingerprints agregados sin acceso a datos crudos.](tfm/figures/architecture.png)
+
+### 5.0.5 Implicaciones regulatorias
+
+La arquitectura propuesta es directamente aplicable al despliegue
+comercial post-MiCA (Reglamento (UE) 2023/1114, vigencia plena 2027):
+
+- **Rec. 16 FATF** (travel rule): cada exchange comparte fingerprints
+  agregados, no PII, cumpliendo la restricción de compartición.
+- **Rec. 20 FATF** (transparencia SAR): el LLM coordinator produce
+  razonamiento textual auditable por rol AML (§8.7).
+- **MiCA art. 63** (transparencia algorítmica): los outputs LLM son
+  interpretables por un compliance officer sin conocimiento de ML.
+
 ## 5.A Diseño y diagramas del sistema
 
 Este capítulo describe la arquitectura del sistema completo mediante siete

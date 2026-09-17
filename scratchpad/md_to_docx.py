@@ -43,6 +43,7 @@ CHAPTER_ORDER = [
     "05_diseno_dataset.md",
     "06_experimentos_resultados.md",
     "07_visibilidad_conclusiones.md",
+    "08_bibliografia.md",
     "A_anexos.md",
 ]
 
@@ -286,6 +287,31 @@ def _render_markdown(doc: Document, md_text: str) -> None:
                 rows.append(_parse_table_row(lines[i].strip()))
                 i += 1
             _add_table(doc, rows)
+            continue
+
+        # Image: ![alt](path) on its own line
+        m_img = re.match(r"^!\[([^\]]*)\]\(([^)]+)\)\s*$", stripped)
+        if m_img:
+            from docx.shared import Inches
+            alt_text = m_img.group(1)
+            img_path = m_img.group(2)
+            # Resolve path relative to repo root
+            if not Path(img_path).is_absolute():
+                img_path = str(REPO / img_path)
+            try:
+                para = doc.add_paragraph()
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                run = para.add_run()
+                run.add_picture(img_path, width=Inches(6.0))
+                if alt_text:
+                    cap = doc.add_paragraph()
+                    cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    cap_run = cap.add_run(alt_text)
+                    cap_run.italic = True
+                    cap_run.font.size = Pt(9)
+            except Exception as e:
+                doc.add_paragraph(f"[Imagen no disponible: {img_path} — {e}]")
+            i += 1
             continue
 
         # Headings
