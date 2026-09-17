@@ -1,64 +1,33 @@
-**UNIVERSIDAD CARLOS III DE MADRID**
+**Máster Universitario en Tecnologías del Sector Financiero: Fintech**
 
-**Escuela Politécnica Superior**
+**2025-2026**
 
-**Máster Universitario en Tecnologías del Sector Financiero (FinTech)**
+**Trabajo Fin de Máster**
 
----
+# "Detección adversarial multi-agente de blanqueo de capitales en Ethereum: simulación con agentes LLM y detección colaborativa federada bajo visibilidad parcial"
 
-## TRABAJO FIN DE MÁSTER
+**Autor**
 
----
+Saleh Sinawi
 
-# Detección adversarial multi-agente de blanqueo de capitales en Ethereum
+**Tutor**
 
-## Simulación con agentes LLM y detección colaborativa federada bajo visibilidad parcial
+José María Alonso Cebrián
 
----
-
-**Autor**: Saleh Sinawi
-
-**Tutor**: José María "Chema" Alonso Cebrián
-
-**Departamento**: Informática
-
-**Curso académico**: 2025-2026
-
-**Convocatoria**: Septiembre 2026
-
-**Madrid, España**
+Septiembre 2026
 
 ---
 
-*El presente documento constituye el Trabajo Fin de Máster elaborado
-por el/la autor/a citado/a bajo la supervisión de su tutor/a
-académico, cumpliendo con la Normativa Propia del TFM del Máster
-Universitario en Tecnologías del Sector Financiero (FinTech) de la
-Universidad Carlos III de Madrid, actualizada para el curso
-2024-2025, y con las Directrices para la Organización y Evaluación
-de las asignaturas de Trabajo Fin de Estudios aprobadas por el
-Consejo de Gobierno de la UC3M el 14 de noviembre de 2019.*
+**DETECCIÓN DEL PLAGIO**
+
+*La Universidad utiliza el programa Turnitin Feedback Studio para
+comparar la originalidad del trabajo entregado por cada estudiante
+con millones de recursos electrónicos y detecta aquellas partes del
+texto copiadas y pegadas. Copiar o plagiar en un TFM es considerado
+una Falta Grave, y puede conllevar la expulsión definitiva de la
+Universidad.*
 
 ---
 
-## Agradecimientos
-
-A mi tutor Chema, por la orientación técnica y la validación
-arquitectónica del enfoque dual multi-agente en las fases iniciales,
-así como por el escrutinio crítico en las iteraciones tardías
-(P1-42 en adelante) que refinaron el diseño hacia su versión final.
-
-A la Universidad Carlos III de Madrid y al programa del Máster en
-Tecnologías del Sector Financiero (FinTech), por los conocimientos
-y competencias adquiridos durante el máster, aplicados de forma
-directa en cada capítulo de este trabajo.
-
-A la comunidad open-source detrás de las herramientas empleadas
-—Foundry, snarkjs, PyTorch Geometric, NetworkX, Anthropic Claude—
-sin cuya disponibilidad este proyecto habría requerido un
-presupuesto órdenes de magnitud mayor.
-
-A mi familia, por el apoyo sostenido durante los cinco meses
-intensivos de desarrollo.
-
----
+*Esta obra se encuentra sujeta a la licencia Creative Commons
+Reconocimiento — No Comercial — Sin Obra Derivada.*

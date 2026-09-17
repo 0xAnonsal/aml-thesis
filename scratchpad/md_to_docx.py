@@ -127,20 +127,41 @@ def _add_seq_field(paragraph, seq_name: str):
 
 
 def _configure_styles(doc: Document) -> None:
-    """Base font sizes + code style + heading tweaks."""
+    """Compact academic styling — save vertical space."""
     normal = doc.styles["Normal"]
     normal.font.name = "Cambria"
     normal.font.size = Pt(11)
+    normal.paragraph_format.space_before = Pt(0)
+    normal.paragraph_format.space_after = Pt(3)
+    normal.paragraph_format.line_spacing = 1.15
 
-    # Code (character-level via a paragraph style)
+    # Reduce heading spacing
+    for level in range(1, 5):
+        try:
+            hstyle = doc.styles[f"Heading {level}"]
+            hstyle.paragraph_format.space_before = Pt(8 if level == 1 else 6)
+            hstyle.paragraph_format.space_after = Pt(3)
+            hstyle.paragraph_format.keep_with_next = True
+        except KeyError:
+            pass
+
+    # Reduce list spacing
+    for name in ("List Bullet", "List Number"):
+        try:
+            s = doc.styles[name]
+            s.paragraph_format.space_before = Pt(0)
+            s.paragraph_format.space_after = Pt(2)
+        except KeyError:
+            pass
+
     styles = doc.styles
     if "CodeBlock" not in [s.name for s in styles]:
         code = styles.add_style("CodeBlock", WD_STYLE_TYPE.PARAGRAPH)
         code.font.name = "Consolas"
         code.font.size = Pt(9)
         code.paragraph_format.left_indent = Cm(0.5)
-        code.paragraph_format.space_before = Pt(4)
-        code.paragraph_format.space_after = Pt(4)
+        code.paragraph_format.space_before = Pt(2)
+        code.paragraph_format.space_after = Pt(2)
 
 
 def _add_cover(doc: Document) -> None:
@@ -444,10 +465,17 @@ def _render_markdown(doc: Document, md_text: str) -> None:
             i += 1
             continue
 
-        # Blank line
+        # Blank line — collapse consecutive blanks into a single small spacer.
         if not stripped:
-            doc.add_paragraph()
-            i += 1
+            # Skip all consecutive blank lines
+            j = i
+            while j < len(lines) and not lines[j].strip():
+                j += 1
+            # Add ONE tiny spacer only if the surrounding content warrants it
+            # (i.e. not immediately after a heading / table / image caption).
+            # Just skip the blank lines entirely — Word paragraphs already have
+            # natural space_after that suffices.
+            i = j
             continue
 
         # Paragraph — gather until blank or block delimiter

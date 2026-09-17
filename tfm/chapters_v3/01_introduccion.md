@@ -71,55 +71,54 @@ FATF, Louvain, actor clustering.
 
 ## 1.1 Contexto y motivación
 
-El blanqueo de capitales en criptoactivos ha dejado de ser un problema periférico
-para convertirse en un vector sistémico del crimen financiero global. Según el
-informe *Crypto Crime Trends 2025* de Chainalysis, el volumen de fondos
-identificados como procedentes de actividad ilícita superó los 40 000 millones
-de dólares en 2024, con una concentración creciente en la red Ethereum: los
-*stablecoins* USDT y USDC —ambos contratos ERC-20 sobre Ethereum— acumularon
-más del 84 % del volumen de fraude cripto verificado en el ejercicio 2025.
-Este desplazamiento desde Bitcoin hacia Ethereum modifica de raíz el problema
-de detección: la unidad de análisis deja de ser una UTXO y pasa a ser una
-cuenta con estado; los flujos ilícitos se enmascaran mediante interacciones
-con contratos inteligentes de propósito general (intercambios descentralizados,
-puentes cross-chain, mezcladores basados en pruebas de conocimiento cero); y
-el rastro on-chain se fragmenta entre múltiples plataformas de intercambio
-regulado (*exchanges*) que, por diseño regulatorio, sólo observan una vista
-parcial del grafo global.
+El blanqueo de capitales en criptoactivos ha dejado de ser un problema
+periférico para convertirse en un vector sistémico del crimen financiero
+global. Según el informe *Crypto Crime Trends 2025* de Chainalysis [27],
+el volumen de fondos identificados como procedentes de actividad ilícita
+superó los 40 000 millones de dólares en 2024, con una concentración
+creciente en la red Ethereum: los *stablecoins* USDT y USDC acumularon más
+del 84 % del volumen de fraude cripto verificado en el ejercicio 2025.
+Este desplazamiento desde Bitcoin hacia Ethereum modifica de raíz el
+problema de detección. La unidad de análisis deja de ser una UTXO y pasa a
+ser una cuenta con estado; los flujos ilícitos se enmascaran mediante
+interacciones con contratos inteligentes de propósito general —intercambios
+descentralizados, puentes cross-chain y mezcladores basados en pruebas de
+conocimiento cero— y el rastro on-chain se fragmenta entre múltiples
+plataformas de intercambio regulado (*exchanges*) que, por diseño
+regulatorio, sólo observan una vista parcial del grafo global.
 
 Esta última restricción es la más limitante en la práctica y, sin embargo,
 está prácticamente ausente de la literatura académica reciente. Un exchange
-sometido a la normativa KYC/AML —FATF Recommendation 16 sobre la *travel rule*,
-Reglamento (UE) 2023/1113, MiCA (Reglamento (UE) 2023/1114)— sólo puede
-etiquetar como *entidad conocida* aquellas direcciones que ha verificado
-directamente. El resto del grafo, incluyendo las direcciones de otros
-exchanges, sólo es observable como *contrapartes anónimas*. En consecuencia,
-ningún actor individual dispone de la visión global que asumen implícitamente
-los detectores publicados en los principales *benchmarks* académicos
-(Elliptic, EthereumHeist, OpenAML). Este trabajo aborda esa brecha
-proponiendo una arquitectura donde cada exchange entrena su propio clasificador
-sobre su vista local, y un coordinador cross-exchange —basado en un modelo de
-lenguaje grande (LLM)— razona sobre los *fingerprints* agregados para inferir
-qué direcciones flageadas en distintos exchanges pertenecen al mismo actor
-adversarial subyacente.
+sometido a la normativa KYC/AML —FATF Recomendación 16 sobre la *travel
+rule* [6], Reglamento (UE) 2023/1113 [8], MiCA (Reglamento (UE)
+2023/1114) [7]— sólo puede etiquetar como *entidad conocida* aquellas
+direcciones que ha verificado directamente. El resto del grafo, incluyendo
+las direcciones de otros exchanges, sólo es observable como *contrapartes
+anónimas*. Ningún actor individual dispone entonces de la visión global
+que asumen implícitamente los detectores publicados en los principales
+*benchmarks* académicos [1][2][3]. En este TFM abordamos esa brecha
+proponiendo una arquitectura donde cada exchange entrena su propio
+clasificador sobre su vista local y un coordinador cross-exchange, basado
+en un modelo de lenguaje grande (LLM), razona sobre los *fingerprints*
+agregados para inferir qué direcciones flageadas en distintos exchanges
+pertenecen al mismo actor adversarial subyacente.
 
 Paralelamente, el estado del arte en simulación adversarial de blanqueo
 tampoco recoge la sofisticación reciente de los actores reales. Los datasets
-sintéticos disponibles —AMLSim (IBM 2020), AMLWorld (Altman, Blanuša,
-Egressy et al. NeurIPS 2023), OpenAML (FINOS 2025)— generan campañas
-de *smurfing* clásico o
-patrones geométricos de *fan-out/fan-in*, pero no simulan el uso combinado
-de mezcladores ZK (Tornado Cash), puentes cross-chain, intercambios
-descentralizados con *slippage* real, y estructuración por debajo del umbral
-de reporte CTR. Este trabajo propone un simulador ofensivo basado en agentes
-LLM que ejecuta cinco de las ocho técnicas de blanqueo cripto documentadas
-por FATF en el informe "Virtual Assets Red Flag Indicators" (2021) —
-concretamente mezcladores, DEX, puentes cross-chain, structuring sub-CTR y
-rapid pass-through wallets, dejando fuera privacy coins, jurisdicciones no
-cooperativas y OTC brokers por no ser verificables on-chain sin datos
-externos — mediante herramientas on-chain reales sobre una copia local de
-la red Ethereum (Foundry/Anvil), y valida el sistema completo sobre la
-*testnet* pública Sepolia con verificabilidad on-chain vía Etherscan.
+sintéticos disponibles —AMLSim [4], OpenAML [5]— generan campañas de
+*smurfing* clásico o patrones geométricos de *fan-out/fan-in*, pero no
+simulan el uso combinado de mezcladores ZK (Tornado Cash) [20], puentes
+cross-chain, intercambios descentralizados con *slippage* real y
+estructuración por debajo del umbral de reporte CTR. En este TFM
+proponemos un simulador ofensivo basado en agentes LLM que ejecuta cinco
+de las ocho técnicas de blanqueo cripto documentadas por FATF en el
+informe *Virtual Assets Red Flag Indicators* [6] —mezcladores, DEX,
+puentes cross-chain, structuring sub-CTR y rapid pass-through wallets,
+dejando fuera privacy coins, jurisdicciones no cooperativas y OTC brokers
+por no ser verificables on-chain sin datos externos— mediante herramientas
+on-chain reales sobre una copia local de la red Ethereum (Foundry/Anvil)
+[26] y validamos el sistema completo sobre la *testnet* pública Sepolia
+con verificabilidad on-chain vía Etherscan.
 
 ## 1.2 Problema
 
@@ -139,7 +138,7 @@ de las direcciones que él mismo ha verificado por KYC. Ninguna de las
 plataformas ve el grafo completo, y ninguna comparte sus tablas KYC
 con las demás.
 
-Sobre este planteamiento el trabajo aborda dos problemas encadenados:
+Sobre este planteamiento abordamos dos problemas encadenados:
 
 1. **Detección binaria local**. Cada *exchange* entrena su propio
    clasificador con la información que sí puede ver dentro de su
@@ -161,41 +160,40 @@ la arista que las conecta.
 
 ## 1.3 Contribuciones
 
-Este trabajo realiza cuatro aportaciones principales:
+Realizamos cuatro aportaciones principales.
 
-1. **Arquitectura simétrica LLM-vs-LLM**. Se propone un sistema donde tanto
-   el atacante como el defensor están orquestados por agentes LLM. El
-   atacante utiliza un coordinador Opus 4.7 con sub-agentes especializados
-   (Placement, Layering, Integration) basados en Sonnet 4.6, cada uno con
-   acceso a un catálogo de herramientas on-chain reales. El defensor replica
-   la asimetría: clasificadores GCN locales por exchange (rol *ML filter*)
-   más un coordinador Sonnet 4.6 cross-exchange (rol *LLM agent*) que
-   razona sobre los fingerprints agregados para inferir clusters de actores.
-   Hasta donde el autor conoce, esta simetría LLM-vs-LLM es novedosa en la
-   literatura AML cripto.
+**Arquitectura simétrica LLM-vs-LLM**. Proponemos un sistema donde tanto
+el atacante como el defensor están orquestados por agentes LLM. El
+atacante utiliza un coordinador Opus 4.7 con sub-agentes especializados
+(Placement, Layering, Integration) basados en Sonnet 4.6, cada uno con
+acceso a un catálogo de herramientas on-chain reales. El defensor replica
+la asimetría: clasificadores GCN locales por exchange (rol *ML filter*)
+más un coordinador Sonnet 4.6 cross-exchange (rol *LLM agent*) que razona
+sobre los fingerprints agregados para inferir clusters de actores. Hasta
+donde tenemos constancia, esta simetría LLM-vs-LLM es novedosa en la
+literatura AML cripto.
 
-2. **Evaluación estricta bajo visibilidad parcial federada**. A diferencia de
-   los detectores publicados sobre Elliptic++ (Elmougy y Liu, KDD 2023)
-   o AMLWorld (Altman, Blanuša, Egressy et al. NeurIPS 2023) —que asumen
-   implícitamente una vista global del
-   grafo— este trabajo evalúa cada componente bajo particiones aleatorias
-   del grafo en n=3 exchanges, midiendo separadamente el rendimiento
-   *intra-exchange* (F1 sobre etiquetas binarias locales) y el rendimiento
-   *cross-exchange* (ARI sobre atribución de actor clusters).
+**Evaluación estricta bajo visibilidad parcial federada**. A diferencia
+de los detectores publicados sobre Elliptic++ [2] o AMLWorld [4], que
+asumen implícitamente una vista global del grafo, evaluamos cada
+componente bajo particiones del grafo en n=3 exchanges, midiendo
+separadamente el rendimiento *intra-exchange* (F1 sobre etiquetas binarias
+locales) y el rendimiento *cross-exchange* (ARI sobre atribución de actor
+clusters).
 
-3. **Auditoría metodológica de la memorización en detectores AML**. Se
-   identifica y documenta un artefacto experimental común en la literatura:
-   los detectores GCN sobre datasets pequeños (< 30 campañas) tienden a
-   memorizar en lugar de generalizar, produciendo F1 > 0,95 en validación
-   estándar pero cayendo a F1 ≈ 0,42 bajo *leave-one-campaign-out*
-   cross-validation. Este trabajo aplica LOCO-CV a los tres detectores
-   (Louvain, GCN, MultiAgent-LLM) y reporta los diferenciales.
+**Auditoría metodológica de la memorización en detectores AML**.
+Identificamos y documentamos un artefacto experimental común en la
+literatura: los detectores GCN sobre datasets pequeños (< 30 campañas)
+tienden a memorizar en lugar de generalizar, produciendo F1 > 0.95 en
+validación estándar pero cayendo a F1 ≈ 0.42 bajo *leave-one-campaign-out*
+cross-validation. Aplicamos LOCO-CV a los tres detectores (Louvain, GCN,
+MultiAgent-LLM) y reportamos los diferenciales.
 
-4. **Validación externa on-chain**. El sistema completo se despliega sobre
-   Sepolia con seis contratos verificables (MockUSDT, MockUniswapV2Pool,
-   MockTornado con verificador Groth16, MockBridge, MiMCSponge, Verifier),
-   permitiendo que un lector independiente reproduzca las campañas y verifique
-   los hashes de transacción en Etherscan.
+**Validación externa on-chain**. Desplegamos el sistema completo sobre
+Sepolia con seis contratos verificables (MockUSDT, MockUniswapV2Pool,
+MockTornado con verificador Groth16, MockBridge, MiMCSponge, Verifier),
+permitiendo que un lector independiente reproduzca las campañas y
+verifique los hashes de transacción en Etherscan.
 
 ## 1.4 Objetivos y requisitos del proyecto
 
