@@ -163,43 +163,6 @@ marcadas por *exchanges* distintos deben acabar en el mismo *cluster*
 si pertenecen al mismo actor, aunque ningún detector local haya visto
 la arista que las conecta.
 
-## 1.3 Contribuciones
-
-En este trabajo se realizan cuatro aportaciones principales.
-
-**Arquitectura simétrica LLM-vs-LLM**. Se propone un sistema en el que
-tanto el atacante como el defensor están orquestados por agentes LLM. El
-atacante utiliza un coordinador Opus 4.7 con sub-agentes especializados
-(Placement, Layering, Integration) basados en Sonnet 4.6, cada uno con
-acceso a un catálogo de herramientas on-chain reales. El defensor replica
-la asimetría con clasificadores GCN locales por exchange (rol *ML
-filter*) más un coordinador Sonnet 4.6 cross-exchange (rol *LLM agent*)
-que razona sobre los fingerprints agregados para inferir clusters de
-actores. Esta simetría LLM-vs-LLM constituye una aportación novedosa
-respecto a la literatura AML cripto reciente.
-
-**Evaluación estricta bajo visibilidad parcial federada**. A diferencia
-de los detectores publicados sobre Elliptic++ [2] o AMLWorld [4], que
-asumen implícitamente una vista global del grafo, en este trabajo se
-evalúa cada componente bajo particiones del grafo en n=3 exchanges,
-midiendo separadamente el rendimiento *intra-exchange* (F1 sobre
-etiquetas binarias locales) y el rendimiento *cross-exchange* (ARI sobre
-atribución de actor clusters).
-
-**Auditoría metodológica de la memorización en detectores AML**. Se
-identifica y documenta un artefacto experimental común en la literatura:
-los detectores GCN sobre datasets pequeños (< 30 campañas) tienden a
-memorizar en lugar de generalizar, produciendo F1 > 0.95 en validación
-estándar pero cayendo a F1 ≈ 0.42 bajo *leave-one-campaign-out*
-cross-validation. Se aplica LOCO-CV a los tres detectores (Louvain, GCN,
-MultiAgent-LLM) y se reportan los diferenciales.
-
-**Validación externa on-chain**. El sistema completo se despliega sobre
-Sepolia con seis contratos verificables (MockUSDT, MockUniswapV2Pool,
-MockTornado con verificador Groth16, MockBridge, MiMCSponge, Verifier),
-lo que permite que un lector independiente reproduzca las campañas y
-verifique los hashes de transacción en Etherscan.
-
 ## 1.4 Objetivos y requisitos del proyecto
 
 ### 1.4.1 Objetivo general
@@ -256,27 +219,6 @@ MiCA, Reglamento (UE) 2023/1113).
 | RNF4 | Código publicado bajo licencia open source | MIT en `github.com/0xAnonsal/aml-thesis` |
 | RNF5 | Contratos on-chain verificables por auditor externo | 6 contratos Sepolia con source verified en Etherscan |
 | RNF6 | Compliance con normativa uso IA generativa UC3M | Declaración en Anexo H |
-
-## 1.5 Alcance y limitaciones
-
-Este trabajo asume explícitamente las siguientes restricciones:
-
-- **Cadena única (Ethereum)**. Las tipologías cross-chain se simulan mediante
-  un `MockBridge` local; no se ejecutan puentes reales a Tron, Solana ni
-  Bitcoin. Un trabajo futuro extendería el detector a grafos heterogéneos
-  multi-cadena.
-- **Tokens únicos (USDT/ETH)**. El simulador soporta un único ERC-20
-  (`MockUSDT`) y el activo nativo. No se modelan agrupamientos multi-token
-  ni farm/yield laundering.
-- **Sin memoria histórica del defensor**. Cada corrida se evalúa
-  independientemente. Un defensor productivo mantendría estado entre
-  bloques y aprendería de flags anteriores; ese componente está fuera del
-  alcance del TFM.
-- **LLMs propietarios (Anthropic Claude)**. Los agentes están instanciados
-  sobre la familia Claude (Opus 4.7, Sonnet 4.6, Haiku 4.5). El código
-  abstrae el proveedor mediante `aml.attackers.llm_client.LLMClient`, pero
-  la reproducción exacta requiere una API key comercial. Se documentan los
-  costes reales de cada experimento.
 
 ## 1.6 Marco regulador
 

@@ -321,36 +321,60 @@ futuro:
   caro. Configuración Pareto-óptima confirmada: **Haiku 4.5 + P1-71 +
   P1-73**. Ver §8.9.I.
 
-### 10.4.28 Síntesis final — control de LLM output tras 7 intervenciones
+### 10.4.28 Síntesis del control de output del LLM
 
-Cerrando el arco de experimentos sobre cómo influir en la
-granularidad de clustering del LLM defensor, la evidencia acumulada
-en el TFM soporta la siguiente jerarquía de intervenciones:
-
-| Nivel de intervención           | Ejemplo               | Coste   | Efectividad         | Determinismo |
-|---------------------------------|-----------------------|--------:|:-------------------:|:------------:|
-| Prompt hint (soft)              | P1-55/56/70           | ~$0     | ❌ Nula              | ❌ No        |
-| Feature enrichment (input)      | P1-72                 | ~$0.05  | ❌ Nula              | ❌ No        |
-| Bigger model (Sonnet vs Haiku)  | P1-74                 | +$0.60  | ❌ Peor final ARI    | ❌ No        |
-| Training data injection         | P1-69 (hard-negative) | $0.20   | ✓ F1 +0.010         | Parcial     |
-| **Code-level post-hoc merge**   | **P1-71**             | $0.19   | **✓✓ ARI ×160 (5)** | **✓ Total** |
-| **Cross-domain validation**     | **P1-71 + EthHeist**  | $0.01   | **✓✓ ARI 0.077→0.41** | **✓**     |
-| **Silhouette auto-tune (P1-73)**| **P1-73**             | $0      | **✓✓ Mean ARI 0.19** | **✓ Total** |
-
-**Meta-finding publishable**: para controlar decisiones cuantitativas
-del output de un LLM (número de clusters, categorías, budgets),
-**modificar el post-proceso ES sistemáticamente más efectivo que
-modificar el prompt o los features**. El LLM genera bien la SEÑAL
-(quién está cerca de quién en feature-space); lo que falla es su
-DECISIÓN OPERATIVA (dónde cortar). Externalizar esa decisión al
-código, respetando la señal del LLM, es la palanca correcta.
-
-Esta conclusión generaliza más allá del AML: en cualquier pipeline
-LLM-agent + downstream computation donde la LLM produce
-categorizaciones sin garantías de cardinalidad, un merge/split
+De las siete intervenciones aplicadas al defensor se extrae un
+meta-finding publishable: para controlar decisiones cuantitativas del
+output de un LLM (número de clusters, categorías, budgets), modificar
+el post-proceso resulta sistemáticamente más efectivo que modificar el
+prompt o los features. El LLM genera bien la señal cualitativa —qué
+direcciones están cerca de qué otras en el espacio de features— pero
+falla en la decisión operativa cuantitativa —dónde cortar. Externalizar
+esa decisión al código, respetando la señal del LLM, es la palanca
+correcta. Esta conclusión generaliza más allá del AML: en cualquier
+pipeline LLM-agent + downstream computation donde el LLM produce
+categorizaciones sin garantías de cardinalidad, un merge o split
 post-hoc determinista basado en distancia entre representaciones
-implícitas (centroides, embeddings, log-probs) es cheaper y más
-robusto que iterar sobre el prompt.
+implícitas es más barato y más robusto que iterar sobre el prompt.
+
+## 10.4.29 Alcance y limitaciones del trabajo
+
+Antes de cerrar el capítulo se explicitan las cuatro limitaciones
+principales del trabajo, que a su vez motivan buena parte del
+programa de trabajo futuro. Estas limitaciones acotan el alcance
+declarado en §1.4 y §1.5.
+
+**Limitación 1 — Ausencia de temporalidad**. El clasificador GCN opera
+sobre snapshots estáticos del grafo. Un atacante consciente del
+detector podría explotar temporalidad para dispersar las transacciones
+de una campaña a lo largo de meses, quedando por debajo del umbral de
+detección por ventana. La incorporación de features temporales o de
+GNNs con memoria (T-GCN, TGN) queda para trabajo futuro.
+
+**Limitación 2 — Simetría LLM-vs-LLM incompleta**. El coordinador
+atacante (Opus 4.7) y el coordinador defensor (Sonnet 4.6 / Haiku 4.5)
+usan distintos tamaños de modelo por constricciones de presupuesto.
+Un experimento verdaderamente simétrico Opus-vs-Opus está fuera del
+alcance presupuestario actual pero es técnicamente inmediato.
+
+**Limitación 3 — Escala de la simulación**. Veintiséis campañas
+atacantes sobre unos diez mil nodos es un régimen pequeño frente a
+datasets académicos recientes (AMLWorld: 10⁷ transacciones). La
+justificación es el coste de la simulación multi-agente basada en LLM
+(~50 EUR para veintiséis campañas atacantes reales), pero la
+extrapolación de las conclusiones a regímenes de mayor escala
+requeriría experimentación adicional.
+
+**Limitación 4 — Alcance regulatorio parcial**. Este trabajo aborda
+FATF Recomendaciones 16 (travel rule) y 20 (transparencia SAR) más
+MiCA artículos 60/63/68, pero no las Recomendaciones 10 (customer due
+diligence), 11 (record keeping), ni la totalidad de MiCA. Un sistema
+productivo AML debe integrar todos estos elementos; este TFM se
+circunscribe a la parte técnica de detección y atribución.
+
+Las tres primeras limitaciones se traducen directamente en las
+propuestas §10.4.A (extensión temporal), §10.4.A (simetría Opus-vs-Opus)
+y §10.4.A (escalado a régimen ≥ 100 campañas) descritas más arriba.
 
 ## 10.5 Reflexión final
 
