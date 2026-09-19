@@ -125,7 +125,7 @@ set -a; source .env.sepolia; set +a
     contracts/MockTornado.sol:MockTornado
 ```
 
-La verificación sube el source a Sepolia Etherscan para que cualquiera (Chema, los
+La verificación sube el source a Sepolia Etherscan para que cualquiera (el tutor, los
 revisores del TFM) pueda leer el código en
 `https://sepolia.etherscan.io/address/0x<ADDR>#code`.
 

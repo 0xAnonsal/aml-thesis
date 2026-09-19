@@ -5,7 +5,7 @@ Sistemas adversariales multi-agente basados en LLM para investigación en detecc
 - **Red team** — un blanqueador multi-agente LLM (Coordinador + sub-agentes Placement / Layering / Integration alineados con la taxonomía FATF) que opera sobre un simulador EVM real. Utiliza ciclos reales por un mezclador ZK estilo Tornado, swaps Uniswap-V2, structuring en USDT, y fan-out sub-$999 hacia múltiples wallets *clean exit*.
 - **Blue team** — un detector multi-agente colaborativo que realiza clustering a nivel de actor (identificación de wallets relacionadas) bajo visibilidad parcial del grafo — un agente por exchange simulado. Se compara contra detección de comunidades (Louvain) y una baseline GCN estilo Weber 2019.
 
-Consulta [ROADMAP.md](ROADMAP.md) para la propuesta inicial (planteamiento del problema, contribuciones, metodología, datasets, métricas y cronograma). El estado actual del trabajo está reportado en el TFM completo en `tfm/chapters/`.
+Consulta [ROADMAP.md](ROADMAP.md) para la propuesta inicial (planteamiento del problema, contribuciones, metodología, datasets, métricas y cronograma). El estado actual del trabajo está reportado en el TFM completo en `tfm/chapters_v3/` (borrador Word en `tfm/TFM_Sinawi_UC3M.docx`).
 
 ## Estado
 
