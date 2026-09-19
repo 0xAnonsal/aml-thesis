@@ -278,7 +278,81 @@ Este trabajo asume explícitamente las siguientes restricciones:
   la reproducción exacta requiere una API key comercial. Se documentan los
   costes reales de cada experimento.
 
-## 1.6 Estructura del documento
+## 1.6 Marco regulador
+
+El TFM se sitúa en el cruce de tres marcos regulatorios que definen las
+restricciones operativas de un exchange de criptoactivos regulado en la
+Unión Europea. El análisis de estos marcos justifica la arquitectura de
+visibilidad parcial federada que constituye la novedad del trabajo
+(§5.0).
+
+**FATF Recomendación 16 — Travel rule sobre criptoactivos**. La
+Financial Action Task Force actualizó en 2019 la Recomendación 16 para
+extender la obligación de compartir información del emisor y receptor
+—vigente hasta entonces sólo para transferencias bancarias— a las
+transferencias de activos virtuales entre proveedores de servicios de
+activos virtuales (VASPs). En la práctica, cada exchange debe transmitir
+al exchange receptor el nombre, dirección y número de cuenta del
+originador, junto con el nombre y número de cuenta del beneficiario,
+para transferencias por encima del umbral de mil euros o mil dólares
+[6]. La consecuencia técnica de esta regulación es que **la información
+KYC de un usuario reside en el exchange que lo verificó, y no puede
+compartirse libremente con el resto del ecosistema**. Ningún exchange
+tiene visión global de las identidades reales detrás de las direcciones
+observadas —justamente la brecha que aborda este TFM.
+
+**FATF Recomendación 20 — Reporting de operaciones sospechosas**. La
+Recomendación 20 obliga a las instituciones financieras (y por extensión
+a los VASPs) a reportar a la Unidad de Inteligencia Financiera (UIF)
+nacional cualquier operación que sospechen relacionada con el blanqueo
+de capitales o la financiación del terrorismo. Los reportes deben
+incluir la justificación explícita de la sospecha, con detalle del
+comportamiento observado y del arquetipo AML asociado (structuring,
+layering, integration, mixing, etc.) [6]. La consecuencia técnica es que
+**un detector automatizado desplegable en producción debe producir
+outputs interpretables** —no un score numérico opaco—, requisito que
+guía el diseño del defensor multi-agente descrito en §5.A.2.
+
+**Reglamento (UE) 2023/1113 sobre transferencias de fondos y
+criptoactivos**. Esta versión europea de la travel rule FATF entró en
+vigor el 30 de diciembre de 2024 y aplica plenamente desde esa fecha
+[8]. Establece los mismos requisitos de traspaso de información KYC
+entre CASPs (Crypto-Asset Service Providers), con umbral de mil euros y
+sanciones administrativas por incumplimiento. Complementa el marco
+travel rule con requisitos específicos para el ecosistema crypto europeo
+y refuerza la restricción de que cada CASP sólo puede identificar
+directamente a sus propios usuarios verificados.
+
+**Reglamento (UE) 2023/1114 sobre Mercados de Criptoactivos (MiCA)**.
+MiCA es el marco regulatorio europeo integral para criptoactivos,
+publicado en junio de 2023 y en vigencia plena desde el 30 de diciembre
+de 2024 para stablecoins (Título III y IV) y desde el 30 de diciembre de
+2024 para el resto del articulado [7]. Los artículos relevantes para
+este TFM son el artículo 60 (autorización y supervisión de CASPs), el
+artículo 63 (obligaciones organizativas —incluida la transparencia
+algorítmica de los sistemas automatizados de detección) y el artículo 68
+(requisitos de gobierno de datos). El artículo 63 en particular exige
+que los algoritmos de decisión empleados por un CASP puedan ser
+auditados por la autoridad competente, requisito que refuerza el
+argumento de §5.A.2 sobre la interpretabilidad del defensor LLM.
+
+**Directiva (UE) 2015/849 (AMLD5) y Directiva (UE) 2018/843 (AMLD6)**.
+Las Directivas AML de la UE, en su quinta y sexta revisión,
+transpuestas al ordenamiento español mediante la Ley 10/2010 de
+prevención del blanqueo de capitales y la financiación del terrorismo
+—modificada por el Real Decreto-ley 7/2021 para incorporar AMLD5—
+extienden las obligaciones AML a los proveedores de servicios de cambio
+de moneda virtual y a los proveedores de servicios de custodia de
+monederos electrónicos. En la práctica, todo exchange de criptoactivos
+operante en España está sujeto a estas obligaciones y debe implementar
+un procedimiento formal de KYC + monitorización de operaciones +
+reporting a la UIF (SEPBLAC en España). Este TFM asume implícitamente el
+cumplimiento de este marco como línea base y propone un componente
+técnico —el defensor cross-exchange— que refuerza la capacidad de
+detección sin sustituir los procedimientos formales de compliance
+existentes.
+
+## 1.7 Estructura del documento
 
 El TFM se organiza en siete capítulos más anexos:
 
