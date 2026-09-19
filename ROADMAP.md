@@ -2,7 +2,7 @@
 
 > **Documento de planning inicial (mayo 2026)** preservado por trazabilidad.
 > El estado final y los resultados del proyecto están en el TFM completo en
-> `tfm/chapters/`. Los cronogramas y estados de este documento son históricos.
+> `tfm/chapters_v3/`. Los cronogramas y estados de este documento son históricos.
 
 **Título de trabajo:** *Sistemas adversariales multi-agente para blanqueo de capitales en criptoactivos: generación red-team y detección colaborativa sobre Ethereum, con detección de laundering en stablecoins y smurfing*
 

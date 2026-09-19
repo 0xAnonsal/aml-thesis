@@ -1,4 +1,4 @@
-"""Generate tfm/TFM_Sinawi_UC3M.docx from tfm/chapters_v2/*.md.
+"""Generate tfm/TFM_Sinawi_UC3M.docx from tfm/chapters_v3/*.md.
 
 Uses python-docx (no pandoc dep). Produces a clean academic-style TFM
 with cover page, TOC field, page numbers in footer, and monospaced

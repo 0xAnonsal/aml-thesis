@@ -1,0 +1,36 @@
+{
+  "run_name": "2026-09-09T16-57-04_benign_seed304",
+  "kind": "benign",
+  "seed": 304,
+  "num_users": 50,
+  "num_txs": 1500,
+  "with_pool": true,
+  "timestamp_utc": "2026-09-09T16-57-04",
+  "wall_clock_seconds": 203.54661512374878,
+  "anvil_chain_id": 31337,
+  "deploy_end_block": 5,
+  "end_block": 2188,
+  "activity_counts": {
+    "transfer_usdt": 104,
+    "transfer_eth": 104,
+    "swap_eth_for_usdt": 55,
+    "swap_usdt_for_eth": 46,
+    "mint_usdt": 38,
+    "new_user": 19,
+    "hub_broadcast": 57,
+    "business_chain": 81,
+    "sub999_invoice": 85,
+    "medium_eth_transfer": 32,
+    "whale_transfer": 3,
+    "exchange_deposit": 428,
+    "exchange_withdrawal": 402,
+    "skipped": 46
+  },
+  "args": {
+    "num_users": 50,
+    "num_txs": 1500,
+    "seed": 304,
+    "out": "results/benign_corpus_v57",
+    "with_pool": true
+  }
+}

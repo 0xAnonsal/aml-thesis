@@ -1,0 +1,169 @@
+[runner] starting 2026-09-09T20-41-52_stablecoin-scam_seed840 → results/anvil_option_a/2026-09-09T20-41-52_stablecoin-scam_seed840
+[runner] oracle: campaign_ts=2026-09-09T00:00:00+00:00 eth=$2,485.07 usdt=$0.9998
+[runner] funder pool: 10 wallets, 10.0000 ETH total ($24,850.70), per-funder [1.0000 .. 1.0000]
+[runner] funder amounts: ['1.0000', '1.0000', '1.0000', '1.0000', '1.0000', '1.0000', '1.0000', '1.0000', '1.0000', '1.0000']
+[runner] alice normalized: 10000.0000 ETH (target exact: 41672.0000)
+[runner] chain ready (deploy ended at block 15), launching campaign...
+[runner] sub-agent max iterations (adaptive by amount 41672.0 ETH): 150
+[llm 22:41:53] → claude-sonnet-4-6 max_tokens=4096 messages=1 tools=5
+[llm 22:42:14] ← claude-sonnet-4-6 21.2s stop=tool_use
+[llm 22:42:14] → claude-sonnet-4-6 max_tokens=4096 messages=1 tools=9
+[llm 22:42:20] ← claude-sonnet-4-6 5.9s stop=tool_use
+[llm 22:42:20] → claude-sonnet-4-6 max_tokens=4096 messages=3 tools=9
+[llm 22:42:25] ← claude-sonnet-4-6 5.1s stop=tool_use
+[llm 22:42:25] → claude-sonnet-4-6 max_tokens=4096 messages=5 tools=9
+[llm 22:42:29] ← claude-sonnet-4-6 3.9s stop=tool_use
+[llm 22:42:29] → claude-sonnet-4-6 max_tokens=4096 messages=7 tools=9
+[llm 22:42:39] ← claude-sonnet-4-6 9.5s stop=tool_use
+[llm 22:42:39] → claude-sonnet-4-6 max_tokens=4096 messages=9 tools=9
+[llm 22:42:46] ← claude-sonnet-4-6 7.0s stop=tool_use
+[llm 22:42:46] → claude-sonnet-4-6 max_tokens=4096 messages=11 tools=9
+[llm 22:42:55] ← claude-sonnet-4-6 8.9s stop=tool_use
+[llm 22:42:55] → claude-sonnet-4-6 max_tokens=4096 messages=13 tools=9
+[llm 22:43:02] ← claude-sonnet-4-6 7.5s stop=tool_use
+[llm 22:43:02] → claude-sonnet-4-6 max_tokens=4096 messages=15 tools=9
+[llm 22:43:09] ← claude-sonnet-4-6 6.8s stop=tool_use
+[llm 22:43:09] → claude-sonnet-4-6 max_tokens=4096 messages=17 tools=9
+[llm 22:43:16] ← claude-sonnet-4-6 6.9s stop=tool_use
+[llm 22:43:16] → claude-sonnet-4-6 max_tokens=4096 messages=19 tools=9
+[llm 22:43:24] ← claude-sonnet-4-6 7.6s stop=tool_use
+[llm 22:43:24] → claude-sonnet-4-6 max_tokens=4096 messages=21 tools=9
+[llm 22:43:50] ← claude-sonnet-4-6 25.7s stop=tool_use
+[llm 22:43:50] → claude-sonnet-4-6 max_tokens=4096 messages=23 tools=9
+[llm 22:44:13] ← claude-sonnet-4-6 23.1s stop=tool_use
+[llm 22:44:13] → claude-sonnet-4-6 max_tokens=4096 messages=25 tools=9
+[llm 22:44:37] ← claude-sonnet-4-6 24.5s stop=tool_use
+[llm 22:44:37] → claude-sonnet-4-6 max_tokens=4096 messages=27 tools=9
+[llm 22:44:41] ← claude-sonnet-4-6 3.3s stop=tool_use
+[llm 22:44:41] → claude-sonnet-4-6 max_tokens=4096 messages=29 tools=9
+[llm 22:44:44] ← claude-sonnet-4-6 3.6s stop=tool_use
+[llm 22:44:44] → claude-sonnet-4-6 max_tokens=4096 messages=31 tools=9
+[llm 22:44:49] ← claude-sonnet-4-6 4.8s stop=tool_use
+[llm 22:44:49] → claude-sonnet-4-6 max_tokens=4096 messages=33 tools=9
+[llm 22:44:52] ← claude-sonnet-4-6 2.8s stop=tool_use
+[llm 22:44:52] → claude-sonnet-4-6 max_tokens=4096 messages=35 tools=9
+[llm 22:44:56] ← claude-sonnet-4-6 4.4s stop=tool_use
+[llm 22:44:56] → claude-sonnet-4-6 max_tokens=4096 messages=37 tools=9
+[llm 22:45:02] ← claude-sonnet-4-6 5.3s stop=tool_use
+[llm 22:45:02] → claude-sonnet-4-6 max_tokens=4096 messages=39 tools=9
+[llm 22:45:08] ← claude-sonnet-4-6 6.0s stop=tool_use
+[llm 22:45:08] → claude-sonnet-4-6 max_tokens=4096 messages=41 tools=9
+[llm 22:45:12] ← claude-sonnet-4-6 4.2s stop=tool_use
+[llm 22:45:12] → claude-sonnet-4-6 max_tokens=4096 messages=43 tools=9
+[llm 22:45:17] ← claude-sonnet-4-6 5.2s stop=tool_use
+[llm 22:45:17] → claude-sonnet-4-6 max_tokens=4096 messages=45 tools=9
+[llm 22:45:23] ← claude-sonnet-4-6 6.1s stop=tool_use
+[llm 22:45:23] → claude-sonnet-4-6 max_tokens=4096 messages=47 tools=9
+[llm 22:45:29] ← claude-sonnet-4-6 5.7s stop=tool_use
+[llm 22:45:29] → claude-sonnet-4-6 max_tokens=4096 messages=49 tools=9
+[llm 22:45:31] ← claude-sonnet-4-6 2.2s stop=tool_use
+[llm 22:45:31] → claude-sonnet-4-6 max_tokens=4096 messages=51 tools=9
+[llm 22:45:46] ← claude-sonnet-4-6 14.9s stop=tool_use
+[llm 22:45:46] → claude-sonnet-4-6 max_tokens=4096 messages=53 tools=9
+[llm 22:46:13] ← claude-sonnet-4-6 27.1s stop=tool_use
+[llm 22:46:13] → claude-sonnet-4-6 max_tokens=4096 messages=55 tools=9
+[llm 22:46:22] ← claude-sonnet-4-6 9.2s stop=tool_use
+[llm 22:46:23] → claude-sonnet-4-6 max_tokens=4096 messages=57 tools=9
+[llm 22:46:27] ← claude-sonnet-4-6 5.0s stop=tool_use
+[llm 22:46:27] → claude-sonnet-4-6 max_tokens=4096 messages=59 tools=9
+[llm 22:46:37] ← claude-sonnet-4-6 9.6s stop=tool_use
+[llm 22:46:37] → claude-sonnet-4-6 max_tokens=4096 messages=61 tools=9
+[llm 22:48:12] ← claude-sonnet-4-6 95.3s stop=tool_use
+[llm 22:48:12] → claude-sonnet-4-6 max_tokens=4096 messages=63 tools=9
+[llm 22:48:15] ← claude-sonnet-4-6 2.3s stop=tool_use
+[llm 22:48:15] → claude-sonnet-4-6 max_tokens=4096 messages=65 tools=9
+[llm 22:52:55] ✗ TIMEOUT after 280.2s (APITimeoutError)
+Traceback (most recent call last):
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpx/_transports/default.py", line 250, in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpcore/_sync/connection_pool.py", line 256, in handle_request
+    raise exc from None
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpcore/_sync/connection_pool.py", line 236, in handle_request
+    response = connection.handle_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpcore/_sync/connection.py", line 103, in handle_request
+    return self._connection.handle_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 136, in handle_request
+    raise exc
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 106, in handle_request
+    ) = self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 177, in _receive_response_headers
+    event = self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 217, in _receive_event
+    data = self._network_stream.read(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpcore/_backends/sync.py", line 126, in read
+    with map_exceptions(exc_map):
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ReadTimeout: The read operation timed out
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/anthropic/_base_client.py", line 1078, in request
+    response = self._client.send(
+               ^^^^^^^^^^^^^^^^^^
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpx/_client.py", line 914, in send
+    response = self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpx/_client.py", line 942, in _send_handling_auth
+    response = self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpx/_client.py", line 979, in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpx/_client.py", line 1014, in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpx/_transports/default.py", line 249, in handle_request
+    with map_httpcore_exceptions():
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ReadTimeout: The read operation timed out
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/anon/aml-thesis/src/aml/attackers/run_campaign.py", line 834, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/anon/aml-thesis/src/aml/attackers/run_campaign.py", line 829, in main
+    result, _ = run_campaign(args, scenario)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/aml-thesis/src/aml/attackers/run_campaign.py", line 261, in run_campaign
+    result = coordinator.run(
+             ^^^^^^^^^^^^^^^^
+  File "/home/anon/aml-thesis/src/aml/attackers/coordinator.py", line 453, in run
+    sub_result = self.sub_agents[role].run(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/aml-thesis/src/aml/attackers/sub_agent.py", line 199, in run
+    response = self.client.complete(
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/aml-thesis/src/aml/attackers/llm_client.py", line 250, in complete
+    response = self._client.messages.create(**kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/anthropic/_utils/_utils.py", line 294, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/anthropic/resources/messages/messages.py", line 1003, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/anthropic/_base_client.py", line 1374, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/miniconda3/envs/aml-thesis/lib/python3.11/site-packages/anthropic/_base_client.py", line 1096, in request
+    raise APITimeoutError(request=request) from err
+anthropic.APITimeoutError: Request timed out or interrupted. This could be due to a network timeout, dropped connection, or request cancellation. See https://docs.anthropic.com/en/api/errors#long-requests for more details.

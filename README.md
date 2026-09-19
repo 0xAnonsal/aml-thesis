@@ -15,14 +15,14 @@ Consulta [ROADMAP.md](ROADMAP.md) para la propuesta inicial (planteamiento del p
 |---|---|
 | Simulador Anvil + 6 contratos mock (USDT, Uniswap pool, Tornado mixer, bridge, MiMC, Verifier) | ✅ |
 | Mezclador ZK Tornado real (Groth16, MiMC, Merkle) — pruebas reales verificadas on-chain | ✅ |
-| Atacante multi-agente FATF — Coordinador + 3 sub-agentes, 19 herramientas on-chain, gestión de gas | ✅ |
+| Atacante multi-agente FATF — Coordinador + 3 sub-agentes, 21 herramientas on-chain, gestión de gas | ✅ |
 | Validado end-to-end: campaña seed 403 de 10 ETH con 92 % de recuperación | ✅ |
 | Runner de campañas + generador de baseline benigno (artefactos etiquetados) | ✅ |
 | Cargador de runs + extractor del grafo de transacciones + renderer de figuras del TFM | ✅ |
 | Combinador de datasets + partición de visibilidad parcial federada | ✅ |
 | Quinteto de detectores: Louvain + GCN + coseno + LLM Coordinator (Haiku/Sonnet/Opus) | ✅ |
 | Despliegue Sepolia (6 contratos verificables en Etherscan) + campaña real | ✅ |
-| Más de 300 tests automáticos, todos en verde | ✅ |
+| 342 tests automáticos; los 13 tests ZK requieren ejecutar antes scripts/setup_zk.sh | ✅ |
 
 ## Instalación
 
@@ -152,6 +152,7 @@ pytest tests/test_tools.py tests/test_graph.py -q
 pytest tests/test_coordinator.py::test_coordinator_runs_full_eth_laundering_campaign -v
 
 # Sweep completa — ~5 min
+# Los tests ZK (test_zk_toolchain.py, test_zk_withdraw.py) necesitan los artefactos de circuits/build/: ejecutar antes  bash scripts/setup_zk.sh
 pytest tests/ -q
 ```
 
@@ -166,7 +167,7 @@ src/aml/
                      coordinator.py    — Orquestador FATF (delegate-only)
                      sub_agent.py      — Especialista FATF tool-scoped
                      prompts.py        — Prompts Placement / Layering / Integration
-                     tools.py          — 19 herramientas on-chain (USDT, ETH, swaps, mixer)
+                     tools.py          — 21 herramientas on-chain (USDT, ETH, swaps, mixer)
                      funder_sizing.py  — Distribución del pool de funders
                      scenarios.py      — Tipologías de campaña (defi-exploit, etc.)
                      run_campaign.py   — CLI para orquestar una campaña + volcar artefactos
@@ -186,7 +187,7 @@ src/aml/
 data/              Datasets (mayormente gitignored — ver ROADMAP §3.1)
 results/           Outputs de experimentos (JSON persistidos en git)
 scripts/           Puntos de entrada CLI + setup toolchain ZK
-tests/             Más de 300 tests automáticos
+tests/             342 tests automáticos (los 13 ZK requieren scripts/setup_zk.sh)
 tfm/               Draft del TFM (chapters + anexos + bibliografía)
 foundry.toml       Config Foundry
 ```

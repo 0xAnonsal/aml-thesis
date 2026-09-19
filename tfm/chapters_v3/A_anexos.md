@@ -185,7 +185,7 @@ aml-thesis/
 ├── data/                     Datasets (gitignored excepto price cache)
 ├── results/                  JSON outputs por experimento
 ├── tfm/                      Este documento
-│   ├── chapters_v2/          Capítulos definitivos (estructura UC3M 10 caps)
+│   ├── chapters_v3/          Capítulos definitivos (estructura UC3M 6 caps + anexos)
 │   │   ├── 01_introduccion.md
 │   │   ├── 02_analisis_comparaciones.md
 │   │   ├── 03_tecnologias.md

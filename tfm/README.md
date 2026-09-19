@@ -2,42 +2,37 @@
 
 Trabajo Fin de Máster: **"Detección adversarial multi-agente de blanqueo de capitales en Ethereum: simulación y detección basadas en agentes LLM bajo visibilidad parcial federada"**
 
-Escrito en Markdown por portabilidad. Convertible a Word (via `python-docx`) o LaTeX (via pandoc) cuando el formato final esté decidido con la universidad. El draft docx canónico se genera con el script `scratchpad/md_to_docx.py`.
+## Qué fichero es el bueno
 
-## Estructura de capítulos
+- **`TFM_Sinawi_UC3M.docx` es el documento canónico**: el que se entrega y se defiende. Las últimas revisiones (referencias cruzadas, marco regulador, citas en línea, pasada de estilo, consistencia con el repositorio) se hicieron directamente sobre el Word.
+- `chapters_v3/*.md` es la fuente Markdown de la que se generó la primera versión de esta estructura (6 capítulos + anexos) con `scratchpad/md_to_docx.py`. Va por detrás del docx.
+- `figures/` — figuras generadas (`scratchpad/gen_*_fig*.py`).
+- `references.bib` — bibliografía en BibTeX (33 entradas, numeradas [1]-[33] en el texto). `references_audit.md` — verificación de cada referencia.
 
-| # | Archivo | Título | Estado |
-|---|---|---|---|
-| 1 | `chapters/01_introduccion.md` | Introducción | ✅ Completado |
-| 2 | `chapters/02_estado_del_arte.md` | Estado del arte | ✅ Completado |
-| 3 | `chapters/03_arquitectura.md` | Arquitectura del sistema | ✅ Completado |
-| 4 | `chapters/04_metodologia.md` | Metodología experimental | ✅ Completado |
-| 5 | `chapters/05_resultados.md` | Resultados y discusión | ✅ Completado |
-| 6 | `chapters/06_conclusiones.md` | Conclusiones y trabajo futuro | ✅ Completado |
-| A | `chapters/A_anexos.md` | Anexos (código, prompts, hashes tx) | ✅ Completado |
+## Estructura (`chapters_v3/`)
 
-Tamaño combinado del draft: ~2 950 líneas, ~100 KB en formato `.docx`.
+| Fichero | Contenido |
+|---|---|
+| `00_portada.md` | Portada UC3M |
+| `01_introduccion.md` | Cap. 1 — Resumen/Abstract, contexto, problema, objetivos y requisitos, marco regulador, estructura |
+| `02_estado_arte_conceptos.md` | Cap. 2 — Estado del arte, brecha y contexto tecnológico 2024-2026 |
+| `04_analisis_tecnologias.md` | Cap. 3 — Análisis del problema y tecnologías |
+| `05_diseno_dataset.md` | Cap. 4 — Diseño, datasets, planificación y presupuesto |
+| `06_experimentos_resultados.md` | Cap. 5 — Experimentos y resultados |
+| `07_visibilidad_conclusiones.md` | Cap. 6 — Visibilidad parcial, conclusiones, limitaciones, competencias |
+| `08_bibliografia.md` | Bibliografía |
+| `A_anexos.md` | Anexos A (prompts), F (repositorio), G (atribuciones), H (declaración de IA) |
 
-## Convertir a otros formatos
+## Regenerar el docx desde Markdown
 
 ```bash
-# A DOCX (formato principal para submission)
-python scratchpad/md_to_docx.py
-
-# A PDF via pandoc + LaTeX (alternativa)
-pandoc chapters/*.md -o tfm.pdf --pdf-engine=xelatex --toc
-
-# A LaTeX intermedio
-pandoc chapters/*.md -o tfm.tex --toc
+python scratchpad/md_to_docx.py   # escribe tfm/TFM_Sinawi_UC3M.docx a partir de chapters_v3/
 ```
 
-## Bibliografía
-
-Referencias en formato BibTeX en `tfm/references.bib`. Por ahora, citas inline `[Autor Año]` en Markdown; se convertirían a `\cite{}` si se decide pasar el draft a LaTeX.
+Ojo: sobrescribe el docx canónico con la versión Markdown, que está desactualizada respecto al Word.
 
 ## Notas de estilo
 
-- **Idioma**: español académico. Términos técnicos aceptados en inglés (*mixer*, *layering*, *actor cluster*, *ground truth*) van en cursiva la primera vez y luego sin.
-- **Formalidad**: 3ª persona ("se propone", "se implementa"). Evitar "yo" o "nosotros".
-- **Métricas**: siempre con unidad ("F1 = 0,68", "ARI = 0,066", "coste = 0,14 USD"). Coma decimal (convención española).
-- **Direcciones Ethereum**: full 42-char en tablas; primeros 10 + últimos 4 en prosa (`0xa513e6e4...c853`).
+- Español académico, impersonal. Términos técnicos en inglés en cursiva la primera vez (*mixer*, *layering*, *actor cluster*).
+- Decimales con coma en el texto en español; el Abstract en inglés y los números de versión (Solidity 0.8, Sonnet 4.6) mantienen el punto.
+- Citas numéricas `[n]` enlazadas a `08_bibliografia.md`.

@@ -104,3 +104,7 @@ results/episodes/
 
 # Allow examples
 !.env.example
+
+# Coordinator checkpoints and incremental sub-agent logs embed mixer deposit notes (secret + nullifier)
+**/coordinator_checkpoint.json
+**/sub_agents_incremental.jsonl

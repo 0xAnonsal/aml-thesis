@@ -2,7 +2,7 @@
 
 Inventario exhaustivo del código, artefactos criptográficos y datasets de terceros integrados en este proyecto. Ver `LICENSE` para la licencia MIT del código propio.
 
-La versión ampliada en español (con contexto académico) vive como **Anexo G** en `tfm/chapters/A_anexos.md`.
+La versión ampliada en español (con contexto académico) vive como **Anexo G** en `tfm/chapters_v3/A_anexos.md`.
 
 ---
 
