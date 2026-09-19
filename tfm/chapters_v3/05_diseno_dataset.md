@@ -746,14 +746,42 @@ Amortización lineal a 5 años sobre el periodo de 5 meses del TFM:
 
 ### 5.F.3 Coste de servicios cloud y APIs
 
-| Servicio | Uso | Coste real |
-|----------|-----|-----------:|
-| Anthropic API (Opus 4.7 atacante, ~13 campañas oficiales) | 26 campañas × ~$1 USD | 25 USD |
-| Anthropic API (defensor Haiku + Sonnet ablations) | 15 evals × ~$0.15 USD | ~2 USD |
-| CoinGecko API (free tier) | 5 meses | 0 USD |
-| Alchemy / Infura RPC (free tier Sepolia) | 5 meses | 0 USD |
-| GitHub (repo público) | 5 meses | 0 USD |
-| **Subtotal servicios** (~$27 USD ≈ 25 EUR al cambio) |  | **25 EUR** |
+El coste real de la API de Anthropic durante los cinco meses del TFM se
+detalla en la tabla siguiente, con las cifras extraídas directamente del
+historial de facturación de la cuenta.
+
+| Fecha | Concepto | Coste |
+|-------|----------|------:|
+| May 10, 2026 | Credit grant Anthropic | 6.05 USD |
+| Jun 11, 2026 | Credit grant Anthropic | 24.20 USD |
+| Jul 5, 2026 | Credit grant Anthropic | 12.10 USD |
+| Aug 12, 2026 | Credit grant Anthropic | 24.20 USD |
+| Aug 15, 2026 | Credit grant Anthropic | 24.20 USD |
+| Aug 26, 2026 | Credit grant Anthropic | 24.20 USD |
+| Sep 3, 2026 | Credit grant Anthropic | 36.30 USD |
+| Sep 9, 2026 | Credit grant Anthropic | 36.30 USD |
+| **Subtotal Anthropic pagado** | | **187.55 USD** |
+| Bonos y créditos gratuitos consumidos | Anthropic promo | ~50-100 USD |
+| **Total API consumido** | | **~240-290 USD** |
+
+El desglose por uso aproximado es: Opus 4.7 en las veintiséis campañas
+del atacante consume aproximadamente el 70 % del gasto; Sonnet 4.6 en la
+ablation §8.9.I y en las evaluaciones headline representa
+aproximadamente el 20 %; Haiku 4.5 en las evaluaciones bulk del defensor
+representa el 10 % restante.
+
+| Servicio adicional | Uso | Coste |
+|--------------------|-----|------:|
+| CoinGecko API (tier gratuito) | 5 meses | 0 EUR |
+| Alchemy / Infura RPC (tier gratuito Sepolia) | 5 meses | 0 EUR |
+| GitHub (repositorio público) | 5 meses | 0 EUR |
+| Etherscan API (verificación source) | 6 contratos | 0 EUR |
+| **Subtotal servicios adicionales** | | **0 EUR** |
+
+**Subtotal cloud + APIs**: 187.55 USD desembolsados directamente ≈
+**172 EUR** al tipo de cambio ~0.92 EUR/USD del periodo. Incluyendo el
+consumo de créditos promocionales de Anthropic, el consumo total en
+llamadas LLM se estima en **~220-265 EUR** equivalentes.
 
 ### 5.F.4 Coste de electricidad y overhead
 
@@ -769,21 +797,31 @@ Amortización lineal a 5 años sobre el periodo de 5 meses del TFM:
 |----------|------------:|
 | Personal | 7 570 |
 | Hardware (amortización) | 146 |
-| Servicios cloud + APIs | 25 |
+| Servicios cloud + APIs (LLM Anthropic) | 172 |
 | Electricidad + overhead | 81 |
-| **Subtotal directo** | **7 822** |
-| IVA (21 %) | 1 643 |
-| **TOTAL con IVA** | **9 465 EUR** |
+| **Subtotal directo** | **7 969** |
+| IVA (21 %) | 1 674 |
+| **TOTAL con IVA** | **9 643 EUR** |
 
-**Nota sobre coste real vs. presupuesto**: el coste directo de los
-recursos técnicos (hardware amortizado + APIs + electricidad) fue de
-**252 EUR** — una fracción muy pequeña del total. El grueso del coste
-(7 570 EUR, 97 %) corresponde a las horas de trabajo del autor. En
-un contexto académico donde este coste no se factura, el **presupuesto
-efectivo desembolsado** para completar el TFM fue de aproximadamente
-**252 EUR**, lo cual constituye uno de los findings publishable del
-proyecto: un pipeline AML multi-agente reproducible con budget
-< 300 EUR es viable en 2026 gracias a la disponibilidad de LLMs
-frontera a coste marginal.
+**Nota sobre coste real desembolsado**: en un contexto académico las
+horas de trabajo del autor no se facturan. El **presupuesto efectivo
+realmente desembolsado** para completar el TFM asciende a los siguientes
+conceptos: 187.55 USD en pagos directos a Anthropic (~172 EUR),
+aproximadamente 146 EUR en amortización de hardware imputada al
+proyecto, y unos 81 EUR de electricidad y overhead. En total,
+aproximadamente **400 EUR desembolsados**. Si se contabilizan además
+los créditos promocionales de Anthropic consumidos durante el periodo
+(50-100 USD adicionales), el coste técnico total del pipeline sube
+hasta unos **450-500 EUR**.
+
+Este dato constituye uno de los findings publishable del proyecto: un
+pipeline AML multi-agente completo, reproducible y verificable
+on-chain, se puede desarrollar en 2026 con un budget técnico por debajo
+de 500 EUR gracias a la disponibilidad de LLMs frontera a coste
+marginal reducido y a la infraestructura open-source (Foundry, snarkjs,
+PyTorch Geometric, NetworkX). El coste equivalente en 2023, con la
+generación anterior de modelos frontera (GPT-4 a 30 USD por millón de
+tokens de entrada), habría sido de al menos 10 000-15 000 EUR sólo en
+llamadas LLM para el mismo volumen de campañas.
 
 
