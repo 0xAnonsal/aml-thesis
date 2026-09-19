@@ -316,7 +316,7 @@ def test_actor_metrics_no_common_addresses_returns_zeros():
 
 
 # --- LLMDefenderCoordinator tests (Task #15) ---------------------------
-# Chema-validated architecture: ML filter → LLM agent. Mocks the LLM
+# Tutor-validated architecture: ML filter → LLM agent. Mocks the LLM
 # client so tests run offline / at zero API cost.
 
 from aml.detectors.multi_agent import (

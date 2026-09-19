@@ -384,7 +384,7 @@ def actor_clustering_metrics(
 
 
 # --- LLM Defender Coordinator -------------------------------------------
-# Chema-validated architecture (2026-07-15): ML filter → LLM agent.
+# Tutor-validated architecture (2026-07-15): ML filter → LLM agent.
 # Parity with attacker Coordinator (Opus over sub-agents Placement/Layering/
 # Integration). Same shape, opposite goal: instead of orchestrating laundering
 # stages, orchestrate cross-exchange actor identification.
@@ -680,7 +680,7 @@ class LLMDefenderCoordinator(Detector):
                flagged-address fingerprints and reasons about which cross-
                exchange addresses belong to the same actor.
 
-    Chema-validated (2026-07-15): "ML filter → LLM agent" is the right shape.
+    Tutor-validated (2026-07-15): "ML filter → LLM agent" is the right shape.
 
     Args:
         detector_factory: zero-arg callable → fresh local Detector per view

@@ -325,7 +325,7 @@ def test_mixer_withdraw_malformed_note_returns_error():
         assert "note" in result.error.lower(), f"{bad!r}: {result.error}"
 
 
-# --- Batched mixer tools (Chema-approved batched pattern) ----------------
+# --- Batched mixer tools (tutor-approved batched pattern) ----------------
 
 
 @needs_foundry
