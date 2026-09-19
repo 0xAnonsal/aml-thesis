@@ -1,4 +1,4 @@
-# Capítulo 4 — Análisis del problema y tecnologías
+# Capítulo 3 — Análisis del problema y tecnologías
 
 Este capítulo cataloga las tecnologías —contratos inteligentes, primitivas
 criptográficas, bibliotecas de *machine learning*, herramientas de
@@ -45,7 +45,7 @@ más rápida; (ii) integración nativa con Anvil sin proceso separado;
 ### 3.1.3 Anvil (EVM local ephemeral)
 
 Subcomponente de Foundry. Backend principal para la evaluación §5
-del Capítulo 8 (Implementación y pruebas). Ventajas frente a Sepolia
+del Capítulo 5 (Implementación y pruebas). Ventajas frente a Sepolia
 para desarrollo: coste 0, velocidad de bloque instantánea (o
 controlada mediante `advance_blocks`), reproducibilidad byte-idéntica
 entre corridas del mismo seed.
@@ -54,7 +54,7 @@ entre corridas del mismo seed.
 
 `chain_id = 11155111`. Testnet oficial post-*The Merge* mantenida por
 la fundación Ethereum. Empleada como validación externa on-chain
-verificable por terceros (Capítulo 8 §8.6). *Provider* RPC: Alchemy
+verificable por terceros (Capítulo 5 §5.6). *Provider* RPC: Alchemy
 free tier para envío de transacciones; `publicnode.com` para
 `eth_getLogs` paginados (Alchemy free tier limita el rango a 10
 bloques por *request*).

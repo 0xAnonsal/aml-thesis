@@ -49,7 +49,7 @@ del flag, no sólo el resultado binario del clasificador. Un detector
 que produce únicamente un identificador de cluster opaco no cumple con
 el espíritu de la Recomendación 20; un coordinador LLM que genera
 justificaciones textuales sí. Esta consideración se retoma en la
-discusión del Capítulo 8.
+discusión del Capítulo 5.
 
 En cuanto a tipologías, el informe FATF (2021) *Virtual Assets Red Flag
 Indicators of Money Laundering and Terrorist Financing* organiza los
@@ -116,7 +116,7 @@ desde una dirección semilla identificada por análisis forense.
 Los autores reportan F1 = 0,84 con un GCN de dos capas bajo validación
 estándar (split aleatorio 80/20). Este trabajo replica esa evaluación y
 demuestra que la métrica cae a F1 ≈ 0,68 bajo *leave-one-heist-out*
-cross-validation (Capítulo 8), consistente con la hipótesis de
+cross-validation (Capítulo 5), consistente con la hipótesis de
 memorización de los detectores GNN sobre datasets AML pequeños.
 
 ### 2.2.3 AMLWorld (Altman, Blanuša, Egressy et al. 2023)
@@ -333,7 +333,7 @@ modelos frontera accesibles: Claude Sonnet 4.6 y Haiku 4.5 tienen coste
 aproximado de 3 USD/15 USD (Sonnet) y 0.80 USD/4 USD (Haiku) por millón
 de tokens de entrada/salida respectivamente, entre diez y cuarenta veces
 más baratos que GPT-4 en 2023. Con presupuesto estudiantil de
-aproximadamente 200 EUR (§5.F) se ejecutan veintiséis campañas atacantes
+aproximadamente 200 EUR (§4.F) se ejecutan veintiséis campañas atacantes
 reales más la evaluación completa del defensor, algo inviable hace dos
 años. Segundo, la infraestructura testnet madura: Sepolia es en 2026
 suficientemente estable y fondeada para simulación adversarial

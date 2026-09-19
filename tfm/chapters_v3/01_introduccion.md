@@ -163,9 +163,9 @@ marcadas por *exchanges* distintos deben acabar en el mismo *cluster*
 si pertenecen al mismo actor, aunque ningún detector local haya visto
 la arista que las conecta.
 
-## 1.4 Objetivos y requisitos del proyecto
+## 1.3 Objetivos y requisitos del proyecto
 
-### 1.4.1 Objetivo general
+### 1.3.1 Objetivo general
 
 Diseñar, implementar y evaluar un sistema dual multi-agente basado en
 modelos LLM que (i) simule campañas realistas de blanqueo de capitales
@@ -175,7 +175,7 @@ de visibilidad parcial federada por exchange, con outputs auditables
 alineados a los requisitos regulatorios de reporting (FATF Rec. 20,
 MiCA, Reglamento (UE) 2023/1113).
 
-### 1.4.2 Objetivos específicos
+### 1.3.2 Objetivos específicos
 
 1. **O1 — Atacante multi-agente LLM**. Implementar un simulador
    ofensivo capaz de ejecutar 5 de las 8 técnicas FATF de blanqueo
@@ -197,7 +197,7 @@ MiCA, Reglamento (UE) 2023/1113).
    los 6 contratos del sistema en Sepolia con source code verificado
    en Etherscan y publicar el código bajo MIT en GitHub.
 
-### 1.4.3 Requisitos del proyecto (verificables)
+### 1.3.3 Requisitos del proyecto (verificables)
 
 **Requisitos funcionales**:
 
@@ -206,7 +206,7 @@ MiCA, Reglamento (UE) 2023/1113).
 | RF1 | El atacante debe ejecutar campañas siguiendo FATF placement/layering/integration | 26 campañas ejecutadas con las 3 fases identificables en el `chain_trace.jsonl` |
 | RF2 | El atacante debe usar mezclador ZK con pruebas Groth16 verificables | Cada `mixer_withdraw` produce un proof verificado on-chain por el contrato Verifier |
 | RF3 | El defensor debe operar bajo visibilidad parcial 3-exchange | `partial_visibility_split` con seed determinista, cada exchange sólo ve sus visible_addresses |
-| RF4 | El defensor debe producir binary F1 + actor clustering ARI | Métricas reportadas en §8.5 y §8.6 sobre 5 datasets in-dist + 2 held-out |
+| RF4 | El defensor debe producir binary F1 + actor clustering ARI | Métricas reportadas en §5.5 y §5.6 sobre 5 datasets in-dist + 2 held-out |
 | RF5 | Los outputs del LLM Phase 2 deben ser texto auditable | `llm_reasoning` string persistido en cada eval JSON |
 
 **Requisitos no funcionales**:
@@ -215,18 +215,18 @@ MiCA, Reglamento (UE) 2023/1113).
 |----|-----------|--------------------------|
 | RNF1 | Reproducibilidad determinista | Todo random_state=42, mismo comando reproduce mismos JSON |
 | RNF2 | Cost budget máximo 50 USD | Coste real acumulado 26.6 USD (atacante + defensor) |
-| RNF3 | El sistema debe compilar y ejecutarse en un portátil estándar | i7-11800H + 32 GB RAM + WSL Ubuntu 22.04 — ver §8.2 hardware |
+| RNF3 | El sistema debe compilar y ejecutarse en un portátil estándar | i7-11800H + 32 GB RAM + WSL Ubuntu 22.04 — ver §5.2 hardware |
 | RNF4 | Código publicado bajo licencia open source | MIT en `github.com/0xAnonsal/aml-thesis` |
 | RNF5 | Contratos on-chain verificables por auditor externo | 6 contratos Sepolia con source verified en Etherscan |
 | RNF6 | Compliance con normativa uso IA generativa UC3M | Declaración en Anexo H |
 
-## 1.6 Marco regulador
+## 1.4 Marco regulador
 
 El TFM se sitúa en el cruce de tres marcos regulatorios que definen las
 restricciones operativas de un exchange de criptoactivos regulado en la
 Unión Europea. El análisis de estos marcos justifica la arquitectura de
 visibilidad parcial federada que constituye la novedad del trabajo
-(§5.0).
+(§4.0).
 
 **FATF Recomendación 16 — Travel rule sobre criptoactivos**. La
 Financial Action Task Force actualizó en 2019 la Recomendación 16 para
@@ -294,7 +294,7 @@ técnico —el defensor cross-exchange— que refuerza la capacidad de
 detección sin sustituir los procedimientos formales de compliance
 existentes.
 
-## 1.7 Estructura del documento
+## 1.5 Estructura del documento
 
 El TFM se organiza en seis capítulos más anexos:
 
@@ -345,11 +345,3 @@ El TFM se organiza en seis capítulos más anexos:
   uso de IA generativa. Código y datos disponibles en
   [`github.com/0xAnonsal/aml-thesis`](https://github.com/0xAnonsal/aml-thesis).
 
-**Nota sobre numeración de secciones**: los identificadores internos
-`§X.Y.Z` de secciones y sub-secciones (por ejemplo §8.9.42) se
-preservan como identificadores estables de cross-reference. El primer
-dígito reflejaba el número de capítulo en la organización previa
-del documento; se mantiene por trazabilidad con los commits de
-GitHub y los artefactos publicados. Los capítulos 5-7 del actual
-esquema recogen contenido que originalmente vivía en capítulos
-numerados 4-10.

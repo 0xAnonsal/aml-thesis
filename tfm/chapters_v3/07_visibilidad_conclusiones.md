@@ -1,4 +1,4 @@
-# Capítulo 7 — Visibilidad parcial, conclusiones y findings
+# Capítulo 6 — Visibilidad parcial, conclusiones y findings
 
 Este capítulo cierra el TFM con (a) la argumentación de la novedad
 central del trabajo — visibilidad parcial federada por exchange,
@@ -8,7 +8,7 @@ reflexión final.
 
 ---
 
-## 7.A Decisiones de diseño
+## 6.1 Decisiones de diseño
 
 Once decisiones estructurales dan forma al proyecto. Las once se
 sintetizan en la Tabla siguiente y a continuación se desarrollan las tres
@@ -64,15 +64,15 @@ un LLM, el post-procesamiento code-level determinístico supera
 sistemáticamente al prompt engineering.
 
 
-## 7.B Conclusiones, findings y trabajo futuro
+## 6.2 Conclusiones, findings y trabajo futuro
 
 Este capítulo recapitula las cuatro contribuciones del Trabajo Fin de
 Máster tal como han quedado sustanciadas por los resultados del
-Capítulo 8, discute las lecciones metodológicas derivadas del proceso
+Capítulo 5, discute las lecciones metodológicas derivadas del proceso
 experimental, y traza un programa de trabajo futuro concreto
 articulado sobre las limitaciones identificadas.
 
-## 10.1 Recapitulación de las contribuciones
+### 6.2.1 Recapitulación de las contribuciones
 
 Las cuatro contribuciones anunciadas en el Capítulo 1 §1.3 se han
 sustanciado empíricamente:
@@ -101,7 +101,7 @@ esquema replica fielmente la asimetría regulatoria post-MiCA descrita
 en el Capítulo 2 §2.1.
 
 **Contribución 3 — Auditoría metodológica de la memorización**. El
-Capítulo 8 §8.10 formaliza tres *findings* publicables independientemente
+Capítulo 5 §8.10 formaliza tres *findings* publicables independientemente
 del sistema propuesto. Sobre la simulación propia, el GCN pierde
 ΔF1 = −0,55 al pasar de *split* 80/20 a LOCO-CV; sobre EthereumHeist
 real, la pérdida es ΔF1 = −0,31; Louvain preserva su F1 en ambos
@@ -123,9 +123,9 @@ transacciones cuyos *hashes* son
 independientemente verificables por cualquier tercero con acceso a la
 red pública.
 
-## 10.2 Trade-off central: interpretabilidad frente a métrica cuantitativa
+### 6.2.2 Trade-off central: interpretabilidad frente a métrica cuantitativa
 
-La discusión del Capítulo 8 §8.8 identifica el hallazgo empírico que
+La discusión del Capítulo 5 §8.8 identifica el hallazgo empírico que
 resume la contribución central del trabajo: la similaridad coseno
 supera al coordinador LLM en ARI raw (0,081 vs 0,013 en simulación;
 0,066 vs 0,040 sobre EthereumHeist real), pero el coordinador LLM
@@ -151,7 +151,7 @@ productivo con 100 000 direcciones/día. Este coste es dos órdenes de
 magnitud inferior al coste equivalente en horas humanas de un
 *compliance officer* revisando el mismo volumen.
 
-## 10.3 Lecciones metodológicas
+### 6.2.3 Lecciones metodológicas
 
 Del proceso experimental se extraen tres lecciones metodológicas
 aplicables al campo más allá del sistema específico propuesto.
@@ -161,7 +161,7 @@ literatura AML sobre grafos ha reportado sistemáticamente F1 > 0,90
 sobre *datasets* con menos de 30 actor clusters, incluyendo trabajos
 publicados sobre Elliptic (Weber et al. 2019), EthereumHeist (Wu et
 al. 2023) y OpenAML v1 (FINOS 2025). Los resultados del
-Capítulo 8 §8.5 sugieren que esas cifras sobreestiman el rendimiento
+Capítulo 5 §8.5 sugieren que esas cifras sobreestiman el rendimiento
 operativo real por 30-55 puntos absolutos de F1. La recomendación
 metodológica derivada es que los futuros *benchmarks* AML con actor
 clusters escasos deben reportar *leave-one-actor-out* como métrica
@@ -186,7 +186,7 @@ que incluyan los prompts íntegros como artefactos verificables (Anexo
 A y B de este trabajo son un intento en esa dirección), no como
 implementaciones opacas.
 
-## 10.4 Trabajo futuro
+### 6.2.4 Trabajo futuro
 
 El trabajo futuro se organiza en cuatro categorías: (A) extensiones
 inmediatas del scope del TFM, (B) arquitectura de despliegue en
@@ -195,7 +195,7 @@ las 26 corridas (referencias P1-XX de commits GitHub), y (D) mejoras
 del pipeline defensor. Las items marcadas **[IMPLEMENTED]** ya
 existen en el código publicado; los demás son propuestas.
 
-### 10.4.A Extensiones inmediatas del scope
+#### 6.2.4.A Extensiones inmediatas del scope
 
 **A1 — Extensión temporal**. El pipeline actual opera sobre snapshots
 estáticos. Un atacante consciente del detector podría dispersar
@@ -229,7 +229,7 @@ memoria histórica de patterns previamente flagged, permitiendo
 detección de repeat-offenders y evolución adaptativa a nuevas
 técnicas atacantes.
 
-### 10.4.B Arquitectura de despliegue en producción
+#### 6.2.4.B Arquitectura de despliegue en producción
 
 **B1 — Sistema productivo AML sobre exchange real**. Un producto
 comercial basado en este pipeline requeriría: (i) integración con
@@ -252,7 +252,7 @@ adversarialmente y publishable como iteration del atacante.
 (customer due diligence), Rec. 11 (record keeping), ni la totalidad
 de MiCA. Un sistema productivo debe integrar todas ellas.
 
-### 10.4.C Mejoras identificadas del pipeline atacante
+#### 6.2.4.C Mejoras identificadas del pipeline atacante
 
 Durante las 26 corridas se identificaron 12 mejoras (P1-XX) del
 pipeline atacante. Todas están registradas en commits del
@@ -292,13 +292,13 @@ futuro:
   (300s read timeout, 5 retries). Evita cuelgues por Sonnet response
   slow-path.
 
-### 10.4.D Mejoras del pipeline defensor
+#### 6.2.4.D Mejoras del pipeline defensor
 
 - **P1-55/56/70 [ATTEMPTED, NEGATIVE]** Prompt-level guidance para
   guiar la granularidad de output del LLM. Los tres ablations
   fallaron consistentemente (§8.9.F). Publishable como
   meta-finding: prompt engineering no controla output cuantitativo
-  discreto del LLM. Ver §10.4.28 síntesis.
+  discreto del LLM. Ver §6.2.4.28 síntesis.
 - **P1-68 [FUTURE]** LLM re-scoring bidireccional. Para reducir el
   background FPR residual, el LLM re-evalúa las address flagged por
   Louvain con conocimiento explícito de los otros flagged
@@ -321,7 +321,7 @@ futuro:
   caro. Configuración Pareto-óptima confirmada: **Haiku 4.5 + P1-71 +
   P1-73**. Ver §8.9.I.
 
-### 10.4.28 Síntesis del control de output del LLM
+#### 6.2.4.28 Síntesis del control de output del LLM
 
 De las siete intervenciones aplicadas al defensor se extrae un
 meta-finding publishable: para controlar decisiones cuantitativas del
@@ -337,7 +337,7 @@ categorizaciones sin garantías de cardinalidad, un merge o split
 post-hoc determinista basado en distancia entre representaciones
 implícitas es más barato y más robusto que iterar sobre el prompt.
 
-## 10.4.29 Alcance y limitaciones del trabajo
+### 6.2.4.29 Alcance y limitaciones del trabajo
 
 Antes de cerrar el capítulo se explicitan las cuatro limitaciones
 principales del trabajo, que a su vez motivan buena parte del
@@ -373,10 +373,10 @@ productivo AML debe integrar todos estos elementos; este TFM se
 circunscribe a la parte técnica de detección y atribución.
 
 Las tres primeras limitaciones se traducen directamente en las
-propuestas §10.4.A (extensión temporal), §10.4.A (simetría Opus-vs-Opus)
-y §10.4.A (escalado a régimen ≥ 100 campañas) descritas más arriba.
+propuestas §6.2.4.A (extensión temporal), §6.2.4.A (simetría Opus-vs-Opus)
+y §6.2.4.A (escalado a régimen ≥ 100 campañas) descritas más arriba.
 
-## 10.5 Reflexión final
+### 6.2.5 Reflexión final
 
 El diseño original de este TFM planteaba un sistema
 atacante-detector clásico donde el atacante era un agente LLM y el
@@ -392,7 +392,7 @@ arquitectura definitiva descrita en los Capítulos 6 y 7.
 La contribución central del trabajo, tal como se ha sustanciado a
 través de los ocho capítulos anteriores, no es que el LLM defensor
 supere numéricamente al *baseline* coseno —no lo hace, y el
-Capítulo 8 §8.8 lo argumenta detenidamente—. La contribución es
+Capítulo 5 §8.8 lo argumenta detenidamente—. La contribución es
 demostrar que un *pipeline* AML sobre grafos puede producir
 *simultáneamente* *flags* binarios operativamente accionables
 (mediante el clasificador GCN local) y justificaciones textuales
@@ -411,7 +411,7 @@ donde la mayoría de sistemas publicados no incluyen código
 ejecutable, la publicación completa del artefacto es en sí misma una
 contribución.
 
-## 7.C Justificación de competencias del Máster FinTech
+## 6.3 Justificación de competencias del Máster FinTech
 
 Conforme al artículo de la Normativa Propia TFM del Máster Universitario
 en Tecnologías del Sector Financiero (FinTech) UC3M (actualizada
@@ -422,8 +422,8 @@ en Tecnologías del Sector Financiero (FinTech) UC3M (actualizada
 
 - **CB6 — Conocimientos originales en contexto de investigación**.
   Cubierta por la novedad de visibilidad parcial federada (§4.4), el
-  simulador atacante LLM-driven (§5.A/5.B) y las 7 intervenciones
-  publishable documentadas en §10.4. El meta-finding
+  simulador atacante LLM-driven (§4.A/5.B) y las 7 intervenciones
+  publishable documentadas en §6.2.4. El meta-finding
   «cost-effective code-level post-processing supera prompt engineering»
   generaliza más allá del AML — contribución original al diseño de
   pipelines LLM-agent + downstream computation.
@@ -438,12 +438,12 @@ en Tecnologías del Sector Financiero (FinTech) UC3M (actualizada
   4 ablations negativas (P1-55/56/70/72) que rechazaron hipótesis
   iniciales.
 - **CB9 — Comunicación clara**. Cubierta por la estructura del TFM:
-  resumen bilingüe (§1), tabla ejecutiva de findings (§7.B) y cost
+  resumen bilingüe (§1), tabla ejecutiva de findings (§6.2) y cost
   summary (§8.9.Z).
 - **CB10 — Aprendizaje autodirigido**. Cubierta por el arco completo:
   el autor partió sin experiencia previa en Solidity, ZK proofs o
   LLM agents y desarrolló los tres stacks durante los 5 meses del
-  TFM (ver §5.C LOC por lenguaje).
+  TFM (ver §4.C LOC por lenguaje).
 
 ### 7.C.2 Competencias Generales
 

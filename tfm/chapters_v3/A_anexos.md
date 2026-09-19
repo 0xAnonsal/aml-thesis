@@ -52,7 +52,7 @@ con el precio ETH/USDT/TRX del oráculo determinista
 agente razonar en unidades USD (natural para el umbral CTR de 999
 USD) sin re-calibrar prompt entre corridas con precios diferentes.
 
-**`_BURNER_MODERATION`** (post-fix A+B-lite, §8.9.5). Instrucción
+**`_BURNER_MODERATION`** (post-fix A+B-lite, §5.9). Instrucción
 explícita al Layering specialist para que solicite *"MODERATE aids"*
 en vez de la formulación anterior *"OVER-PROVISIONING WELL BEYOND
 REQUIRED"*, que en seed 306 produjo el bucle patológico de 236
@@ -108,7 +108,7 @@ depósitos y retiradas en el mezclador (`mixer_deposit`,
 (Sepolia D.1) pero fuera del alcance del catálogo de herramientas
 del atacante: no se expone como *tool* al LLM porque el *bridge*
 real requeriría integración *cross-chain* que queda como trabajo
-futuro (§10.4.4).
+futuro (§6.4.4).
 
 El prompt Layering incluye un catálogo priorizado de tácticas por
 tamaño de flow: para movimientos ≥ 1 ETH prefiere ciclos
@@ -175,7 +175,7 @@ aml-thesis/
 │   ├── eval_llm_defender_heist.py  Eval sobre EthereumHeist
 │   ├── loco_simulation_3detectors.py LOCO-CV simulación
 │   ├── loco_ethereum_heist.py      LOCO-CV EthereumHeist
-│   ├── audit_f1_memorization.py    Auditoría §8.10
+│   ├── audit_f1_memorization.py    Auditoría §5.10
 │   ├── load_ethereum_heist.py      Adaptador dataset Wu 2023
 │   └── ...                          (más scripts de utilidad)
 ├── tests/                    Suite pytest (~300 tests, cobertura > 85%)
@@ -231,7 +231,7 @@ La preservación literal del *cryptographic core* es intencional: es
 lo que asegura que la simulación tenga las mismas propiedades de
 soundness y zero-knowledge que el sistema real que las campañas de
 blanqueo explotan en mainnet, requisito para que los *findings* del
-Capítulo 8 sean transferibles.
+Capítulo 5 sean transferibles.
 
 **Uniswap V2** — [`github.com/Uniswap/v2-core`](https://github.com/Uniswap/v2-core) (GPL-2.0).
 Referencia algorítmica (no reutilización de código):
@@ -281,15 +281,15 @@ símbolos.
 
 ### G.3 Datasets de terceros
 
-Los cuatro *datasets* utilizados en el Capítulo 8 son externos y se
+Los cuatro *datasets* utilizados en el Capítulo 5 son externos y se
 citan académicamente:
 
 | Dataset                       | Cita académica                                                                                                                                          | Provisión                                                              | Rol en el TFM                              |
 |-------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------|--------------------------------------------|
-| **Elliptic** (2019)           | Weber, M., Domeniconi, G., Chen, J. et al. *Anti-Money Laundering in Bitcoin: Experimenting with Graph Convolutional Networks for Financial Forensics*. arXiv 1908.02591. | Kaggle público                                                          | Baseline histórico (referenciado en §8.10)  |
-| **Elliptic++** (2023)         | Elmougy, Y., Liu, L. *Demystifying Fraudulent Transactions and Illicit Nodes in the Bitcoin Network*. arXiv 2305.15214.                                | GitHub `git-disl/EllipticPlusPlus`                                     | Sanity check GCN (§8.5.4)                  |
-| **EthereumHeist** (2023)      | Wu, J. et al. *Toward Understanding Asset Flows in Crypto Money Laundering through the Lenses of Ethereum Heists*. IEEE TIFS 18: 1994-2009.            | Dropbox + GitHub `HxQlaive/EthereumHeist`                              | Validación externa real (§8.5.3, §8.6.2)   |
-| **OpenAML v1** (2025)         | *FINOS OpenAML v1 — DTCC AI Hackathon dataset*. FINOS (Linux Foundation).                                                                              | GitHub `finos/OpenAML` (`training_data.csv`)                           | Sanity check GCN (§8.5.4)                  |
+| **Elliptic** (2019)           | Weber, M., Domeniconi, G., Chen, J. et al. *Anti-Money Laundering in Bitcoin: Experimenting with Graph Convolutional Networks for Financial Forensics*. arXiv 1908.02591. | Kaggle público                                                          | Baseline histórico (referenciado en §5.10)  |
+| **Elliptic++** (2023)         | Elmougy, Y., Liu, L. *Demystifying Fraudulent Transactions and Illicit Nodes in the Bitcoin Network*. arXiv 2305.15214.                                | GitHub `git-disl/EllipticPlusPlus`                                     | Sanity check GCN (§5.5.4)                  |
+| **EthereumHeist** (2023)      | Wu, J. et al. *Toward Understanding Asset Flows in Crypto Money Laundering through the Lenses of Ethereum Heists*. IEEE TIFS 18: 1994-2009.            | Dropbox + GitHub `HxQlaive/EthereumHeist`                              | Validación externa real (§5.5.3, §5.6.2)   |
+| **OpenAML v1** (2025)         | *FINOS OpenAML v1 — DTCC AI Hackathon dataset*. FINOS (Linux Foundation).                                                                              | GitHub `finos/OpenAML` (`training_data.csv`)                           | Sanity check GCN (§5.5.4)                  |
 
 Adicionalmente se referencian sin utilizar directamente:
 
@@ -309,7 +309,7 @@ del oráculo determinista descrito en §3.4.
 
 ### G.4 Referencias algorítmicas de detectores
 
-Los cuatro detectores de referencia del Capítulo 8 son
+Los cuatro detectores de referencia del Capítulo 5 son
 implementaciones de algoritmos ampliamente conocidos:
 
 - **GCN** (Kipf, T., Welling, M. *Semi-Supervised Classification with
@@ -427,7 +427,7 @@ Alineadas con los usos que la política UC3M enumera como
   (`scripts/eval_llm_defender.py`, `scripts/loco_ethereum_heist.py`,
   etc.) bajo la revisión posterior de todos los resultados numéricos.
 - Análisis exploratorio de artefactos generados por las campañas del
-  atacante para identificar patrones de refinamiento (§8.9.5).
+  atacante para identificar patrones de refinamiento (§5.9).
 
 **Herramienta de desarrollo de código (co-piloto)**:
 - Asistencia en la implementación de contratos Solidity adaptados de
@@ -470,16 +470,16 @@ de todos los detectores son decisiones documentadas y justificadas
 por el autor.
 
 **Generación de datos experimentales**. Todos los datos reportados en
-el Capítulo 8 provienen de: (i) ejecución real del pipeline sobre la
+el Capítulo 5 provienen de: (i) ejecución real del pipeline sobre la
 blockchain Anvil local o la testnet Sepolia; (ii) *datasets*
 académicos externos citados explícitamente en el Anexo G. **En ningún
 caso se han fabricado resultados experimentales mediante IA
 generativa**.
 
-**Interpretación de los resultados y hallazgos del Capítulo 8**. Las
-conclusiones sobre el trade-off ARI vs interpretabilidad (§8.8), la
-auditoría de memorización (§8.10) y las lecciones metodológicas del
-Capítulo 10 §10.3 reflejan el análisis crítico del autor sobre los
+**Interpretación de los resultados y hallazgos del Capítulo 5**. Las
+conclusiones sobre el trade-off ARI vs interpretabilidad (§5.8), la
+auditoría de memorización (§5.10) y las lecciones metodológicas del
+Capítulo 10 §6.3 reflejan el análisis crítico del autor sobre los
 datos empíricos observados.
 
 ### H.4 Trazabilidad y verificabilidad

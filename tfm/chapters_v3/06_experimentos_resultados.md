@@ -1,13 +1,13 @@
-# Capítulo 6 — Experimentos y resultados (attack primero, luego defense)
+# Capítulo 5 — Experimentos y resultados (attack primero, luego defense)
 
 Este capítulo describe (i) la infraestructura de reproducibilidad y el suite de tests del sistema; (ii) la estrategia de validación cruzada empleada; (iii) el protocolo de validación externa Sepolia; y (iv) los resultados empíricos completos de todos los experimentos.
 
-## 8.1 Estrategia de cross-validation
+## 5.1 Estrategia de cross-validation
 
 Se emplean tres estrategias de validación diseñadas para detectar
 distintos modos de sobreajuste.
 
-### 8.1.1 Split estándar 80/20 (referencia histórica)
+### 5.1.1 Split estándar 80/20 (referencia histórica)
 
 Particionado aleatorio de las 20 campañas atacantes en 16 de
 entrenamiento y 4 de test, con `train_test_split(random_state=42,
@@ -17,7 +17,7 @@ resultados **no son** la evidencia principal de este capítulo —la
 literatura previa ha demostrado que esta métrica sobreestima el
 rendimiento en *datasets* AML pequeños.
 
-### 8.1.2 Leave-One-Campaign-Out (LOCO-CV)
+### 5.1.2 Leave-One-Campaign-Out (LOCO-CV)
 
 **Motivación**. El problema con el split 80/20 sobre *datasets* AML
 pequeños es que el clasificador puede *memorizar* la identidad
@@ -29,7 +29,7 @@ sus vecinos exhiben este patrón específico → atacante" en vez de
 "cuando cualquier wallet + su vecindad exhiben esta topología
 adversarial → atacante". La consecuencia práctica es que el F1
 reportado sobre el *split* estándar sobreestima el rendimiento
-operativo real (§8.10 documenta un Δ F1 = -0,55 absoluto al
+operativo real (§5.10 documenta un Δ F1 = -0,55 absoluto al
 pasar de 80/20 a LOCO sobre la simulación propia).
 
 **Definición operativa**. Para cada una de las 20 campañas atacantes
@@ -43,7 +43,7 @@ del *dataset*:
 
 La métrica final es la media y desviación estándar del F1 sobre las
 20 iteraciones. Esta validación es la evidencia principal del
-Capítulo 8: mide la capacidad del detector de generalizar a un
+Capítulo 5: mide la capacidad del detector de generalizar a un
 actor/tipología nunca visto en entrenamiento —el escenario operativo
 real donde un exchange debe detectar campañas que emergen en el
 futuro, no re-clasificar campañas históricas ya etiquetadas.
@@ -53,7 +53,7 @@ Sobre el *dataset* EthereumHeist se emplea la variante análoga
 sirve como test set, con el resto como entrenamiento.
 
 **Auditoría diagnóstica adicional** (`scripts/audit_f1_memorization.py`,
-detallada en §8.10). Además de LOCO se computan cuatro chequeos que
+detallada en §5.10). Además de LOCO se computan cuatro chequeos que
 permiten aislar el origen de cualquier F1 elevado: (i) verificación
 de que los splits train/test tengan intersección vacía de direcciones
 no-contrato (previene *leakage* trivial); (ii) mutual information
@@ -67,16 +67,16 @@ fallaría sobre el escenario *stablecoin-scam* donde `mixer_*` son
 todos cero). El artefacto completo está en
 `results/audit_f1_memorization.json`.
 
-### 8.1.3 Stratified Group k-Fold (auditoría de leakage)
+### 5.1.3 Stratified Group k-Fold (auditoría de leakage)
 
 Como diagnóstico adicional se aplica *stratified group k-fold* con
 k=5 donde el grupo es la campaña. Esto separa el efecto de la
 memorización a nivel de campaña del efecto general de tamaño de test
 set. Se reporta en el Anexo B.
 
-## 8.2 Reproducibilidad y hardware
+## 5.2 Reproducibilidad y hardware
 
-### 8.2.1 Semillas deterministas
+### 5.2.1 Semillas deterministas
 
 Toda ejecución fija `random_state=42` en:
 
@@ -93,7 +93,7 @@ LLM (Anthropic no garantiza reproducibilidad exacta con
 runs consecutivas del *pipeline* LLM sobre el mismo prompt es
 < 5 % relativa en ARI.
 
-### 8.2.2 Hardware
+### 5.2.2 Hardware
 
 Los experimentos se han ejecutado sobre:
 
@@ -110,9 +110,9 @@ nodos del *dataset* filtrado toma ~5 minutos por exchange en CPU, o
 ~1 minuto en GPU. La evaluación LLM completa toma entre 30 s (Haiku,
 20 campañas) y 8 minutos (Sonnet, 420 campañas + EthereumHeist).
 
-### 8.2.3 Comandos de reproducción
+### 5.2.3 Comandos de reproducción
 
-Cada resultado numérico del Capítulo 8 se acompaña de un comando
+Cada resultado numérico del Capítulo 5 se acompaña de un comando
 `python scripts/<nombre>.py <argumentos>`. Los principales:
 
 ```bash
@@ -140,7 +140,7 @@ python scripts/eval_gcn_openaml.py
 
 Los outputs JSON se persisten en `results/` bajo control de versiones.
 
-## 8.3 Validación externa sobre Sepolia
+## 5.3 Validación externa sobre Sepolia
 
 La validación externa on-chain se ejecuta sobre la *testnet* pública
 Sepolia (chain_id `11155111`). El *setup* está descrito en detalle en
@@ -169,50 +169,50 @@ la metodología:
   desde el *provider* RPC (Alchemy o Infura) y se somete al mismo
   particionado y al mismo pipeline de detección que la simulación
   local. La comparativa de F1/ARI entre simulación y Sepolia se
-  reporta en el Capítulo 8.
+  reporta en el Capítulo 5.
 
 Este capítulo reporta los resultados experimentales del sistema
 descrito en los capítulos anteriores. La organización sigue el orden
 lógico del pipeline defensivo: primero la detección binaria local por
-exchange (§8.5), luego la atribución cross-exchange de actor clusters
-(§8.6), después el análisis cualitativo del razonamiento del
-coordinador LLM (§8.7), la discusión del trade-off entre interpretabilidad
+exchange (§5.5), luego la atribución cross-exchange de actor clusters
+(§5.6), después el análisis cualitativo del razonamiento del
+coordinador LLM (§5.7), la discusión del trade-off entre interpretabilidad
 y métrica cuantitativa que constituye la contribución central del
-trabajo (§8.8), la validación externa on-chain sobre Sepolia (§8.9), la
-auditoría metodológica de memorización (§8.10), y finalmente la
+trabajo (§5.8), la validación externa on-chain sobre Sepolia (§5.9), la
+auditoría metodológica de memorización (§5.10), y finalmente la
 discusión de limitaciones y su implicación para el trabajo futuro
-(§8.11).
+(§5.11).
 
 Todos los resultados numéricos han sido regenerados a partir del
 código publicado en el repositorio; los comandos exactos de
 reproducción se listan en el Capítulo 4 §4.7.3 y se referencian
 individualmente en cada tabla.
 
-## 8.4 Visión general de los experimentos
+## 5.4 Visión general de los experimentos
 
 Se han ejecutado cinco bloques experimentales sobre el pipeline
 defensivo:
 
 1. **Detección binaria local** sobre el *dataset* simulado bajo
-   *split* estándar 80/20 (§8.5.1). Fija la referencia comparativa
+   *split* estándar 80/20 (§5.5.1). Fija la referencia comparativa
    con la literatura previa.
 2. **Detección binaria local** bajo *leave-one-campaign-out
-   cross-validation* (§8.5.2). Evidencia principal sobre generalización.
+   cross-validation* (§5.5.2). Evidencia principal sobre generalización.
 3. **Detección binaria local** sobre EthereumHeist real, tanto
-   *split* estándar como *leave-one-heist-out* (§8.5.3). Valida el
+   *split* estándar como *leave-one-heist-out* (§5.5.3). Valida el
    diferencial memorización/generalización sobre datos reales.
 4. **Atribución de actor cluster cross-exchange** sobre el *dataset*
    simulado, comparando MultiAgent-cosine vs MultiAgent-LLM en tres
-   modelos Claude (§8.6.1).
-5. **Atribución cross-exchange** sobre EthereumHeist real (§8.6.2).
+   modelos Claude (§5.6.1).
+5. **Atribución cross-exchange** sobre EthereumHeist real (§5.6.2).
    Replica el hallazgo del bloque 4 sobre datos reales.
 
 Los sanity checks del clasificador GCN sobre Elliptic++ y OpenAML v1
-se reportan como validación auxiliar en §8.5.4.
+se reportan como validación auxiliar en §5.5.4.
 
-## 8.5 Detección binaria local por exchange
+## 5.5 Detección binaria local por exchange
 
-### 8.5.1 Split estándar 80/20 sobre simulación
+### 5.5.1 Split estándar 80/20 sobre simulación
 
 Bajo el *split* estándar (16 campañas atacantes en entrenamiento, 4 en
 test, seed 42), los cuatro detectores producen los siguientes F1 sobre
@@ -235,9 +235,9 @@ con su rol de baseline de referencia histórica.
 *benchmarks* AML sobre *datasets* pequeños (< 30 campañas) sufren
 sistemáticamente de sobreestimación por memorización, un artefacto
 señalado repetidamente en la literatura (Elmougy y Liu 2023, Weber et
-al. 2019). La §8.5.2 audita esta hipótesis mediante LOCO-CV.
+al. 2019). La §5.5.2 audita esta hipótesis mediante LOCO-CV.
 
-### 8.5.2 Leave-One-Campaign-Out sobre simulación
+### 5.5.2 Leave-One-Campaign-Out sobre simulación
 
 Aplicando LOCO-CV (Cap. 4 §4.4.2) al mismo *dataset*, con las mismas
 configuraciones de detector, se obtiene:
@@ -263,7 +263,7 @@ una campaña nunca vista, colapsan a rendimiento comparable al
 baseline no supervisado. Este es el modo de fallo más importante que
 debe corregirse antes de un despliegue productivo del sistema.
 
-### 8.5.3 EthereumHeist: réplica sobre datos reales
+### 5.5.3 EthereumHeist: réplica sobre datos reales
 
 Para descartar que el diferencial memorización/generalización sea un
 artefacto del generador simulado, se replica el experimento sobre
@@ -283,7 +283,7 @@ metodológico publicable del trabajo: los detectores GCN sobre AML
 cripto reportan métricas infladas cuando la validación no aísla la
 identidad del actor.
 
-### 8.5.4 Sanity checks: Elliptic++ y OpenAML v1
+### 5.5.4 Sanity checks: Elliptic++ y OpenAML v1
 
 Como validación auxiliar del clasificador GCN aislado del pipeline
 propio, se replica el entrenamiento sobre dos *benchmarks* académicos
@@ -297,10 +297,10 @@ externos con etiquetas independientes:
 En ambos casos el clasificador GCN implementado reproduce los
 resultados publicados dentro de 3 puntos de F1, lo que permite
 descartar bugs en la implementación como causa del diferencial
-observado en §8.5.2-§8.5.3. La caída bajo LOCO es un fenómeno
+observado en §5.5.2-§5.5.3. La caída bajo LOCO es un fenómeno
 metodológico, no un defecto de implementación.
 
-## 8.6 Atribución cross-exchange de actor clusters
+## 5.6 Atribución cross-exchange de actor clusters
 
 Esta sección constituye la evidencia principal para la contribución
 central del trabajo: la arquitectura simétrica LLM-vs-LLM. Se
@@ -308,7 +308,7 @@ compara la calidad del clustering producido por MultiAgent-cosine
 (baseline no paramétrica) contra MultiAgent-LLM (coordinador Claude)
 en tres tamaños de modelo.
 
-### 8.6.1 Simulación (420 corridas)
+### 5.6.1 Simulación (420 corridas)
 
 Sobre el *dataset* simulado combinado (10 311 nodos, 649 direcciones
 adversariales en 20 actor clusters + 9 584 singletons), con
@@ -341,7 +341,7 @@ cruza fronteras de campaña. Ambos criterios son coherentes; el
 segundo es más rico semánticamente pero no maximiza ARI contra un
 *ground truth* definido a nivel de campaña.
 
-### 8.6.2 EthereumHeist (datos reales)
+### 5.6.2 EthereumHeist (datos reales)
 
 Sobre el subgrafo EthereumHeist filtrado (4 796 nodos, 48 408 aristas,
 19 hackeos + 4 408 singletons benignos), con la misma configuración
@@ -359,7 +359,7 @@ Sobre el subgrafo EthereumHeist filtrado (4 796 nodos, 48 408 aristas,
 observado en simulación se preserva sobre datos reales de hackeos
 sobre Ethereum mainnet. Cosine gana en ARI por ~0,03; el LLM
 (especialmente Sonnet) produce razonamiento aliniado con la
-taxonomía canónica AML (§8.7). La diferencia absoluta entre Sonnet y
+taxonomía canónica AML (§5.7). La diferencia absoluta entre Sonnet y
 Haiku es de sólo 0,002 en ARI, lo que sugiere que la métrica
 cuantitativa está saturada; la diferencia real está en la calidad del
 razonamiento textual.
@@ -373,9 +373,9 @@ implicación metodológica es clara: **la similaridad coseno sobre
 features estáticos es un baseline sorprendentemente fuerte para
 atribución de actor cluster en AML**, y cualquier método más sofisticado
 debe justificar su coste con una dimensión distinta del ARI raw. La
-§8.8 argumenta que esa dimensión es la interpretabilidad.
+§5.8 argumenta que esa dimensión es la interpretabilidad.
 
-## 8.7 Análisis cualitativo del razonamiento LLM
+## 5.7 Análisis cualitativo del razonamiento LLM
 
 El *output* estructurado del coordinador LLM Sonnet 4.6 sobre
 EthereumHeist incluye una sección de razonamiento textual por
@@ -426,9 +426,9 @@ no puede producir.
 
 ![Figura 2. Flujo end-to-end de una campaña attacker + detección defensor. Ejemplo: seed 803 defi-exploit sobre Sepolia real, con métricas empíricas obtenidas.](tfm/figures/end_to_end_flow.png)
 
-![Figura 3. F1 binary por dataset — comparación entre Louvain baseline (Phase 1), GCN entrenado supervisado, y Louvain con hard-negative training (§8.9.38). El F1=0.928 sobre EthereumHeist real es el headline conservador reportado en abstract y defensa.](tfm/figures/f1_by_dataset.png)
+![Figura 3. F1 binary por dataset — comparación entre Louvain baseline (Phase 1), GCN entrenado supervisado, y Louvain con hard-negative training (§5.9). El F1=0.928 sobre EthereumHeist real es el headline conservador reportado en abstract y defensa.](tfm/figures/f1_by_dataset.png)
 
-## 8.7.bis Comparación cuantitativa con el estado del arte (SOTA)
+## 5.7.bis Comparación cuantitativa con el estado del arte (SOTA)
 
 Para contextualizar nuestros resultados frente a la literatura previa
 sobre detección AML en criptoactivos, se presenta una tabla
@@ -456,7 +456,7 @@ trabajos originales cuando no se reportó explícitamente.
    bajo LOCO (Δ = −0.04 vs −0.11/−0.22/−0.31 de la literatura previa
    sobre GCN). Esto se explica porque Louvain (nuestro Phase 1) no
    tiene parámetros entrenables susceptibles de memorizar identidades
-   de campaña — el finding metodológico §8.10 (Louvain como cota
+   de campaña — el finding metodológico §5.10 (Louvain como cota
    inferior de generalización).
 2. **Cross-domain sim2real**. Ningún trabajo previo reporta validación
    cross-domain (sim → real) con el mismo pipeline. Nuestro F1 = 0.928
@@ -464,14 +464,14 @@ trabajos originales cuando no se reportó explícitamente.
    nuestra simulación es evidencia directa de generalización.
 3. **Interpretabilidad**. Todos los baselines previos producen un
    score numérico sin razonamiento textual. Nuestro Phase 2 LLM
-   coordinator emite justificación textual auditable (ver §8.7 y
+   coordinator emite justificación textual auditable (ver §5.7 y
    Anexo B para ejemplos completos) — capacidad ausente en el estado
    del arte.
 4. **ARI actor clustering**. Solo Wu et al. 2023 discute clustering
    más allá de detección binaria; su GNN produce agrupaciones no
    interpretables. Nuestro pipeline logra ARI 0.406 sobre EthereumHeist
    con clustering explícitamente interpretable por rol AML
-   (§8.7 arquetipos: peel chain, mixer relay, exchange laundering).
+   (§5.7 arquetipos: peel chain, mixer relay, exchange laundering).
 
 **Referencias**:
 - [1] Weber et al., "Anti-Money Laundering in Bitcoin", KDD Workshop 2019.
@@ -482,9 +482,9 @@ trabajos originales cuando no se reportó explícitamente.
 - [4] Juvinski et al., "OpenAML: A Reproducible Benchmark for Ethereum-Based
   AML", (paper de referencia OpenAML v1, 2025).
 
-## 8.8 Discusión: trade-off ARI vs interpretabilidad
+## 5.8 Discusión: trade-off ARI vs interpretabilidad
 
-Los resultados de §8.6-§8.7 configuran una tensión aparente que
+Los resultados de §5.6-§5.7 configuran una tensión aparente que
 constituye la contribución central del trabajo. Se argumenta aquí que
 la tensión se resuelve al considerar dos dimensiones de evaluación
 que la literatura AML actual conflacta.
@@ -535,17 +535,17 @@ cifra que un compliance officer humano supera por dos órdenes de
 magnitud. El coste computacional del razonamiento LLM está muy por
 debajo del coste del análisis humano equivalente.
 
-## 8.9 Validación externa: iteraciones del atacante y evaluación del defensor
+## 5.9 Validación externa: iteraciones del atacante y evaluación del defensor
 
 Esta sección presenta los resultados de las corridas atacantes en
-Sepolia y Anvil (parte offensive, §8.9.A-B), seguidos de la evaluación
-completa del defensor con todas las ablations y validaciones (§8.9.C-K).
+Sepolia y Anvil (parte offensive, §5.9.A-B), seguidos de la evaluación
+completa del defensor con todas las ablations y validaciones (§5.9.C-K).
 Los identificadores `P1-XX` referencian mejoras del pipeline registradas
 en los commits de GitHub — el detalle histórico completo está en el
 registro de commits del repositorio; aquí se resumen los findings
 publishable.
 
-### 8.9.A Cronología de campañas atacantes — resumen ejecutivo
+### 5.9.A Cronología de campañas atacantes — resumen ejecutivo
 
 Se ejecutaron **26 campañas atacantes** distribuidas entre Sepolia
 (testnet pública) y Anvil (sandbox local), a lo largo de 5 meses
@@ -557,7 +557,7 @@ Sonnet 4.6) fue **~$25 USD** sobre las 26 campañas.
 |--------------|-----------|-------|-------:|-------------:|----------:|-----------------|
 | Deploy + smoke 100 | defi-exploit | Sepolia | 1 ETH | 100 % | $0.85 | Contratos verificados en Etherscan |
 | 500-503 | defi-exploit | Sepolia | 3-10 ETH | 89-100 % | $3.20 | Recuperación 9 ETH de Tornado; bug mixer_withdraw fixed |
-| 504-515 | defi-exploit + iteraciones | Sepolia | 1-3 ETH | 70-100 % | $4.10 | Retention-window finding (§8.9.6); hardening operativo; A+B+D+G+ gas architecture |
+| 504-515 | defi-exploit + iteraciones | Sepolia | 1-3 ETH | 70-100 % | $4.10 | Retention-window finding (§5.9); hardening operativo; A+B+D+G+ gas architecture |
 | 600-606 | defi-exploit | Sepolia | 1-3 ETH | 85-100 % | $2.90 | Oracle-matched pool; leaf-sync bug fixed; validación full-stack |
 | **800 oficial** | defi-exploit | Sepolia | **22.6 ETH** | 96 % | $2.10 | **Anti-strand co-funding leak metodológico** — P1-42 |
 | 802 oficial | defi-exploit post-P1-42 | Sepolia | 22.6 ETH | 96 % | $2.05 | A/B directo con 800; validación P1-42 |
@@ -565,13 +565,13 @@ Sonnet 4.6) fue **~$25 USD** sobre las 26 campañas.
 | 830 Anvil | defi-exploit | Anvil | 24.83 ETH | 97 % | $1.20 | Finding «Sonnet olvidó withdrawals» |
 | 840 v1/v2 Anvil | stablecoin-scam | Anvil | 41 672 USDT | FAILED | $1.50 | Context inflation crash — P1-63 propuesto |
 | **850 Anvil** | **ransomware-cashout** | Anvil | **12 ETH** | 95 % | $1.10 | **P1-61 validado**; ransomware dataset |
-| 900 held-out | defi-exploit | Anvil | 3 ETH | 96 % | $0.50 | Seed nunca visto — held-out validation §8.9.47 |
+| 900 held-out | defi-exploit | Anvil | 3 ETH | 96 % | $0.50 | Seed nunca visto — held-out validation §5.9 |
 | 901 held-out | ransomware-cashout | Anvil | 12 ETH | 94 % | $0.55 | Seed nunca visto — validación honesta |
 
-### 8.9.B Findings del atacante publishable
+### 5.9.B Findings del atacante publishable
 
 **Finding A — LLM Sonnet puede "olvidar" retirar del mixer**
-(§8.9.32, seed 830 Anvil). El coordinator ejecutó `mixer_deposit`
+(§5.9, seed 830 Anvil). El coordinator ejecutó `mixer_deposit`
 correctamente pero omitió el `mixer_withdraw` correspondiente en la
 misma sesión, dejando 3 ETH atrapados hasta que el post-hoc
 `mixer_recover.py` los rescató. Este *forgetting* es característico
@@ -586,7 +586,7 @@ limitaciones estructurales de faucet que afectan las campañas
 realistas: (i) Alchemy faucet emite 0.1 ETH cada 24h por wallet;
 (ii) Circle USDC faucet emite 20 USDC cada 2h por wallet — techo que
 saturaba los 100 000 USDT requeridos por el escenario stablecoin-scam
-antes del pivot a USDT Sepolia (§8.9.7). Estas restricciones NO
+antes del pivot a USDT Sepolia (§5.9). Estas restricciones NO
 existen en mainnet real y son puramente artefactos de testnet; la
 migración a Anvil (sandbox local, ETH ilimitado) es la mitigación
 adoptada para el dataset final.
@@ -602,17 +602,17 @@ salvedad de que representa comportamiento simulado (no real) —
 compensado por la ejecución on-chain verificable en Sepolia
 Etherscan.
 
-**Finding D — Anti-strand co-funding leak** (P1-42, §8.9.21). En la
+**Finding D — Anti-strand co-funding leak** (P1-42, §5.9). En la
 campaña oficial seed 800, el autor descubrió que el atacante estaba
 usando implícitamente un mismo funder wallet para bootstrap y para
 anti-strand recovery, creando un edge topológico que el defensor
 podía trivialmente flaguear. La arquitectura A+B+D+G+ (self-sovereign
-gas propagation, §8.9.23) separa estas rutas: cada burner recibe gas
+gas propagation, §5.9) separa estas rutas: cada burner recibe gas
 del predecesor en la cadena, sin dependencia de un funder pool
 compartido. Esta corrección aumenta la sofisticación adversarial y
 es lo que hace no-trivial la detección en seeds 802/803.
 
-### 8.9.C Cross-eval baselines F1 sobre los 5 datasets attacker + corpus benigno v57
+### 5.9.C Cross-eval baselines F1 sobre los 5 datasets attacker + corpus benigno v57
 
 Los detectores clásicos (Louvain, GCN) se evalúan sobre los 5
 datasets attacker consolidados (sepolia_800/802/803 + anvil_830/850)
@@ -629,14 +629,14 @@ seeds 300-304). Comando: `python scripts/cross_eval_baselines.py`.
 | **Mean**                         |  **0.978** | **0.937** | **1.000** | **0.959** |
 
 Louvain iguala o supera al GCN entrenado en mean F1 (0.978 vs 0.937),
-lo cual es coherente con el finding de §8.10 (Louvain como cota
+lo cual es coherente con el finding de §5.10 (Louvain como cota
 inferior de generalización). Precisión = 1.000 en todos los datasets
 — cero falsos positivos. El drop de F1 hacia sofisticaciones
 crecientes es monótono pero pequeño (P1-43+ solo −1.9 pp vs naive).
 
-### 8.9.D LLM defender empírico + hard-negative training
+### 5.9.D LLM defender empírico + hard-negative training
 
-**§8.9.D.1 LLM defender (§8.9.37)**. El coordinador LLM (Haiku 4.5)
+**§5.9.D.1 LLM defender (§5.9)**. El coordinador LLM (Haiku 4.5)
 opera en Phase 2 sobre las direcciones flagged por Louvain,
 proponiendo actor clusters. Cost sub-$0.05 por dataset. Sin embargo,
 el análisis reveló *label leakage* implícito: el corpus benigno v57
@@ -644,7 +644,7 @@ inicial contenía patterns tan distintos del attacker que el LLM
 producía F1 nominalmente perfecto (1.000) sin razonar realmente sobre
 similitud comportamental.
 
-**§8.9.D.2 Hard-negative training (§8.9.38, P1-69)**. Se inyectaron
+**§5.9.D.2 Hard-negative training (§5.9, P1-69)**. Se inyectaron
 500 direcciones background del propio grafo Sepolia como labels
 benignos duros durante la fase de entrenamiento de Louvain. Esto
 cerró el leakage y forzó al pipeline a discriminar sobre señales
@@ -663,18 +663,18 @@ El bg_FPR (false positive rate sobre las 500 hard-negatives) es
 **0.000** en 4/5 datasets — el pipeline nunca marca hard-neg como
 attacker. En anvil_850 el FPR es 0.028 (14/500), aceptable operativa.
 
-### 8.9.E Cross-domain validation — EthereumHeist (Wu 2023)
+### 5.9.E Cross-domain validation — EthereumHeist (Wu 2023)
 
 Para descartar overfit al simulador propio, se ejecutó el pipeline
 completo sobre EthereumHeist (dataset externo, 633 057 nodos, 23
-hackeos reales, ver Cap. 5 §5.D). RF Phase 1 sobre 4-dim features
+hackeos reales, ver Cap. 5 §4.D). RF Phase 1 sobre 4-dim features
 (in/out degree, log_eth_in/out) da **F1 = 0.928**; el LLM Phase 2
 sobre el top-60 flagged da baseline ARI = 0.077. Al aplicar P1-71
-(§8.9.G) con `max_c=8`, el ARI sube a **0.406** (+0.329, ~5×). Cost
+(§5.9.G) con `max_c=8`, el ARI sube a **0.406** (+0.329, ~5×). Cost
 $0.007 (una sola llamada Haiku). Cross-domain confirmada: el
 pipeline no está overfit al setup sintético.
 
-### 8.9.F Ablations negativas — prompt engineering y feature enrichment
+### 5.9.F Ablations negativas — prompt engineering y feature enrichment
 
 Se ejecutaron **cuatro ablations que intentaron mejorar el ARI del
 LLM defender mediante intervención en input o prompt, todas
@@ -683,19 +683,19 @@ límites del prompt-engineering para output cuantitativo LLM.
 
 | Ablation | Intervención | ARI Δ vs baseline | Coste | §  |
 |----------|--------------|------------------:|------:|:--:|
-| P1-55    | Prompt "PREFER distribute_to_exits" | 0 (ignorado) | $0.05 | 8.9.22 |
-| P1-56    | Prompt "MUST balance mixer/peel/swap 40/30/20" | 0 (ignorado) | $0.05 | 8.9.36 |
-| P1-70    | Prompt "aim for 5-10 clusters" | **−0.049** | $0.05 | 8.9.40 |
-| P1-72    | Feature enrichment: pagerank + betweenness + clustering coefficient (19→22 dim) | −0.011 | $0.05 | 8.9.41 |
+| P1-55    | Prompt "PREFER distribute_to_exits" | 0 (ignorado) | $0.05 | 5.9.22 |
+| P1-56    | Prompt "MUST balance mixer/peel/swap 40/30/20" | 0 (ignorado) | $0.05 | 5.9.36 |
+| P1-70    | Prompt "aim for 5-10 clusters" | **−0.049** | $0.05 | 5.9.40 |
+| P1-72    | Feature enrichment: pagerank + betweenness + clustering coefficient (19→22 dim) | −0.011 | $0.05 | 5.9.41 |
 
 **Finding metodológico consolidado**: prompt guidance y feature
 enrichment son cheap pero *unreliable*. La granularidad de output
 del LLM parece insensible a estas intervenciones. La ruta efectiva
-es post-procesamiento code-level (P1-71, §8.9.G).
+es post-procesamiento code-level (P1-71, §5.9.G).
 
 ![Figura 4. Barrido de max_clusters en P1-71 post-hoc merge sobre los 6 datasets (5 sintéticos + EthereumHeist real). Óptimo max_c=3 para sintéticos (círculos verdes), max_c=8 para EthereumHeist real — refleja la diferencia estructural entre los datasets.](tfm/figures/ari_sweep.png)
 
-### 8.9.G P1-71 post-hoc cluster merge — primera intervención positiva
+### 5.9.G P1-71 post-hoc cluster merge — primera intervención positiva
 
 **Algoritmo** (implementado en `src/aml/detectors/multi_agent.py:_merge_clusters_by_centroid`):
 merge determinístico de clusters LLM por distancia L2 de centroides
@@ -719,9 +719,9 @@ consecutivas negativas. Cost total sweep: **$0.194**. Backward-
 compatible: `max_clusters=None` por defecto deja el output LLM
 intacto.
 
-### 8.9.H P1-73 silhouette auto-tune — quita el caveat del oracle k
+### 5.9.H P1-73 silhouette auto-tune — quita el caveat del oracle k
 
-**Motivación**: §8.9.G usa `max_clusters=3` que coincide con el
+**Motivación**: §5.9.G usa `max_clusters=3` que coincide con el
 verdadero k=3 role types en nuestros datasets. En producción k es
 desconocido. Silhouette score picking data-driven resuelve esto sin
 ground truth.
@@ -745,7 +745,7 @@ sepolia_802) tienen baseline ya no-trivial y silhouette under-picks
 a k=2. Coste API: **$0** (silhouette es puro numpy sobre outputs
 LLM ya computados).
 
-### 8.9.I P1-74 ablation Sonnet 4.6 — contra-intuitive: cheaper wins
+### 5.9.I P1-74 ablation Sonnet 4.6 — contra-intuitive: cheaper wins
 
 Se replicaron los 5 datasets propios con Sonnet 4.6 (vs. Haiku 4.5)
 para probar si un modelo más grande produce mejor baseline
@@ -763,21 +763,21 @@ porque sobre-particiona menos de partida. Neto: Haiku baseline + P1-71
 supera a Sonnet + P1-71 por 2× a un tercio del coste. La configuración
 Pareto-óptima es **Haiku 4.5 + P1-71 + P1-73**.
 
-### 8.9.J Validación honesta — held-out con seeds nunca vistos (§8.9.46-47)
+### 5.9.J Validación honesta — held-out con seeds nunca vistos (§5.9-47)
 
 **Motivación crítica del autor**: los valores F1 = 1.000 en
 sepolia_800/802 son sospechosos. ¿Structural leakage o statistical
 noise?
 
-**Pre-registration (§8.9.46, 2026-09-14)**: se pre-registró la
+**Pre-registration (§5.9, 2026-09-14)**: se pre-registró la
 hipótesis y los tres escenarios posibles ANTES de ejecutar el
 experimento. Setup: 2 nuevas campañas attacker (seeds 900
 defi-exploit + 901 ransomware, nunca usados en dev) + corpus benigno
 v58 nuevo (5 seeds 400-404, nunca usados).
 
-**Resultado (§8.9.47)**:
+**Resultado (§5.9)**:
 
-| Métrica          | anvil_900 | anvil_901 | Mean HELD-OUT | Mean §8.5 in-dist | Δ         |
+| Métrica          | anvil_900 | anvil_901 | Mean HELD-OUT | Mean §5.5 in-dist | Δ         |
 |------------------|----------:|----------:|--------------:|------------------:|----------:|
 | **Louvain F1**   |   0.974   |   0.968   |     **0.971** |         **0.978** | **−0.007** ✓|
 | Precision        |   1.000   |   1.000   |         1.000 |             1.000 |    0      |
@@ -790,7 +790,7 @@ memorización estructural. El pipeline funciona reproducible sobre
 seeds genuinamente nuevos. Recomendación adoptada: en abstract/defensa
 se reporta EthereumHeist (F1=0.928) como headline más conservador.
 
-### 8.9.K Multi-campaign LOCO — pipeline escala bajo carga simultánea
+### 5.9.K Multi-campaign LOCO — pipeline escala bajo carga simultánea
 
 **Setup**: unir los 7 datasets attacker + benign v57 en UN grafo
 combinado (34 578 nodos, 56 648 aristas, 667 attackers) y correr el
@@ -810,7 +810,7 @@ F1 y ARI baja marginalmente (−0.03). Precision sigue en 1.000 con
 34k nodes. El 12 % de attackers que se pierden en Recall bajo carga
 son el trade-off honesto operativo.
 
-**Extensión — campaign-id LOCO (§8.9.49)**: mismo experimento pero
+**Extensión — campaign-id LOCO (§5.9)**: mismo experimento pero
 con ground truth `{role}__seed{N}` (18 clusters role×campaign en
 vez de 3 role-only). El pipeline logra **ARI role-attribution = 0.43**
 (excelente) pero **ARI campaign-attribution = 0.01** (indistinguible
@@ -819,7 +819,7 @@ atribuye por rol de comportamiento, no por identidad de campaña —
 que es **exactamente lo que FATF Rec. 20 requiere para SAR
 reporting** (arquetipo, no identidad forense de campaña individual).
 
-### 8.9.L Feature ablation — sólo 5 features hacen falta
+### 5.9.L Feature ablation — sólo 5 features hacen falta
 
 **Setup**: RF fit sobre las 19 features → extraer importance →
 re-run pipeline con máscaras top-K (K ∈ {5, 10, 19}). Dataset seed 803.
@@ -856,11 +856,11 @@ idéntico ARI. Pipeline con 5-dim es 3.8× más pequeño en prompt, mismo
 signal. Recomendación futura: adoptar 5-dim (`in_degree`,
 `total_degree`, `log_unique_in`, `transfer_usdt_in`, `log_usdt_in`)
 como default productivo. Se mantiene 19-dim en el TFM por trazabilidad
-con las tablas §8.5 ya reportadas.
+con las tablas §5.5 ya reportadas.
 
-## 8.10 Auditoría metodológica de memorización
+## 5.10 Auditoría metodológica de memorización
 
-Los resultados de §8.5 permiten formalizar tres *findings*
+Los resultados de §5.5 permiten formalizar tres *findings*
 metodológicos publicables independientemente del sistema propuesto.
 
 ![Figura 5. Auditoría metodológica de memorización — GCN colapsa bajo LOCO-CV (ΔF1 = −0.55 sobre simulación, −0.31 sobre EthereumHeist real), evidencia característica de memorización a nivel de campaña. Louvain (no supervisado) mantiene su F1 en ambos regímenes por no tener parámetros entrenables susceptibles de memorizar identidades. Finding metodológico publishable independiente del sistema propuesto.](tfm/figures/memorization_audit.png)
@@ -871,7 +871,7 @@ Sobre el *dataset* simulado, el paso de *split* 80/20 a LOCO-CV
 degrada el F1 del GCN de 0,97 a 0,42 (ΔF1 = −0,55, o −57 % relativo).
 La magnitud del diferencial es característica de memorización a nivel
 de campaña. Este resultado NO se debe a un defecto de implementación
-—§8.5.4 confirma que el mismo GCN reproduce los benchmarks públicos
+—§5.5.4 confirma que el mismo GCN reproduce los benchmarks públicos
 Elliptic++ y OpenAML dentro de 3 puntos de F1— sino a un artefacto
 inherente al tamaño reducido del *dataset*.
 
@@ -901,7 +901,7 @@ clusters debe incluir la evaluación LOCO por actor como métrica
 principal, no como *ablation*. Los *splits* aleatorios sobreestiman
 el rendimiento operativo real.
 
-**Finding 4 — Held-out validation con seeds nunca vistos (§8.9.47)**.
+**Finding 4 — Held-out validation con seeds nunca vistos (§5.9)**.
 En una auditoría posterior (2026-09-14) el autor observó que los
 valores F1 = 1.000 exactos en sepolia_800/802 son sospechosos. Para
 cuestionar formalmente si eran leakage o variance-de-seed, se

@@ -8,11 +8,11 @@
 
 **Autor**
 
-Saleh Sinawi
+Saleh Sinawi Al Khatib
 
 **Tutor**
 
-José María Alonso Cebrián
+José María De Fuentes García Romero De Tejada
 
 Septiembre 2026
 

@@ -1,24 +1,24 @@
-# Capítulo 5 — Diseño, dataset y lenguajes
+# Capítulo 4 — Diseño, dataset y lenguajes
 
 Este capítulo reúne el diseño arquitectónico del sistema, los
 lenguajes empleados en la implementación, y la especificación de
 datasets y parámetros. Se divide en cuatro bloques principales:
 
-- **§5.A Diseño y diagramas** — vista general del sistema, arquitecturas atacante y defensor, flujo end-to-end.
-- **§5.B Arquitectura de software** — capas de contratos, blockchain, herramientas y coordinación multi-agente.
-- **§5.C Lenguajes empleados** — Python, Solidity, Circom, JavaScript, Bash, Markdown con LOC por lenguaje.
-- **§5.D Datasets y parámetros** — datasets propios y externos, particionado federado, configuración de detectores y LLMs.
+- **§4.A Diseño y diagramas** — vista general del sistema, arquitecturas atacante y defensor, flujo end-to-end.
+- **§4.B Arquitectura de software** — capas de contratos, blockchain, herramientas y coordinación multi-agente.
+- **§4.C Lenguajes empleados** — Python, Solidity, Circom, JavaScript, Bash, Markdown con LOC por lenguaje.
+- **§4.D Datasets y parámetros** — datasets propios y externos, particionado federado, configuración de detectores y LLMs.
 
 ---
 
-## 5.0 Novedad central del TFM — visibilidad parcial federada por exchange
+## 4.0 Novedad central del TFM — visibilidad parcial federada por exchange
 
 Antes de exponer el diseño técnico se articula, en una única sección
 compacta, la novedad que este trabajo aporta al estado del arte
 descrito en el Capítulo 2 y a las limitaciones documentadas en el
 Capítulo 3.
 
-### 5.0.1 El problema que nadie ha modelado
+### 4.0.1 El problema que nadie ha modelado
 
 Toda la literatura académica AML sobre criptoactivos (Weber 2019,
 Wu 2023, Elmougy 2023, Juvinski 2025) asume implícitamente **una
@@ -35,14 +35,14 @@ operan los detectores publicados.
 realidad regulatoria (vistas parciales federadas) es la novedad
 central de este TFM.**
 
-### 5.0.2 Propuesta: federación cross-exchange con fingerprints
+### 4.0.2 Propuesta: federación cross-exchange con fingerprints
 
 La arquitectura propuesta modela explícitamente n exchanges
 federados donde:
 
 1. Cada exchange E_i observa **únicamente su subgrafo local**
    `G_i = (V_i, E_i)` obtenido por *hashing determinista* de las
-   direcciones sobre {1..n} (§5.A.4).
+   direcciones sobre {1..n} (§4.A.4).
 2. Cada exchange entrena su propio clasificador binario Louvain
    sobre G_i, produciendo flags locales `S_i ⊂ V_i`.
 3. Los exchanges comparten **NO datos crudos** sino **fingerprints
@@ -58,7 +58,7 @@ federados donde:
    exchanges probablemente pertenecen al mismo actor adversarial
    subyacente.
 
-### 5.0.3 Por qué esto es publishable
+### 4.0.3 Por qué esto es publishable
 
 Ningún trabajo previo del estado del arte cumple simultáneamente los
 tres siguientes criterios:
@@ -69,19 +69,19 @@ tres siguientes criterios:
 | Coordinador cross-exchange que razona sin acceso a datos crudos | ❌ | ❌ | ❌ | ❌ | **✓** |
 | Validación empírica bajo particionado federado n=3 | ❌ | ❌ | ❌ | ❌ | **✓** |
 
-Los resultados empíricos (§8.9.K multi-campaign LOCO F1 = 0.939 con
-34 578 nodos y 7 campañas simultáneas + §8.9.49 role attribution
+Los resultados empíricos (§5.9.K multi-campaign LOCO F1 = 0.939 con
+34 578 nodos y 7 campañas simultáneas + §5.9 role attribution
 ARI = 0.43 sobre 18 clusters role×campaign) demuestran que la
 arquitectura propuesta **funciona operativamente** bajo las
 condiciones adversariales del despliegue real: multiples campañas
 concurrentes, visibilidad parcial cero cross-exchange, sin re-training
 por dataset.
 
-### 5.0.4 Diagrama de la arquitectura
+### 4.0.4 Diagrama de la arquitectura
 
 ![Figura 1. Arquitectura del sistema dual multi-agente: atacante LLM (Opus 4.7) ejecuta transacciones on-chain; los 3 exchanges federados observan sólo sus vistas locales KYC-verificadas; el coordinador LLM defensor (Haiku 4.5) razona sobre fingerprints agregados sin acceso a datos crudos.](tfm/figures/architecture.png)
 
-## 5.A Vista general de la arquitectura
+## 4.A Vista general de la arquitectura
 
 El sistema se organiza en cinco capas integradas verticalmente. En la
 capa más profunda se despliegan los seis contratos Solidity que
@@ -95,7 +95,7 @@ módulos de análisis. La capa de coordinación LLM contiene los agentes
 Anthropic Claude (Opus 4.7 para el atacante; Sonnet 4.6 y Haiku 4.5 para
 el defensor). Finalmente, la capa de exchanges federados agrupa las tres
 vistas parciales sobre las que operan los detectores locales. La Figura 1
-de §5.0.4 muestra estas cinco capas y su interacción.
+de §4.0.4 muestra estas cinco capas y su interacción.
 
 El atacante multi-agente se compone de un coordinador Opus 4.7 que
 planifica cada campaña siguiendo la taxonomía FATF [6] y cinco
@@ -109,7 +109,7 @@ transferencias cross-chain vía `MockBridge` con log estructurado, e
 `clean_exit` mediante structuring por debajo del umbral CTR. Todos
 comparten el `ToolDispatcher` que enforce las cinco invariants
 estructurales (balance-preserving, gas-sovereign, deterministic-seeding,
-fail-safe, auditable) documentadas en §7.A.
+fail-safe, auditable) documentadas en §6.A.
 
 El defensor tiene arquitectura simétrica. En Phase 1, cada exchange
 observa únicamente su subgrafo local y entrena un clasificador Louvain
@@ -118,9 +118,9 @@ observa únicamente su subgrafo local y entrena un clasificador Louvain
 4.5 recibe los `top-K` flagged addresses de cada exchange con sus
 fingerprints agregados de 19 dimensiones y propone actor clusters
 cross-exchange con razonamiento textual auditable, alineado con FATF
-Recomendación 20. El post-procesamiento P1-71 (§8.9.G) mergea los
+Recomendación 20. El post-procesamiento P1-71 (§5.9.G) mergea los
 clusters LLM por distancia L2 de centroides hasta `max_clusters`, y P1-73
-(§8.9.H) elige `max_clusters` automáticamente por silhouette score sin
+(§5.9.H) elige `max_clusters` automáticamente por silhouette score sin
 requerir ground truth.
 
 El flujo end-to-end de una campaña sigue las cinco fases mostradas en la
@@ -155,7 +155,7 @@ contrato Solidity `Verifier`. La prueba se genera off-chain en Node.js
 `MockTornado`, que verifica la validez del proof y libera los fondos si
 el nullifier no ha sido usado antes.
 
-## 5.B Arquitectura del software
+## 4.B Arquitectura del software
 
 La capa de contratos on-chain está compuesta por seis contratos Solidity
 0.8.20 escritos a mano. Se opta por no importar OpenZeppelin ni Uniswap
@@ -186,7 +186,7 @@ El `ToolDispatcher` expone 32 herramientas al LLM atacante, organizadas
 en cinco grupos funcionales: transferencias directas (4), swaps DEX (4),
 mixer ZK (6), bridge cross-chain (2), gestión de wallets (8) y
 coordinación/audit (8). Cada dispatch valida las cinco invariants
-estructurales enumeradas en §7.A antes de emitir la transacción
+estructurales enumeradas en §6.A antes de emitir la transacción
 correspondiente, lo que garantiza que ningún error del LLM puede corromper
 el estado del sistema ni evadir la trazabilidad.
 
@@ -233,7 +233,7 @@ para el defensor. Los contratos verificados en Sepolia son inspectables
 por hash en Etherscan, y los cuarenta y siete tests unitarios de `tests/`
 cubren tanto la capa Solidity como el pipeline Python.
 
-## 5.C Lenguajes de programación
+## 4.C Lenguajes de programación
 
 El TFM combina seis lenguajes según sus fortalezas específicas, con un
 total aproximado de diez mil líneas de código propio. Python 3.11
@@ -269,11 +269,11 @@ como sistema ZK alternativo a Groth16 por presentar una curva de
 aprendizaje mayor sin aportar beneficio funcional al alcance del TFM.
 
 
-## 5.D Datasets y parámetros
+## 4.D Datasets y parámetros
 
 
 Este capítulo describe el diseño experimental que produce los resultados
-del Capítulo 8. Se detallan: (i) los cuatro *datasets* utilizados y su
+del Capítulo 5. Se detallan: (i) los cuatro *datasets* utilizados y su
 provenance; (ii) el particionado federado en n=3 exchanges; (iii) la
 configuración exacta de cada detector; (iv) la estrategia de
 *cross-validation* diseñada para detectar y prevenir memorización;
@@ -282,10 +282,10 @@ componentes LLM; (vii) las semillas de reproducibilidad;
 (viii) las constantes finales *locked* del atacante refinado; y (ix)
 el protocolo de validación externa sobre la testnet Sepolia.
 El objetivo es que un lector independiente pueda regenerar cualquier
-tabla o figura del Capítulo 8 con un solo comando desde el repositorio
+tabla o figura del Capítulo 5 con un solo comando desde el repositorio
 del proyecto.
 
-## 9.1 Datasets
+### 4.D.1 Datasets
 
 Se emplean cuatro *datasets* complementarios: uno propio (simulación
 adversarial multi-agente) y tres externos (uno real, dos benchmarks
@@ -334,7 +334,7 @@ un único `MultiDiGraph` y produce el *pickle* combinado
 Cuatro de los 23 hackeos son marcadamente asimétricos en escala
 —UpbitHack (263 k nodos), PlusTokenPonzi (155 k), AscendEXHacker
 (85 k), BitpointHacker (44 k)— y dominarían cualquier evaluación
-combinada. Los experimentos del Capítulo 8 reportan tanto la
+combinada. Los experimentos del Capítulo 5 reportan tanto la
 configuración completa como la configuración `--exclude-big-hacks`
 (19 hackeos, 4 796 nodos, 48 408 aristas) que produce un problema
 más equilibrado y tractable para CPU. Los dos regímenes se reportan
@@ -393,7 +393,7 @@ estrategia final locked el 2026-07-18 sustituye StableAML v2 por la
 combinación Elliptic++ + OpenAML v1 + simulación propia, que provee
 triple validación con provenance verificable.
 
-## 9.2 Particionado federado en exchanges
+### 4.D.2 Particionado federado en exchanges
 
 Los cuatro *datasets* se someten al mismo particionado
 `partial_visibility_split` (definido en `src/aml/detectors/dataset.py`,
@@ -421,7 +421,7 @@ exchange observa aproximadamente el 33 % de las direcciones y ~55 %
 de las aristas (las aristas con ambos endpoints en X_i más las que
 cruzan hacia otras plataformas).
 
-## 9.3 Configuración de detectores
+### 4.D.3 Configuración de detectores
 
 Se comparan cuatro detectores.
 
@@ -512,7 +512,7 @@ Los tres modelos se ejecutan sobre exactamente el mismo prompt
 (`_LLM_COORDINATOR_SYSTEM_PROMPT` en `multi_agent.py`) para permitir
 comparativa directa modelo-a-modelo.
 
-## 9.4 Métricas
+### 4.D.4 Métricas
 
 ### 9.4.1 Detección binaria local
 
@@ -547,7 +547,7 @@ Para los detectores LLM se reporta adicionalmente:
   y `output_tokens` (respuesta del LLM).
 - **Tiempo wall-clock**: latencia total de la evaluación.
 
-## 9.5 Configuración LLM
+### 4.D.5 Configuración LLM
 
 ### 9.5.1 Prompts
 
@@ -590,11 +590,11 @@ coseno con umbral 0,95 (idéntico al baseline). El campo
 `used_fallback` del *result* se reporta explícitamente en cada
 ejecución.
 
-## 9.6 Configuración final del atacante (constantes locked)
+### 4.D.6 Configuración final del atacante (constantes locked)
 
-Los resultados canónicos del Capítulo 8 (§8.9.5, seeds 400 y 403) se
+Los resultados canónicos del Capítulo 5 (§5.9, seeds 400 y 403) se
 producen con los siguientes valores fijos, congelados tras la
-iteración de refinamiento documentada en §8.9.5:
+iteración de refinamiento documentada en §5.9:
 
 | Constante                             | Valor                                     | Localización                                             |
 |---------------------------------------|-------------------------------------------|----------------------------------------------------------|
@@ -611,7 +611,7 @@ iteración de refinamiento documentada en §8.9.5:
 | Umbral sub-Travel-Rule *structuring*  | < 999 USD por *clean exit*                   | *prompt* `INTEGRATION_SYSTEM`                        |
 | Precio ETH/USDT fecha campaña         | Congelado por `resolve_campaign_ts`       | `env/market_context.py`                                  |
 
-La derivación empírica de estos valores se detalla en §8.9.5. La
+La derivación empírica de estos valores se detalla en §5.9. La
 motivación de tres de las constantes merece resaltarse:
 
 - **Cap dinámico de burners** (max(30, min(250, 3·⌈USD/999⌉))). La fórmula garantiza al menos 30
@@ -633,7 +633,7 @@ motivación de tres de las constantes merece resaltarse:
 
 ---
 
-## 5.E Planificación del proyecto y metodología de trabajo
+## 4.E Planificación del proyecto y metodología de trabajo
 
 ### 5.E.1 Metodología aplicada
 
@@ -704,10 +704,10 @@ presupuesto oficial.
 | Sepolia faucet drain / no fondos ETH testnet | Media | Medio | Migración a Anvil para escenarios de scale; Sepolia sólo para validación externa |
 | Bug crítico en contratos con ETH bloqueado | Baja | Alto | 47 tests unitarios de contratos + mixer_recover.py como red de rescate |
 | LLM produce campañas no realistas | Media | Medio | P1-42/43/44 iteraciones de refinamiento con métricas F1 vs. baseline |
-| Overfitting del defensor a seeds de dev | Media | Alto | LOCO-CV (§8.10) + held-out validation seeds 900/901 (§8.9.J) |
+| Overfitting del defensor a seeds de dev | Media | Alto | LOCO-CV (§5.10) + held-out validation seeds 900/901 (§5.9.J) |
 | Budget LLM excedido | Baja | Medio | Pivote a Haiku 4.5 en fase F5; cost tracking en cada eval |
 
-## 5.F Presupuesto del proyecto
+## 4.F Presupuesto del proyecto
 
 ### 5.F.1 Coste de personal
 
@@ -754,7 +754,7 @@ historial de facturación de la cuenta.
 
 El desglose por uso aproximado es: Opus 4.7 en las veintiséis campañas
 del atacante consume aproximadamente el 70 % del gasto; Sonnet 4.6 en la
-ablation §8.9.I y en las evaluaciones headline representa
+ablation §5.9.I y en las evaluaciones headline representa
 aproximadamente el 20 %; Haiku 4.5 en las evaluaciones bulk del defensor
 representa el 10 % restante.
 
