@@ -1,37 +1,42 @@
 # Capítulo 1 — Introducción, contexto, motivación y objetivos
 
-## Resumen (Español)
+## Resumen
 
-Este Trabajo Fin de Máster aborda la detección de blanqueo de capitales
-sobre criptoactivos en la red Ethereum bajo restricciones realistas de
-visibilidad parcial federada por exchange. Se propone un sistema dual
-multi-agente: (i) un simulador ofensivo basado en agentes LLM que
-ejecuta campañas siguiendo la taxonomía FATF (colocación, layering,
-integración) mediante herramientas on-chain reales (transferencias
-ERC-20, swaps Uniswap V2, mezclador ZK estilo Tornado con pruebas
-Groth16, structuring sub-CTR); y (ii) un detector defensivo multi-agente
-donde cada exchange federado observa únicamente su vista local y
-colabora vía fingerprints de features sin compartir datos crudos.
+En este Trabajo Fin de Máster se aborda la detección de blanqueo de
+capitales sobre criptoactivos en la red Ethereum bajo restricciones
+realistas de visibilidad parcial federada por exchange. Se propone un
+sistema dual multi-agente: por un lado, un simulador ofensivo basado en
+agentes LLM que ejecuta campañas siguiendo la taxonomía FATF (colocación,
+layering, integración) mediante herramientas on-chain reales
+(transferencias ERC-20, swaps Uniswap V2, mezclador ZK estilo Tornado con
+pruebas Groth16, structuring sub-CTR); y por otro, un detector defensivo
+multi-agente en el que cada exchange federado observa únicamente su vista
+local y colabora mediante fingerprints de features sin compartir datos
+crudos.
 
-El detector combina un clasificador binario Louvain para Phase 1 (F1)
-con un coordinador LLM para Phase 2 (actor clustering) que produce
-razonamiento textual auditable. Se validó frente a baselines
-establecidos (Louvain community detection, GCN estilo Weber) sobre
-tres conjuntos de datos: dataset simulado propio con features
-específicas de mezclador (26 campañas), benchmark real EthereumHeist
-(Wu et al. 2023, 23 hacks de mainnet incluyendo Upbit-Lazarus y
-PolyNetwork), y validaciones auxiliares sobre Elliptic++ y OpenAML v1.
-Se aplicó leave-one-campaign-out cross-validation para evitar
-memorización, held-out validation con seeds nunca vistos, y
-multi-campaign LOCO como test escalabilidad.
+El detector combina un clasificador binario Louvain para la Fase 1 (F1)
+con un coordinador LLM para la Fase 2 (clustering de actores) que produce
+razonamiento textual auditable. Se valida frente a *baselines*
+establecidos (Louvain community detection, GCN estilo Weber) sobre tres
+conjuntos de datos: un dataset simulado propio con features específicas
+de mezclador (26 campañas), el *benchmark* real EthereumHeist (Wu et al.
+2023, 23 hackeos de *mainnet* incluidos Upbit-Lazarus y PolyNetwork), y
+validaciones auxiliares sobre Elliptic++ y OpenAML v1. Se aplica
+leave-one-campaign-out cross-validation para evitar memorización,
+*held-out validation* con semillas nunca vistas, y multi-campaign LOCO
+como prueba de escalabilidad.
 
-Resultados principales: F1 mean = 0.97 sobre datos simulados
-(in-distribution + held-out), F1 = 0.93 sobre EthereumHeist real; ARI
-role-attribution = 0.43 tras la intervención P1-71 (post-hoc cluster
-merge). Como validación externa el sistema completo se desplegó sobre
-la testnet pública Sepolia con verificabilidad on-chain vía
-Etherscan. Coste total del pipeline de validación: ~1.60 USD en
-llamadas LLM.
+Los resultados principales son F1 medio de 0.97 sobre datos simulados
+(in-distribution + held-out), F1 = 0.93 sobre EthereumHeist real, y ARI
+de atribución de rol = 0.43 tras la intervención P1-71 (*post-hoc cluster
+merge*). Como validación externa, el sistema completo se despliega sobre
+la *testnet* pública Sepolia con verificabilidad on-chain vía Etherscan.
+El coste total del pipeline de validación asciende a aproximadamente 1.60
+USD en llamadas LLM.
+
+**Palabras clave**: blanqueo de capitales, criptomonedas, Ethereum,
+simulación adversarial, agentes LLM, aprendizaje federado, visibilidad
+parcial, Sepolia, FATF, Louvain, clustering de actores.
 
 ## Abstract (English)
 
@@ -65,9 +70,9 @@ validation, the entire system was deployed on the Sepolia public
 testnet with on-chain verifiability via Etherscan. Total pipeline
 validation cost: ~1.60 USD in LLM calls.
 
-**Keywords**: AML, cryptocurrency, Ethereum, adversarial simulation,
-multi-agent LLM, federated learning, partial visibility, Sepolia,
-FATF, Louvain, actor clustering.
+**Keywords**: money laundering, cryptocurrencies, Ethereum,
+adversarial simulation, LLM agents, federated learning, partial
+visibility, Sepolia, FATF, Louvain, actor clustering.
 
 ## 1.1 Contexto y motivación
 
@@ -96,8 +101,8 @@ direcciones que ha verificado directamente. El resto del grafo, incluyendo
 las direcciones de otros exchanges, sólo es observable como *contrapartes
 anónimas*. Ningún actor individual dispone entonces de la visión global
 que asumen implícitamente los detectores publicados en los principales
-*benchmarks* académicos [1][2][3]. En este TFM abordamos esa brecha
-proponiendo una arquitectura donde cada exchange entrena su propio
+*benchmarks* académicos [1][2][3]. En este TFM se aborda esa brecha con
+una arquitectura en la que cada exchange entrena su propio
 clasificador sobre su vista local y un coordinador cross-exchange, basado
 en un modelo de lenguaje grande (LLM), razona sobre los *fingerprints*
 agregados para inferir qué direcciones flageadas en distintos exchanges
@@ -109,15 +114,15 @@ sintéticos disponibles —AMLSim [4], OpenAML [5]— generan campañas de
 *smurfing* clásico o patrones geométricos de *fan-out/fan-in*, pero no
 simulan el uso combinado de mezcladores ZK (Tornado Cash) [20], puentes
 cross-chain, intercambios descentralizados con *slippage* real y
-estructuración por debajo del umbral de reporte CTR. En este TFM
-proponemos un simulador ofensivo basado en agentes LLM que ejecuta cinco
-de las ocho técnicas de blanqueo cripto documentadas por FATF en el
-informe *Virtual Assets Red Flag Indicators* [6] —mezcladores, DEX,
-puentes cross-chain, structuring sub-CTR y rapid pass-through wallets,
-dejando fuera privacy coins, jurisdicciones no cooperativas y OTC brokers
-por no ser verificables on-chain sin datos externos— mediante herramientas
+estructuración por debajo del umbral de reporte CTR. En este TFM se propone
+un simulador ofensivo basado en agentes LLM que ejecuta cinco de las
+ocho técnicas de blanqueo cripto documentadas por FATF en el informe
+*Virtual Assets Red Flag Indicators* [6] —mezcladores, DEX, puentes
+cross-chain, structuring sub-CTR y rapid pass-through wallets, dejando
+fuera privacy coins, jurisdicciones no cooperativas y OTC brokers por no
+ser verificables on-chain sin datos externos— mediante herramientas
 on-chain reales sobre una copia local de la red Ethereum (Foundry/Anvil)
-[26] y validamos el sistema completo sobre la *testnet* pública Sepolia
+[26], y se valida el sistema completo sobre la *testnet* pública Sepolia
 con verificabilidad on-chain vía Etherscan.
 
 ## 1.2 Problema
@@ -138,7 +143,7 @@ de las direcciones que él mismo ha verificado por KYC. Ninguna de las
 plataformas ve el grafo completo, y ninguna comparte sus tablas KYC
 con las demás.
 
-Sobre este planteamiento abordamos dos problemas encadenados:
+Sobre este planteamiento se abordan dos problemas encadenados:
 
 1. **Detección binaria local**. Cada *exchange* entrena su propio
    clasificador con la información que sí puede ver dentro de su
@@ -160,39 +165,39 @@ la arista que las conecta.
 
 ## 1.3 Contribuciones
 
-Realizamos cuatro aportaciones principales.
+En este trabajo se realizan cuatro aportaciones principales.
 
-**Arquitectura simétrica LLM-vs-LLM**. Proponemos un sistema donde tanto
-el atacante como el defensor están orquestados por agentes LLM. El
+**Arquitectura simétrica LLM-vs-LLM**. Se propone un sistema en el que
+tanto el atacante como el defensor están orquestados por agentes LLM. El
 atacante utiliza un coordinador Opus 4.7 con sub-agentes especializados
 (Placement, Layering, Integration) basados en Sonnet 4.6, cada uno con
 acceso a un catálogo de herramientas on-chain reales. El defensor replica
-la asimetría: clasificadores GCN locales por exchange (rol *ML filter*)
-más un coordinador Sonnet 4.6 cross-exchange (rol *LLM agent*) que razona
-sobre los fingerprints agregados para inferir clusters de actores. Hasta
-donde tenemos constancia, esta simetría LLM-vs-LLM es novedosa en la
-literatura AML cripto.
+la asimetría con clasificadores GCN locales por exchange (rol *ML
+filter*) más un coordinador Sonnet 4.6 cross-exchange (rol *LLM agent*)
+que razona sobre los fingerprints agregados para inferir clusters de
+actores. Esta simetría LLM-vs-LLM constituye una aportación novedosa
+respecto a la literatura AML cripto reciente.
 
 **Evaluación estricta bajo visibilidad parcial federada**. A diferencia
 de los detectores publicados sobre Elliptic++ [2] o AMLWorld [4], que
-asumen implícitamente una vista global del grafo, evaluamos cada
-componente bajo particiones del grafo en n=3 exchanges, midiendo
-separadamente el rendimiento *intra-exchange* (F1 sobre etiquetas binarias
-locales) y el rendimiento *cross-exchange* (ARI sobre atribución de actor
-clusters).
+asumen implícitamente una vista global del grafo, en este trabajo se
+evalúa cada componente bajo particiones del grafo en n=3 exchanges,
+midiendo separadamente el rendimiento *intra-exchange* (F1 sobre
+etiquetas binarias locales) y el rendimiento *cross-exchange* (ARI sobre
+atribución de actor clusters).
 
-**Auditoría metodológica de la memorización en detectores AML**.
-Identificamos y documentamos un artefacto experimental común en la
-literatura: los detectores GCN sobre datasets pequeños (< 30 campañas)
-tienden a memorizar en lugar de generalizar, produciendo F1 > 0.95 en
-validación estándar pero cayendo a F1 ≈ 0.42 bajo *leave-one-campaign-out*
-cross-validation. Aplicamos LOCO-CV a los tres detectores (Louvain, GCN,
-MultiAgent-LLM) y reportamos los diferenciales.
+**Auditoría metodológica de la memorización en detectores AML**. Se
+identifica y documenta un artefacto experimental común en la literatura:
+los detectores GCN sobre datasets pequeños (< 30 campañas) tienden a
+memorizar en lugar de generalizar, produciendo F1 > 0.95 en validación
+estándar pero cayendo a F1 ≈ 0.42 bajo *leave-one-campaign-out*
+cross-validation. Se aplica LOCO-CV a los tres detectores (Louvain, GCN,
+MultiAgent-LLM) y se reportan los diferenciales.
 
-**Validación externa on-chain**. Desplegamos el sistema completo sobre
+**Validación externa on-chain**. El sistema completo se despliega sobre
 Sepolia con seis contratos verificables (MockUSDT, MockUniswapV2Pool,
 MockTornado con verificador Groth16, MockBridge, MiMCSponge, Verifier),
-permitiendo que un lector independiente reproduzca las campañas y
+lo que permite que un lector independiente reproduzca las campañas y
 verifique los hashes de transacción en Etherscan.
 
 ## 1.4 Objetivos y requisitos del proyecto

@@ -93,1268 +93,193 @@ comercial post-MiCA (Reglamento (UE) 2023/1114, vigencia plena 2027):
 - **MiCA art. 63** (transparencia algorítmica): los outputs LLM son
   interpretables por un compliance officer sin conocimiento de ML.
 
-## 5.A Diseño y diagramas del sistema
+## 5.A Vista general de la arquitectura
 
-Este capítulo describe la arquitectura del sistema completo mediante siete
-diagramas: (1) visión general de las cinco capas del pipeline; (2) desglose
-interno del atacante multi-agente; (3) desglose interno del defensor
-multi-agente; (4) flujo end-to-end de una campaña; (5) modelo de datos
-federado; (6) stack de la prueba zero-knowledge del mezclador; y (7) vista
-de despliegue en producción (trabajo futuro).
+El sistema se organiza en cinco capas integradas verticalmente. En la
+capa más profunda se despliegan los seis contratos Solidity que
+materializan el ecosistema on-chain sobre el que operan atacante y
+defensor. Sobre
+ellos actúa la capa blockchain, formada por Anvil durante el desarrollo y
+Sepolia durante la validación externa. La capa Python del proyecto se
+sitúa por encima e integra el `ToolDispatcher` (que valida cada
+transacción), los detectores (Louvain, GCN, LLM coordinator) y los
+módulos de análisis. La capa de coordinación LLM contiene los agentes
+Anthropic Claude (Opus 4.7 para el atacante; Sonnet 4.6 y Haiku 4.5 para
+el defensor). Finalmente, la capa de exchanges federados agrupa las tres
+vistas parciales sobre las que operan los detectores locales. La Figura 1
+de §5.0.4 muestra estas cinco capas y su interacción.
 
-Cada diagrama se presenta como un esquema estructurado en texto (legible
-directamente en Word) más una descripción explicativa. Las versiones
-renderizadas como imagen (Mermaid) están disponibles en el repositorio
-GitHub del proyecto para consulta online.
+El atacante multi-agente se compone de un coordinador Opus 4.7 que
+planifica cada campaña siguiendo la taxonomía FATF [6] y cinco
+sub-agentes especializados: `placement_agent` controla la fase inicial
+(source wallet a burners), `mixer_agent` coordina depósitos y retiradas
+del `MockTornado` con generación de pruebas Groth16 [23] off-chain via
+snarkjs [30], `swap_agent` ejecuta operaciones sobre `MockUniswapV2Pool`
+aplicando el slippage real de la curva x·y=k, `bridge_agent` simula
+transferencias cross-chain vía `MockBridge` con log estructurado, e
+`integration_agent` distribuye los fondos finales a las direcciones
+`clean_exit` mediante structuring por debajo del umbral CTR. Todos
+comparten el `ToolDispatcher` que enforce las cinco invariants
+estructurales (balance-preserving, gas-sovereign, deterministic-seeding,
+fail-safe, auditable) documentadas en §7.A.
 
----
+El defensor tiene arquitectura simétrica. En Phase 1, cada exchange
+observa únicamente su subgrafo local y entrena un clasificador Louvain
+[10] (o GCN [9], según configuración) que produce `predict_proba(addr) →
+[0,1]` para cada dirección observable. En Phase 2, un coordinador Haiku
+4.5 recibe los `top-K` flagged addresses de cada exchange con sus
+fingerprints agregados de 19 dimensiones y propone actor clusters
+cross-exchange con razonamiento textual auditable, alineado con FATF
+Recomendación 20. El post-procesamiento P1-71 (§8.9.G) mergea los
+clusters LLM por distancia L2 de centroides hasta `max_clusters`, y P1-73
+(§8.9.H) elige `max_clusters` automáticamente por silhouette score sin
+requerir ground truth.
 
-## 4.1 Vista general: las cinco capas del sistema
+El flujo end-to-end de una campaña sigue las cinco fases mostradas en la
+Figura 2 de §6.0. Alice roba fondos del pool DEX vulnerable (placement);
+el atacante los procesa a través del mixer ZK, swaps y burners chain
+(layering); distribuye los fondos limpios mediante structuring sub-CTR a
+direcciones `clean_exit` (integration); los tres exchanges observan
+sus vistas parciales y Louvain flagea localmente (detection); y el LLM
+cluster cross-exchange agrupa las direcciones flageadas con razonamiento
+textual (clustering). Los datos generados quedan persistidos en
+`chain_trace.jsonl`, `addresses.json` y `campaign.json` como artefactos
+verificables e independientemente reproducibles.
 
-### Esquema
+La federación se implementa a través de `partial_visibility_split(combined,
+num_exchanges=3, seed=42)`. Esta función reparte las direcciones
+observables entre los exchanges mediante hashing determinista
+`hash(address) % num_exchanges`. Cada exchange observa sólo aquellas
+aristas donde AMBOS extremos son direcciones asignadas a él,
+garantizando la restricción realista de que un exchange no puede observar
+transacciones que no involucran a sus usuarios KYC. La determinismo del
+hash asegura que el mismo seed reproduce exactamente el mismo
+particionado entre runs, propiedad esencial para la reproducibilidad de
+las tablas del Capítulo 6.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  CAPA 5 — DEFENSOR MULTI-AGENTE                                 │
-│    • GCN local por exchange (×3)                                │
-│    • LLM Coordinator (Haiku / Sonnet / Opus) o cosine baseline  │
-└─────────────────────────────────────────────────────────────────┘
-                              ▲
-                              │ (analiza tráfico generado)
-                              │
-┌─────────────────────────────────────────────────────────────────┐
-│  CAPA 4 — ATACANTE MULTI-AGENTE                                 │
-│    • Coordinator Opus 4.7 (estratega)                           │
-│    • Placement / Layering / Integration Sonnet 4.6              │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼ (invoca tools)
-┌─────────────────────────────────────────────────────────────────┐
-│  CAPA 3 — CATÁLOGO DE 19 HERRAMIENTAS ON-CHAIN                  │
-│    • ToolDispatcher con 5 invariants estructurales              │
-│    • Funder pool + gestión de notes                             │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼ (envía tx firmadas)
-┌─────────────────────────────────────────────────────────────────┐
-│  CAPA 2 — BLOCKCHAIN BACKEND                                    │
-│    • Anvil ephemeral local (desarrollo + eval Anvil)            │
-│    • Sepolia testnet pública (validación externa)               │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼ (opera sobre)
-┌─────────────────────────────────────────────────────────────────┐
-│  CAPA 1 — CONTRATOS SOLIDITY (EVM)                              │
-│    • MockUSDT (ERC-20 6 decimales)                              │
-│    • MockUniswapV2Pool (AMM constant-product)                   │
-│    • MockTornado + MerkleTreeWithHistory + Verifier (mixer ZK)  │
-│    • MockBridge (bridge cross-chain simplificado)               │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Descripción
-
-La Capa 1 (contratos Solidity) es el sustrato sobre el que operan las
-capas superiores. La Capa 2 (backend blockchain) elige entre Anvil
-ephemeral para desarrollo y Sepolia real para validación externa. La
-Capa 3 (herramientas on-chain) expone al atacante 19 tools con 5
-invariants aplicados transversalmente por el ToolDispatcher. Las Capas 4
-y 5 son las contribuciones novel: atacante y defensor multi-agente
-simétricos, ambos basados en LLMs pero con roles opuestos.
-
----
-
-## 4.2 Atacante multi-agente FATF
-
-### Esquema
-
-```
-                            ┌────────────────────────────┐
-   USER prompt ────────▶    │  NIVEL 1: COORDINATOR      │
-   (scenario 10 ETH)        │  Claude Opus 4.7           │
-                            │  Planning + Delegation      │
-                            └────────────┬───────────────┘
-                                         │
-              ┌──────────────────────────┼──────────────────────────┐
-              │                          │                          │
-      delegate_to_                delegate_to_             delegate_to_
-        placement                   layering                integration
-              │                          │                          │
-              ▼                          ▼                          ▼
-    ┌───────────────────┐   ┌───────────────────┐    ┌───────────────────┐
-    │ NIVEL 2:          │   │ NIVEL 2:          │    │ NIVEL 2:          │
-    │ PLACEMENT         │   │ LAYERING          │    │ INTEGRATION       │
-    │ Sonnet 4.6        │   │ Sonnet 4.6        │    │ Sonnet 4.6        │
-    │                   │   │                   │    │                   │
-    │ generate_burner + │   │ mixer_deposit +   │    │ register_clean_   │
-    │ transfer_eth      │   │ mixer_withdraw +  │    │ exit + smurf_     │
-    │                   │   │ swaps + peel      │    │ split             │
-    └─────────┬─────────┘   └─────────┬─────────┘    └─────────┬─────────┘
-              │                       │                        │
-              └───────────────────────┼────────────────────────┘
-                                      │
-                                      ▼
-                     ┌──────────────────────────────────┐
-                     │ NIVEL 3: EJECUCIÓN               │
-                     │                                  │
-                     │ ToolDispatcher                    │
-                     │   • 19 tools                     │
-                     │   • 5 invariants estructurales    │
-                     │   • notes_file persistence       │
-                     │   • funder pool rotation         │
-                     └──────────────┬───────────────────┘
-                                    │
-                                    ▼
-                     ┌──────────────────────────────────┐
-                     │ Anvil / Sepolia                  │
-                     │ (transacciones on-chain reales)   │
-                     └──────────────────────────────────┘
-
-  Retorno de status (success / partial / incomplete) desde cada sub-agente
-  al Coordinador tras completar su fase.
-```
-
-### Descripción
-
-El Coordinador Opus no ejecuta transacciones; sólo delega en sub-agentes
-especializados por fase FATF. Cada sub-agente recibe un `objective`
-textual y un `context`, y devuelve al Coordinador un `status`. El
-ToolDispatcher (Nivel 3) es la única capa que firma y envía
-transacciones on-chain, aplicando los cinco invariants estructurales
-(guardarraíl del deployer, cap dinámico de burners, rotación del funder
-pool, gas reserve por defecto, sweep final) de forma transversal a
-todas las herramientas.
-
----
-
-## 4.3 Defensor multi-agente cross-exchange
-
-### Esquema
-
-```
-                  ┌──────────────────────────────────────────┐
-    INPUT ───▶    │ Grafo global (MultiDiGraph etiquetado)   │
-                  │ chain_trace.jsonl + addresses.json       │
-                  └──────────────────┬───────────────────────┘
-                                     │
-                                     ▼
-                  ┌──────────────────────────────────────────┐
-                  │ partial_visibility_split (hash-based)     │
-                  │ 3 exchanges deterministas, seed=42        │
-                  └──────┬────────┬────────┬─────────────────┘
-                         │        │        │
-                         ▼        ▼        ▼
-                    ┌──────┐ ┌──────┐ ┌──────┐
-                    │ G_A  │ │ G_B  │ │ G_C  │  Subgrafos por exchange
-                    │ ~55% │ │ ~55% │ │ ~55% │  (overlap de contrapartes)
-                    │ edges│ │ edges│ │ edges│
-                    └──┬───┘ └──┬───┘ └──┬───┘
-                       │        │        │
-                       ▼        ▼        ▼
-                    ┌──────┐ ┌──────┐ ┌──────┐
-   CAPA 1           │ GCN  │ │ GCN  │ │ GCN  │  Clasificadores GCN
-   locales          │  A   │ │  B   │ │  C   │  entrenados independientemente
-                    │      │ │      │ │      │  (2 capas 128h + 19 features)
-                    └──┬───┘ └──┬───┘ └──┬───┘
-                       │        │        │
-                       │  top-K=60 flagged + features per address
-                       │        │        │
-                       └────────┼────────┘
-                                │
-                                ▼
-                  ┌──────────────────────────────────────────┐
-   CAPA 2         │ Coordinador cross-exchange (elegir uno): │
-                  │                                          │
-                  │  • MultiAgentDetector (cosine baseline)  │
-                  │  • LLMDefenderCoordinator (Haiku /       │
-                  │      Sonnet / Opus)                      │
-                  └──────────────────┬───────────────────────┘
-                                     │
-                                     ▼
-                  ┌──────────────────────────────────────────┐
-   OUTPUT         │ • Actor clusters (arquetipos AML         │
-                  │   nombrados)                             │
-                  │ • Binary flags per address               │
-                  │ • (LLM) Reasoning textual justificatorio │
-                  └──────────────────────────────────────────┘
-```
-
-### Descripción
-
-La simetría con el atacante es intencional: dos capas jerárquicas donde
-la primera es local por exchange y la segunda agrega cross-exchange. La
-Capa 1 (GCN locales) entrena un modelo por exchange sin compartir
-grafos crudos entre exchanges — cada exchange sólo ve las direcciones
-KYC-propias más sus contrapartes anónimas. La Capa 2 recibe las top-60
-direcciones flageadas por cada exchange más las 19 features de cada una,
-y produce el clustering final más las alertas. Ambos coordinadores
-(cosine baseline y LLM) son sustituibles mediante la misma interfaz.
-
----
-
-## 4.4 Flujo end-to-end de una campaña (secuencia temporal)
-
-### Esquema
-
-```
-  Usuario/CLI      Runner        Coordinator     Sub-agente     ToolDispatcher      Chain
-      │              │                │              │                │              │
-      │ python run   │                │              │                │              │
-      ├─────────────▶│                │              │                │              │
-      │              │                │              │                │              │
-      │              │ arranca Anvil / conecta Sepolia RPC             │              │
-      │              │─────────────────────────────────────────────────┼─────────────▶│
-      │              │                │              │                │              │
-      │              │ despliega 6 contratos + bootstrap pool          │              │
-      │              │─────────────────────────────────────────────────┼─────────────▶│
-      │              │                │              │                │              │
-      │              │ funds alice = amount ETH      │                │              │
-      │              │─────────────────────────────────────────────────┼─────────────▶│
-      │              │                │              │                │              │
-      │              │ instancia + user_prompt        │                │              │
-      │              ├───────────────▶│              │                │              │
-      │              │                │              │                │              │
-      │              │           ┌────┤ LOOP hasta end_turn:            │              │
-      │              │           │    │              │                │              │
-      │              │           │    │ plan next FATF phase           │              │
-      │              │           │    │              │                │              │
-      │              │           │    │ delegate_to_layering(...)     │              │
-      │              │           │    ├─────────────▶│                │              │
-      │              │           │    │              │                │              │
-      │              │           │    │        ┌─────┤ LOOP hasta phase done:         │
-      │              │           │    │        │     │                │              │
-      │              │           │    │        │     │ tool_call (ej. mixer_deposit) │
-      │              │           │    │        │     ├───────────────▶│              │
-      │              │           │    │        │     │                │ sign + send  │
-      │              │           │    │        │     │                ├─────────────▶│
-      │              │           │    │        │     │                │ receipt+event│
-      │              │           │    │        │     │                │◀─────────────┤
-      │              │           │    │        │     │ tool_result    │              │
-      │              │           │    │        │     │◀───────────────┤              │
-      │              │           │    │        └─────│                │              │
-      │              │           │    │              │                │              │
-      │              │           │    │ status success/partial/failed │              │
-      │              │           │    │◀─────────────┤                │              │
-      │              │           │    │              │                │              │
-      │              │           └────┤ evaluate + decide next        │              │
-      │              │                │              │                │              │
-      │              │ sweep_funder_pool(destination)                 │              │
-      │              ├────────────────────────────────────────────────▶│              │
-      │              │                │              │                │              │
-      │              │ extract_chain_trace (start_block, end_block)    │              │
-      │              │─────────────────────────────────────────────────┼─────────────▶│
-      │              │                │              │                │              │
-      │              │ persistir campaign.json / chain_trace.jsonl / addresses.json  │
-      │              │                │              │                │              │
-      │◀─────────────┤ recovery %, cost, wall clock                    │              │
-```
-
-### Descripción
-
-El bucle multi-turn LLM ↔ tools ocurre a nivel del sub-agente. El
-Coordinador sólo interviene entre fases FATF (Placement → Layering →
-Integration). Cada tool call viaja del sub-agente al dispatcher y de
-allí a la blockchain; el resultado (receipt + eventos) vuelve por el
-mismo camino. Al terminar la fase, el sub-agente reporta un status
-resumido al Coordinador. Al final de la campaña, el runner extrae el
-trace completo del window de bloques (incluyendo tráfico coetáneo real
-si es Sepolia) y persiste todos los artefactos en disco.
-
----
-
-## 4.5 Modelo de datos: federación bajo visibilidad parcial
-
-### Esquema
-
-```
-   Grafo global G (NO observable en producción real):
-   ┌─────────────────────────────────────────────────┐
-   │  10 311 nodos                                   │
-   │  101 880 aristas                                │
-   │  Etiquetas KYC completas (sólo en simulación)   │
-   └─────────────────────────┬───────────────────────┘
-                             │
-                             ▼
-              hash(dirección) mod 3, seed=42
-                             │
-        ┌────────────────────┼────────────────────┐
-        │                    │                    │
-        ▼                    ▼                    ▼
-   ┌─────────┐         ┌─────────┐         ┌─────────┐
-   │  X_A    │         │  X_B    │         │  X_C    │
-   │Exchange │         │Exchange │         │Exchange │
-   │    A    │         │    B    │         │    C    │
-   └────┬────┘         └────┬────┘         └────┬────┘
-        │                   │                   │
-        │  Cada exchange ve:                    │
-        │    • Direcciones propias (~33%)       │
-        │    • Sus etiquetas KYC (label conocido)
-        │    • Contrapartes de B y C (visibles pero label=unknown)
-        │
-        └────────┬──────────┴────────┬──────────┘
-                 │                   │
-                 ▼                   ▼
-   ┌───────────────────────────────────────────────┐
-   │ Coordinador cross-exchange (Capa 2)           │
-   │                                               │
-   │ Recibe únicamente:                            │
-   │   • Fingerprints per-address (features)       │
-   │   • Scores de probabilidad                    │
-   │                                               │
-   │ NO recibe grafos crudos de A, B, C            │
-   └───────────────────────────────────────────────┘
-```
-
-### Descripción
-
-El particionado hash-based garantiza que cada dirección pertenece a
-exactamente un exchange (determinismo entre corridas por la semilla
-42). Las contrapartes que interactúan con nuestro exchange aparecen en
-el subgrafo pero sin etiqueta accesible — así se replica la asimetría
-regulatoria post-MiCA. La agregación cross-exchange respeta la
-restricción de no compartir grafos crudos: el coordinador sólo recibe
-fingerprints (vectores de 19 features + scores) de las top-60
-direcciones flageadas por cada exchange.
-
----
-
-## 4.6 Stack de la prueba ZK del mezclador
-
-### Esquema
-
-```
-  OFF-CHAIN (Python + Node.js)                    ON-CHAIN (Solidity EVM)
-  ═══════════════════════════════════════         ══════════════════════════
-
-  1. mixer_deposit(from_wallet)
-     ├─ nullifier = secrets.token_bytes(31)
-     ├─ secret    = secrets.token_bytes(31)
-     ├─ commitment = MiMC(nullifier, secret)
-     │
-     ├─▶ persistir deposit_note                   ┌────────────────────┐
-     │   en mixer_notes.jsonl (safety net)        │ MockTornado.deposit│
-     │                                            │ (commitment) →     │
-     └─▶ tx.deposit(commitment)  ─────────────────│ emit Deposit event │
-                                                  │ commitment insertado
-                                                  │ como leaf en tree  │
-                                                  └────────────────────┘
-
-  2. mixer_withdraw(deposit_note, recipient)
-     │
-     ├─ escanear eventos Deposit del contrato
-     │  (paginación get_logs con retry backoff)
-     │
-     ├─ reconstruir Merkle tree local (200 leaves)
-     │
-     ├─ calcular root local
-     │
-     ├─ verificar isKnownRoot(root) on-chain
-     │  (fallback: retry hasta 3 veces si desync)
-     │
-     ├─ snarkjs.groth16.prove:
-     │    inputs = nullifier + secret + path Merkle
-     │    output = proof.json (3 puntos BN128) + signals
-     │  (~5 segundos por prueba)
-     │                                            ┌────────────────────┐
-     └─▶ tx.withdraw(proof, root, nullifierHash, │ MockTornado.       │
-                     recipient, fee=0, refund=0) │   withdraw(...)    │
-                     ──────────────────────────▶ ├────────────────────┤
-                                                 │ ┌──────────────────┤
-                                                 │ │ Verifier.sol     │
-                                                 │ │ verifyProof(     │
-                                                 │ │   proof, signals)│
-                                                 │ │ ↓                │
-                                                 │ │ Pairing BN128    │
-                                                 │ │ e(A,B)·e(-α,β)   │
-                                                 │ │  ·e(-vk_x,γ)     │
-                                                 │ │  ·e(-C,δ) = 1 ?  │
-                                                 │ └──────────────────┤
-                                                 │ isKnownRoot(root)?  │
-                                                 │ isSpent(hash)? no   │
-                                                 │ transfer 1 ETH →    │
-                                                 │   recipient         │
-                                                 │ mark nullifier spent│
-                                                 └─────────────────────┘
-```
-
-### Descripción
-
-El circuito genera pruebas fuera de la cadena porque el cómputo es
-intensivo (~5 segundos por prueba). Sólo la prueba compacta (3 puntos
-elípticos + 5 signals públicos, ~200 bytes) viaja on-chain. La note
-(secret + nullifier) nunca se revela a la red — esa es la propiedad
-zero-knowledge. La persistencia opcional en disco (mixer_notes.jsonl)
-es el safety net introducido en 2026-08-18 para recuperación manual si
-el sub-agente pierde la note.
-
----
-
-## 4.7 Vista de despliegue en producción (trabajo futuro)
-
-### Esquema
-
-```
-   Cliente exchange
-   ═══════════════
-                                       ┌────────────────────┐
-                                       │ Compliance         │
-                                       │ dashboard          │
-                                       │ (React / Vue)      │
-                                       └─────────┬──────────┘
-                                                 │ HTTPS
-                                                 ▼
-   API Gateway
-   ═══════════        ┌─────────────────────────────────────┐
-                      │ FastAPI                             │
-                      │  POST /detect  → alerta on-demand    │
-                      │  GET /alerts   → consulta histórica  │
-                      └─────┬───────────────────────────────┘
-                            │
-   Servicios de detección
-   ══════════════════════
-             ┌──────────────┼───────────────┐
-             ▼              ▼               ▼
-       ┌──────────┐  ┌───────────────┐  ┌──────────┐
-       │ GCN      │  │ LLM Coordinator│  │ Redis    │
-       │persistido│──│ (async worker) │──│ cache    │
-       │torch.save│  │                │  │ prompts  │
-       │hot-swap  │  └────────┬───────┘  └──────────┘
-       └──────────┘           │
-                              ▼
-   Persistencia
-   ════════════
-                     ┌───────────────────┐
-                     │ PostgreSQL        │
-                     │  alertas + prompts│
-                     │  + decisiones     │
-                     │  (audit trail     │
-                     │   FATF R.11)      │
-                     └───────────────────┘
-
-   Worker asíncrono
-   ════════════════
-                     ┌───────────────────┐
-                     │ Celery + Redis    │
-                     │  batch nocturno   │
-                     └───────────────────┘
-
-   Observabilidad
-   ══════════════
-             ┌────────────────┐    ┌────────────────┐
-             │ Prometheus     │───▶│ Grafana        │
-             │ metrics        │    │ dashboards     │
-             └────────────────┘    └────────────────┘
-```
-
-### Descripción
-
-Esta vista NO forma parte del sistema implementado — es la propuesta de
-trabajo futuro descrita en el Capítulo 10 §10.4.6. La arquitectura
-introduce persistencia de modelos GCN (torch.save), caché de respuestas
-LLM (Redis), base de datos de alertas auditable (PostgreSQL, requerida
-por FATF R.11), procesamiento asíncrono (Celery) y observabilidad
-(Prometheus + Grafana). El esfuerzo estimado es de 6-9 meses full-stack
-+ presupuesto de infraestructura $100-500/mes según carga.
-
----
-
-## 4.8 Renderizado alternativo
-
-Los diagramas en ASCII de este capítulo están diseñados para ser
-directamente legibles en Word y PDF. Para versiones renderizadas como
-imágenes (con formato flowchart profesional), el repositorio GitHub del
-proyecto contiene los mismos diagramas en formato Mermaid, exportables
-a PNG/SVG mediante la CLI `@mermaid-js/mermaid-cli`. Ver `tfm/diagrams/`
-en el repositorio para las imágenes generadas.
-
----
+El stack ZK se apoya en un circuit Circom 2.0 (≈60 líneas) que implementa
+la verificación Merkle-tree sobre el commitment `(secret, nullifier)` del
+depósito, con hasher MiMCSponge de circomlib. La compilación produce el
+R1CS que snarkjs procesa vía `groth16 setup` con la ceremony pública
+Powers of Tau Hermez [ptau12] hasta generar `verification_key.json` y el
+contrato Solidity `Verifier`. La prueba se genera off-chain en Node.js
+(≈200 líneas de puente) y se envía al método `mixer_withdraw` del
+`MockTornado`, que verifica la validez del proof y libera los fondos si
+el nullifier no ha sido usado antes.
 
 ## 5.B Arquitectura del software
 
-Este capítulo describe el pipeline extremo-a-extremo del sistema. La
-Figura 3.1 (a incluir) resume las cinco capas: (1) capa de contratos
-inteligentes; (2) capa de blockchain local (Foundry/Anvil) y despliegue
-sobre Sepolia; (3) catálogo de herramientas on-chain que expone el
-sistema al agente atacante; (4) orquestación multi-agente del atacante
-mediante agentes LLM; y (5) arquitectura simétrica del detector con
-clasificadores locales por exchange más coordinador LLM cross-exchange.
-El código completo del sistema está disponible en el repositorio del
-proyecto (~9 000 líneas Python + ~800 líneas Solidity + circuitos Circom
-para el mezclador ZK).
+La capa de contratos on-chain está compuesta por seis contratos Solidity
+0.8.20 escritos a mano. Se opta por no importar OpenZeppelin ni Uniswap
+para minimizar la superficie adversarial y mantener control explícito
+sobre las invariants del ecosistema. `MockUSDT` implementa un ERC-20
+minimal con `mint()` público y `decimals=6` para emular las
+características de USDT real. `MockUniswapV2Pool` es un pool ETH/USDT
+constant-product (x·y=k) con `swap`, `addLiquidity` y `removeLiquidity`
+que aplica slippage real basado en el balance del pool. `MockTornado` es
+el mezclador estilo Tornado Cash [20] con soporte multi-denominación
+(0.1, 1 y 10 ETH) y verificación Groth16. `MockBridge` emite eventos
+`BridgeInitiated(dst_chain, amount)` para simular cross-chain sin destino
+real. `MiMCSponge` es el hasher on-chain requerido por el circuit ZK, y
+`Verifier` es el contrato Groth16 generado automáticamente por snarkjs.
+Los seis contratos están verificados en Sepolia Etherscan; sus
+direcciones y hashes de despliegue quedan registrados en
+`deployments/sepolia.json`.
+
+La capa blockchain utiliza Foundry como toolchain unificado. Anvil
+proporciona un sandbox EVM local con startup de aproximadamente dos
+segundos, ETH ilimitado y capacidad de mine on demand, lo que resulta
+esencial durante el desarrollo iterativo. Sepolia se emplea como testnet
+pública para la validación externa; cada contrato desplegado se verifica
+con `forge verify-contract` para que un auditor independiente pueda
+inspeccionar el source code directamente en Etherscan.
+
+El `ToolDispatcher` expone 32 herramientas al LLM atacante, organizadas
+en cinco grupos funcionales: transferencias directas (4), swaps DEX (4),
+mixer ZK (6), bridge cross-chain (2), gestión de wallets (8) y
+coordinación/audit (8). Cada dispatch valida las cinco invariants
+estructurales enumeradas en §7.A antes de emitir la transacción
+correspondiente, lo que garantiza que ningún error del LLM puede corromper
+el estado del sistema ni evadir la trazabilidad.
+
+La orquestación multi-agente del atacante se estructura en torno al
+objeto `Coordinator`. Recibe como entrada el escenario
+(`defi-exploit`, `ransomware-cashout` o `stablecoin-scam`), el amount
+target y el seed, y planifica la campaña como una secuencia de `Task`s
+delegables. Cada `Task` se asigna a un sub-agente con contexto local; el
+sub-agente usa la API de tool-use de Anthropic para invocar el
+`ToolDispatcher`, y el coordinador supervisa el retorno y decide si
+continuar, reintentar o abortar. El timeout total se fijó en seis horas
+para Sepolia (limitado por el block time de la red pública) y treinta
+minutos para Anvil.
+
+El defensor `LLMDefenderCoordinator` replica esta estructura. Recibe la
+lista de vistas por exchange (`views: list[ExchangeView]`) y las
+etiquetas de entrenamiento (`train_labels: dict[str, int]`). En Phase 1,
+`PerExchangeDetector.fit_per_view` entrena un Louvain independiente por
+cada `ExchangeView`. En Phase 2, `_build_llm_user_prompt` construye el
+prompt con los top-K flagged addresses de los tres exchanges,
+`LLMClient.complete` ejecuta la llamada a Haiku 4.5, y
+`_parse_llm_clusters` extrae el diccionario `actor_clusters` del output
+del LLM. Si el parámetro `max_clusters` está definido,
+`_merge_clusters_by_centroid` reduce el número de clusters
+determinísticamente; si vale `"auto"`, `_auto_pick_max_clusters` selecciona
+el mejor `max_clusters` por silhouette score.
+
+Cada `ExchangeView` es un `nx.MultiDiGraph` que representa el subgrafo
+observable por el exchange, junto con el conjunto de direcciones visibles
+`visible_addresses`. El coordinador cross-exchange recibe únicamente los
+fingerprints agregados de las direcciones flageadas —nunca los subgrafos
+completos— lo que respeta la restricción de privacidad y mantiene el
+tamaño del prompt LLM en aproximadamente veinte mil tokens, dentro de los
+límites de contexto de Haiku 4.5.
+
+Todo el código está publicado bajo licencia MIT en el repositorio
+[`github.com/0xAnonsal/aml-thesis`](https://github.com/0xAnonsal/aml-thesis).
+Para cada tabla y figura del Capítulo 6 existe un comando de reproducción
+exacto que un tercero puede ejecutar sin acceso a nuestros artefactos
+privados. Los prompts completos residen en `src/aml/attackers/prompts.py`
+para el atacante y en la constante
+`_LLM_COORDINATOR_SYSTEM_PROMPT` de `src/aml/detectors/multi_agent.py`
+para el defensor. Los contratos verificados en Sepolia son inspectables
+por hash en Etherscan, y los cuarenta y siete tests unitarios de `tests/`
+cubren tanto la capa Solidity como el pipeline Python.
+
+## 5.C Lenguajes de programación
+
+El TFM combina seis lenguajes según sus fortalezas específicas, con un
+total aproximado de diez mil líneas de código propio. Python 3.11
+concentra el noventa por ciento del volumen, con unas nueve mil líneas
+distribuidas entre el simulador atacante, los detectores, el pipeline de
+evaluación, los agentes LLM y el análisis. Elegimos Python por la
+madurez de su stack para grafos, machine learning y clientes LLM;
+PyTorch Geometric [29], NetworkX [28] y scikit-learn cubren de forma
+directa todas las necesidades del proyecto.
+
+Solidity 0.8.20 aporta las aproximadamente ochocientas líneas de los seis
+contratos on-chain (`MockUSDT`, `MockUniswapV2Pool`, `MockTornado`,
+`MockBridge`, `MiMCSponge`, `Verifier`), compilados con Foundry [26]. El
+lenguaje estándar para smart contracts EVM y el soporte nativo del
+compilador `solc` para overflow checks lo hacen la elección obligada
+sobre alternativas más experimentales como Vyper. Circom 2.0 contribuye
+las sesenta líneas del circuit ZK del mezclador, sobre la implementación
+de referencia de Groth16 provista por snarkjs [30].
+
+Los tres lenguajes restantes juegan roles auxiliares. JavaScript (Node.js
+LTS) proporciona doscientas líneas de puente off-chain que generan las
+pruebas Groth16 con snarkjs y las empaquetan para el `mixer_withdraw`.
+Bash aporta cien líneas de scripts de setup, orquestación de campañas
+paralelas y despliegue Sepolia. Markdown constituye las cuatro mil líneas
+de documentación del proyecto más el propio draft del TFM en
+`chapters_v3/*.md`, versionado en Git y convertible a docx mediante el
+script `scratchpad/md_to_docx.py`.
+
+Se descartaron Rust por la lentitud del ciclo de compilación y la menor
+madurez de su ecosistema para grafos y aprendizaje automático; Vyper por
+su soporte menos completo que Solidity para el ecosistema DeFi; y Halo2
+como sistema ZK alternativo a Groth16 por presentar una curva de
+aprendizaje mayor sin aportar beneficio funcional al alcance del TFM.
 
-## 6.1 Capa de contratos inteligentes
-
-El sistema despliega seis contratos Solidity que replican
-funcionalmente los primitivos DeFi utilizados en tipologías reales de
-blanqueo:
-
-**`MockUSDT.sol`** (63 líneas). Implementación mínima de un token ERC-20
-con seis decimales, siguiendo la especificación externa del USDT real
-pero sin las particularidades no relevantes (blacklist, fee-on-transfer).
-La función `mint` es permissionless por diseño para facilitar la
-siembra de wallets en la simulación; este trade-off convierte al
-contrato en catastrófico en una red pública real y por eso está
-etiquetado explícitamente como *research artifact*.
-
-**`MockUniswapV2Pool.sol`** (96 líneas). Réplica funcional del contrato
-Pair de Uniswap V2 para el par ETH/USDT, con la fórmula de producto
-constante x · y = k. El agente atacante puede consultar el precio
-spot vía `getReserves()` antes de decidir el tamaño de un swap. La
-implementación es intencionalmente sin fee-on-swap para simplificar el
-razonamiento del atacante sobre el *slippage*; la generalización con
-fee del 0,3 % es trivial y no altera las conclusiones.
-
-**`MockTornado.sol`** (140 líneas) + **`MerkleTreeWithHistory.sol`** (154
-líneas) + **`Verifier.sol`** (196 líneas, auto-generado por snarkjs).
-Réplica funcional de un mezclador estilo Tornado Cash con circuito
-Groth16 real, árbol de Merkle de profundidad 10 (capacidad
-2¹⁰ = 1 024 depósitos), y verificador on-chain. Cada depósito
-requiere `1 ether` fijo (constante hard-coded); cada retirada exige una
-prueba Groth16 válida que demuestre pertenencia al árbol sin revelar
-qué depósito específico se está retirando. La preimagen se comprime
-mediante MiMC-Sponge (contrato `MiMCSponge` auto-generado por
-circomlibjs). Con este stack, los depósitos y retiradas del atacante son
-criptográficamente indistinguibles de un Tornado Cash real desde el
-punto de vista de los signals públicos del smart contract.
-
-**`MockBridge.sol`** (94 líneas). Réplica funcional simplificada de un
-puente cross-chain USDT: el operador bloquea tokens en el contrato
-origen (evento `USDTLocked` con el destino en la cadena externa) y los
-libera en el contrato destino tras verificación (evento `USDTReleased`).
-El bridge simula transacciones cross-chain sin ejecutarlas realmente;
-para el detector, la salida del bridge es indistinguible de un cash-out
-hacia una jurisdicción no cooperativa. Los bridges reales
-(Wormhole, Polygon PoS, Ronin) implementan multisig de validators,
-verificación on-chain de firmas y proof de finalidad de la cadena
-origen; el mock omite todo ese aparato y sustituye el consenso por un
-único `operator` role, suficiente para modelar la SEÑAL on-chain que
-un detector observaría. **Estado en las campañas de la evaluación**:
-el bridge está desplegado y su tool `bridge_lock_usdt` disponible en
-el catálogo del atacante, pero ninguna de las tres campañas Sonnet
-(seed 400, 401, 403) ha ejercitado esta ruta —el atacante ha
-preferido consistentemente structuring directo hacia clean exits
-sobre bridging cross-chain—. El bridge queda como scaffold ready
-para la extensión cross-chain descrita en §10.4.4.
-
-**`Verifier.sol`** (196 líneas, auto-generado por
-`snarkjs zkey export solidityverifier` aplicado al *zkey* del circuito
-`withdraw`). Contiene la única función pública `verifyProof(a, b, c,
-public_signals)` que evalúa la ecuación de emparejamiento Groth16
-sobre los puntos de la curva BN128 aportados en la prueba. Cada
-retirada del mezclador invoca este verifier con: (i) los tres puntos
-del proof generados off-chain por snarkjs; (ii) las cinco *public
-signals* (root Merkle, nullifier hash, recipient, fee, refund). Si el
-verifier retorna `true`, la prueba demuestra —sin revelar cuál
-depósito— que el prover conoce un secret que corresponde a un leaf
-válido del árbol. Se distribuye sin modificar bajo GPL-3.0 heredada
-de snarkjs.
-
-**Justificación de la elección hand-written vs adaptación externa**.
-Los contratos MockUSDT, MockUniswapV2Pool y MockBridge se han escrito
-a mano (etiquetados `SPDX-License-Identifier: UNLICENSED`) por dos
-razones: (i) los originales (Tether real, Uniswap V2 core, bridges
-mainnet) traen decenas de MB de dependencias transitivas y features
-no relevantes al *research* (blacklists, LP tokens, multisig,
-upgradability por proxy) que aumentarían la superficie de código sin
-beneficio metodológico; (ii) el marcado `UNLICENSED` + los comentarios
-prominentes `NEVER deploy on a real chain` reducen el riesgo de que
-un tercero re-utilice los mocks fuera del contexto research. En
-contraste, los tres contratos derivados de Tornado Cash (MockTornado,
-MerkleTreeWithHistory, Verifier) preservan literalmente el *core*
-criptográfico —es lo que garantiza que la simulación tenga las
-mismas propiedades de *soundness* y *zero-knowledge* que el sistema
-real que las campañas de blanqueo explotan en mainnet, requisito para
-que los *findings* del Capítulo 8 sean transferibles fuera del
-entorno mock (§Anexo G para el detalle de atribuciones y licencias).
-
-## 6.2 Capa de blockchain
-
-El sistema opera sobre dos backends intercambiables mediante una
-abstracción única: la clase `AnvilNode` en `src/aml/chains/anvil.py`
-(context manager que arranca y destruye un nodo Anvil local, con diez
-cuentas pre-fondeadas de 10 000 ETH cada una) para experimentación
-rápida; y el módulo `deploy_eth_mocks_sepolia.py` para despliegue
-persistente sobre la testnet pública Sepolia, con EIP-1559 gas,
-validación estricta de `chain_id`, verificación de balance del
-deployer, y persistencia de las direcciones desplegadas en
-`deployments/sepolia.json` para que el runner de campañas pueda
-reconstruir los handles de contrato.
-
-La abstracción `AnvilNode` permite que exactamente el mismo código de
-las herramientas del atacante y del detector se ejecute contra Anvil
-(coste 0, velocidad de bloque instantánea) o contra Sepolia (coste
-0,02–0,05 ETH testnet, bloque cada 12 s). Esta portabilidad es la que
-habilita la validación externa on-chain descrita en el Capítulo 8.
-
-## 6.3 Catálogo de herramientas on-chain
-
-El atacante interactúa con la blockchain exclusivamente a través de un
-catálogo de diecinueve herramientas expuestas al LLM como funciones
-JSON schema (`_TOOL_SCHEMAS` en `src/aml/attackers/tools.py`). Cada
-herramienta tiene un nombre, descripción, esquema de parámetros y una
-implementación Python que traduce la llamada en una transacción
-firmada sobre la blockchain. El dispatcher (`ToolDispatcher`) gestiona
-el ciclo de: (i) recepción de la llamada del LLM, (ii) validación de
-los parámetros contra el schema, (iii) firma y envío de la transacción,
-(iv) espera del receipt, y (v) devolución del resultado estructurado
-(`ToolResult`) al LLM en el siguiente turno de la conversación.
-
-Las herramientas se agrupan funcionalmente en cinco familias:
-
-- **Introspección** (`get_balance`, `get_gas_budget`, `get_swap_quote`,
-  `inspect_chain`): permiten al agente consultar estado sin gastar gas.
-- **Transferencia básica** (`transfer_usdt`, `transfer_eth`,
-  `mint_usdt`): envío directo entre EOAs, minteo permissionless.
-- **Wallet management** (`generate_burner_wallet`, `register_clean_exit`):
-  creación de direcciones nuevas y registro de destinos finales
-  etiquetados con plataforma.
-- **Layering primitives** (`smurf_split`, `smurf_eth_split`,
-  `peel_chain`, `swap_eth_for_usdt`, `swap_usdt_for_eth`,
-  `advance_blocks`): las primitivas para la fase de *layering* de la
-  taxonomía FATF.
-- **Mixing** (`mixer_deposit`, `mixer_withdraw`,
-  `mixer_batch_deposit`, `mixer_batch_withdraw`): interacción con el
-  mezclador ZK, incluyendo variantes *batched* que consolidan
-  múltiples ciclos en una sola llamada LLM (PR #48). La generación
-  off-chain de la prueba Groth16 se ejecuta con snarkjs.
-
-El *dispatcher* dispone además de un helper interno
-`sweep_funder_pool` no expuesto al LLM: el runner lo invoca al final
-de la campaña para consolidar el residual del *pool* de funders
-sobre una dirección de destino previamente registrada, cerrando
-formalmente el ciclo operativo.
-
-**Restricciones estructurales del `ToolDispatcher`.** Cinco *invariants*
-se aplican de forma centralizada en el *dispatcher* (no en cada
-herramienta) para reflejar disciplina operativa realista:
-
-1. **Guardarraíl del deployer**. La dirección
-   `0x54539B5ef33cfC3C57b9b572fc77d1e5F1CFf4c4` (deployer de contratos
-   en Sepolia) no puede aparecer como `from`, `to`, `gas_payer` ni
-   `recipient` de ninguna llamada. Un atacante realista no expone la
-   *hot wallet* de despliegue en la campaña de *laundering*, y esta
-   restricción evita que las métricas de recuperación se inflen por
-   fondos que nunca salieron del *stack* de infraestructura.
-2. **Cap dinámico de burners**. El agente no puede solicitar más de
-   max(30, min(250, 3 · ⌈ USD/999 ⌉))
-   direcciones burner por campaña, calibrado sobre el volumen laundered.
-   La cota inferior de 30 preserva flexibilidad táctica en campañas
-   pequeñas; la cota superior de 250 evita bucles patológicos de
-   generación observados en versiones tempranas (§8.9.5).
-3. **`_pick_funder`** rota entre wallets del *pool* de funders y sólo
-   solicita *refill* cuando el balance cae por debajo de 0,01 ETH
-   (umbral) hasta un techo de 0,025 ETH (refill target).
-4. **Gas reserve** por defecto de 0,005 ETH sobre cada burner (frente a
-   los 0,05 ETH iniciales), alineado con el gas dust real de un burner
-   Ethereum bajo condiciones EIP-1559 típicas.
-5. **`sweep_funder_pool`** consolida el residual del *pool* al final de
-   la campaña en una única dirección de destino, produciendo una
-   última transferencia auditable que un detector real observaría como
-   la señal de cierre de operaciones.
-
-La granularidad del catálogo es una decisión de diseño relevante. Las
-primeras iteraciones exponían herramientas atómicas (una transacción
-ERC-20 = una llamada), pero el consumo de contexto por parte del LLM
-crecía linealmente con el número de wallets involucradas. La versión
-final incluye herramientas *batched* (`smurf_split` procesa hasta N
-receptores en una sola llamada) que reducen el ratio tokens/transacción
-en un orden de magnitud sin sacrificar granularidad forense.
-
-## 6.4 Orquestación multi-agente del atacante
-
-El atacante está estructurado como un sistema multi-agente jerárquico
-con dos niveles.
-
-**Nivel 1 — Coordinador** (`src/aml/attackers/coordinator.py`, ~350
-líneas). Instanciado sobre Claude Opus 4.7 por su capacidad superior
-de planificación de largo alcance. El coordinador recibe como input un
-escenario de blanqueo de alto nivel (por ejemplo, "lava 500 000 USDT
-desde el hackeo de Upbit hacia dos direcciones limpias de destino") y
-descompone la campaña en subtareas asignables a los sub-agentes.
-Mantiene estado global (wallets creadas, balances, direcciones de
-destino comprometidas) y decide cuándo cambiar de fase FATF
-(Placement → Layering → Integration). El coordinador no ejecuta
-transacciones directamente; sólo emite invocaciones a los sub-agentes.
-
-**Nivel 2 — Sub-agentes especializados** (`src/aml/attackers/sub_agent.py`,
-~300 líneas). Tres roles paralelos instanciados sobre Claude Sonnet 4.6
-(mejor coste/rendimiento para tareas tácticas con horizonte corto):
-
-- *Placement Agent*: introduce los fondos en el sistema (minteo de USDT,
-  fondeo de la primera wallet, split inicial en burners).
-- *Layering Agent*: ejecuta las técnicas de ofuscación (smurfing, peel
-  chains, swaps, depósitos/retiradas en el mezclador, uso del bridge).
-  Es el sub-agente que consume el 80 % de las herramientas del catálogo.
-- *Integration Agent*: consolida los fondos en las direcciones de
-  destino limpias, minimizando el número de saltos finales que un
-  detector podría correlacionar.
-
-Los prompts de cada rol se encuentran en `src/aml/attackers/prompts.py`
-(~420 líneas de texto estructurado). Cada prompt incluye: (i) contexto
-de la fase FATF que el sub-agente debe ejecutar; (ii) el catálogo de
-herramientas disponibles para su rol; (iii) restricciones tácticas
-(umbral CTR de 10 000 USD, tamaño máximo de swap para evitar
-*slippage* superior al 3 %); y (iv) un guardrail que impide al agente
-transferir a direcciones fuera de su wallet pool sin justificación
-explícita.
-
-**Ejemplo concreto del flujo Coordinator → sub-agentes**. Para hacer
-tangible el patrón multi-agente, se resume el trazado real de la
-primera fase de la campaña *defi-exploit* con 10 ETH robados. El
-Coordinador, tras recibir la consigna del scenario, decide en su
-primer turn: (i) meta cuantitativa 10 ETH × $1 880 =
-$18 809 USD a *laundering*; (ii) ⌈18 809/999⌉ × 2 = 38
-*clean exits*, reparto no uniforme Binance/Coinbase/Kraken
-(15/12/11); (iii) trifurcación de rutas ROUTE A (nuevos burners) +
-ROUTE B (recycle burners para crear ciclos) + ROUTE C (mixer con
-timing desordenado). El Coordinador NO ejecuta transacciones; delega
-vía `delegate_to_placement`, `delegate_to_layering` e
-`delegate_to_integration`. El Placement specialist recibe *"break
-10 ETH from alice into 10 working wallets of ≈ 1 ETH each"*
-y ejecuta `generate_burner_wallet` + `transfer_eth` diez veces,
-reportando `success` con las diez wallets creadas. El Layering
-specialist recibe *"corre las 10 working wallets por el ZK Tornado
-+ trifurcación A/B/C"* y ejecuta ciclos como `mixer_deposit` →
-`advance_blocks(30)` → `generate_burner_wallet` (recipient) +
-`generate_burner_wallet` (gas_payer independiente) → `mixer_withdraw`
-con la prueba Groth16 generada off-chain por snarkjs
-—el resultado es que la wallet destino recibe 1 ETH sin *link*
-on-chain con *alice*, el Merkle root público sólo prueba que "algún
-depositante" retiró—. El Integration specialist recibe *"registra
-38 clean exits distribuidos 15/12/11 Binance/Coinbase/Kraken,
-fondea 25 con montos \200-\970 (sub-CTR), deja 3 vacíos como
-distractores"* y ejecuta 38 llamadas a `register_clean_exit`
-seguidas de `smurf_split` (*batched*: una única llamada LLM ejecuta
-8-15 transferencias USDT sub-$999 a las direcciones
-registradas). Al terminar las tres fases, el runner invoca
-`sweep_funder_pool` sobre un *clean exit* residual y persiste todos
-los artefactos.
-
-**Cliente LLM abstracto** (`src/aml/attackers/llm_client.py`, ~260
-líneas). Encapsula el SDK oficial de Anthropic tras una interfaz
-`complete(prompt, system, model, max_tokens)` que devuelve un
-`LLMResult` con `text`, `input_tokens`, `output_tokens` y `cost_usd`.
-Un *Software Development Kit* (SDK) es el conjunto de librerías que
-un proveedor distribuye para que el consumidor evite construir
-peticiones HTTP manualmente; en este caso el paquete `anthropic`
-(PyPI, licencia MIT) cubre autenticación por API key, versionado de
-la API, retry automático ante errores transitorios, *streaming*
-opcional y serialización de las respuestas. El *wrapper* propio
-añade: (i) uniformar el cálculo de costes entre Opus, Sonnet y Haiku
-(los precios por millón de tokens de entrada/salida difieren en dos
-órdenes de magnitud entre tiers y el SDK crudo sólo devuelve counts);
-(ii) sustituir el proveedor sin tocar el resto del código (si
-mañana se quisiera evaluar GPT-4 o Gemini bastaría con
-reimplementar `complete` sobre el SDK correspondiente); y (iii)
-inyectar `MockLLMClient` en los tests unitarios para que el CI no
-consuma créditos API en cada corrida.
-
-**Runner de campaña** (`src/aml/attackers/run_campaign.py`, ~420
-líneas). Punto de entrada CLI del atacante, invocable como
-`python -m aml.attackers.run_campaign --scenario defi-exploit --seed
-42 --amount 10 --model sonnet`. Ejecuta trece pasos secuenciales:
-(1) parseo de los *flags* CLI; (2) carga de `ANTHROPIC_API_KEY` y
-demás secretos desde `.env`; (3) instanciación del `AnvilNode`
-context manager que arranca un proceso `anvil` local (o alternativa
-Sepolia mediante `run_sepolia_campaign.py`); (4) despliegue de los
-seis contratos mock + bootstrap del pool Uniswap; (5) instanciación
-del `PriceOracle` con `campaign_ts = resolve_campaign_ts(...)`
-(§3.4, market context); (6) generación determinista de la wallet
-*alice* a partir del seed; (7) fondeo exacto de alice al `amount`
-declarado (Alice normalization, ver más abajo); (8) construcción del
-*user prompt* mediante `scenario.format_prompt(alice, amount)` con
-el bloque *MARKET CONTEXT* pre-formateado inyectado; (9)
-instanciación del Coordinador con el *client* LLM + prompts +
-catálogo de tools + dispatcher; (10) ejecución del bucle multi-turn
-LLM ↔ tools hasta que el Coordinador emite el token de terminación;
-(11) invocación de `sweep_funder_pool` sobre una dirección de
-destino registrada para consolidar el residual operativo; (12)
-persistencia del *bundle* de artefactos (`meta.json`,
-`campaign.json`, `chain_trace.jsonl`, `addresses.json`,
-`summary.txt`) en un directorio con *timestamp*; (13) *reporting*
-final de recovery %, coste USD, wall clock, número de iteraciones
-del Coordinador y sub-agentes. Duraciones típicas: ≈ 3 min y
-$0,30para1ETH con Haiku;~ 20min y~ \3 para
-10 ETH con Sonnet.
-
-**Escenarios de campaña** (`src/aml/attackers/scenarios.py`, ~230
-líneas). Un `Scenario` empaqueta una tipología de blanqueo con la
-configuración *chain* que el runner necesita más la plantilla del
-*user prompt* que se pasa al Coordinador. La estructura permite
-ejecutar múltiples tipologías cambiando únicamente el *flag*
-`--scenario` sin tocar código. Tres escenarios están *locked* en la
-versión de evaluación:
-
-- **`defi-exploit`**: robo estilo hack DeFi. Activo ETH, cantidad
-  por defecto 3 ETH, requiere Pool y Tornado. La táctica firma es
-  el ciclo `transfer_eth` (Placement, no smurfing) →
-  `mixer_deposit` × N (Layering, el ZK mixer es el corazón de la
-  ofuscación) → `swap_eth_for_usdt` + `smurf_split` (Integration).
-- **`stablecoin-scam`**: fraude tipo phishing/romance/ponzi. Activo
-  USDT, cantidad por defecto 8 000 USDT, requiere Pool (opcional
-  para asset cycling), NO requiere Tornado (el mezclador es
-  ETH-only y la mayor parte del laundering de *stablecoin* real
-  opera enteramente en USDT). La táctica firma es
-  `smurf_split(alice, sub-999 chunks)` → cadenas multi-hop con
-  ciclos ROUTE A + B → opcional `swap_usdt_for_eth` /
-  `swap_eth_for_usdt` para romper *token-level tracing* → fan-out a
-  clean exits.
-- **`ransomware-cashout`**: cash-out de rescate. Activo ETH,
-  cantidad por defecto 5 ETH, requiere Pool y Tornado con uso
-  intensivo. La táctica firma es que TODAS las working wallets
-  pasan por el mezclador, algunas dos veces (deposit → withdraw →
-  deposit → withdraw a otra wallet nueva), y se aplica la
-  trifurcación completa A+B+C.
-
-Añadir un escenario nuevo requiere únicamente escribir una instancia
-`Scenario` en `scenarios.py` y registrarla en el diccionario
-`SCENARIOS`; el CLI la detecta automáticamente. Los *prompts* de los
-tres escenarios se reproducen en el §Anexo A junto con los *system
-prompts* de los cuatro roles.
-
-**Oracle de precios y *market context*** (`src/aml/env/market_context.py`
-+ `src/aml/env/oracle.py`). Un oráculo determinista con caché en
-`data/prices/{eth,trx,usdt}.csv` (histórico diario descargado desde
-CoinGecko) inyecta en el *system prompt* del coordinador el precio
-spot ETH/USDT/TRX al momento de la campaña. Con esta señal el agente
-razona en unidades USD (el umbral CTR de 999 USD es unidades
-naturales para el atacante, no unidades ETH), calibra el tamaño de los
-depósitos al mezclador contra la denominación fija de 1 ETH, y
-ajusta la cadencia de swaps al *slippage* observado. El bloque
-inyectado tiene la forma:
-
-```
-MARKET CONTEXT (spot @ 2026-08-16 UTC):
-  1 ETH  = 1,880.96 1 USDT =0.9998   1 TRX = $0.2400
-FATF thresholds in current spot terms:
-  $10,000 CTR   ~ 5.317 ETH   ~ 10,002 USDT
-  $999 sub-CTR  ~ 0.5311 ETH  ~ 999 USDT
-```
-
-Sin esta pre-computación, el LLM tendría que convertir USD→ETH
-mentalmente en cada decisión de tamaño, un error recurrente
-observado en corridas tempranas sin market context. El helper
-`build_market_context(oracle, campaign_ts)` produce el bloque, y el
-helper `resolve_campaign_ts(oracle, override_iso)` decide QUÉ fecha
-usar para el precio spot: (i) si se pasa `--campaign-ts 2026-08-16`
-al runner, esa fecha exacta (reproducibilidad byte-idéntica entre
-corridas del mismo seed); (ii) si no se pasa nada, `now(UTC)`
-clampeado al último día cacheado en el CSV (evita crashear si el
-cache no llegó al día actual); (iii) en Sepolia, el runner refresca
-el cache primero y pasa `now(UTC)` directo (validación externa
-real-time). **La misma pareja de helpers se usa en el defensor**
-(`aml.detectors.multi_agent.LLMDefenderCoordinator`), garantizando
-que atacante y defensor jueguen bajo idéntica realidad de precios y
-la comparativa entre ambos sea metodológicamente válida.
-
-**Diseño del *funder pool*** (`src/aml/attackers/funder_sizing.py`).
-Antes de arrancar la campaña, el runner asigna el capital operativo
-(hasta un 5 % del *amount* laundered, techo \le 1 ETH por funder,
-piso \ge 0,02 ETH) sobre 2-10 wallets funder mediante
-`allocate_funder_amounts`, con distribución tier-based no uniforme
-para replicar patrones observados en operaciones reales (Chainalysis
-2023). Cada burner es re-fondeado por el *dispatcher* con esos funders
-en rotación. El *pool* completo se vuelca al final vía
-`sweep_funder_pool` sobre una dirección de destino registrada por el
-sub-agente Integration, cerrando el ciclo operativo del atacante.
-
-**Alice normalization**. El runner drena la wallet fuente (*alice*)
-exactamente al `amount` declarado del escenario, sin añadir buffer
-adicional. Un atacante real dispone únicamente de los fondos robados;
-el pre-fondeo generoso de amount + 0,05 ETH utilizado en
-versiones tempranas contaminaba el denominador de las métricas de
-recuperación y fue eliminado antes de la corrida canónica seed 400.
-
-## 6.5 Arquitectura simétrica del defensor
-
-El defensor replica la estructura multi-agente del atacante pero
-adaptada al rol defensivo. Está compuesto por dos capas.
-
-**Capa 1 — Clasificador GCN local por exchange** (`src/aml/detectors/gnn.py`,
-~360 líneas + `src/aml/detectors/graph.py` para conversión NetworkX ↔
-PyTorch Geometric). Cada exchange X_i observa el subgrafo inducido
-por las aristas incidentes en sus direcciones KYC y entrena un
-clasificador GCN de dos capas (128 hidden units, dropout 0,5, Adam
-lr 10⁻³, 50 épocas). Las features de nodo son **19-dimensionales**
-(constante `FEATURE_NAMES` en `src/aml/detectors/gnn.py:80`)
-organizadas en cuatro grupos:
-
-*Grupo 1 — degree features (3)*: `in_degree`, `out_degree`,
-`total_degree`. Capturan cuántas aristas inciden en el nodo
-independientemente del tipo, aproximando la actividad neta del wallet.
-
-*Grupo 2 — flujos de valor (4)*, todas transformadas con \log(1+x)
-para comprimir la distribución que puede abarcar varios órdenes de
-magnitud: `log_eth_in`, `log_eth_out`, `log_usdt_in`, `log_usdt_out`.
-Suma total del ETH y USDT recibido y enviado por el nodo.
-
-*Grupo 3 — diversidad de contrapartes (2)*, análogamente
-log-transformadas: `log_unique_in` (contrapartes únicas que envían
-al nodo), `log_unique_out` (contrapartes únicas que reciben del
-nodo). Un burner de laundering típicamente tiene pocas contrapartes
-altamente conectadas; un usuario benigno de DeFi tiene muchas
-contrapartes con menor recurrencia.
-
-*Grupo 4 — conteo por tipo de arista (10 = 5 tipos × 2 direcciones)*:
-`transfer_eth_in/out`, `transfer_usdt_in/out`, `swap_in/out`,
-`mixer_deposit_in/out`, `mixer_withdraw_in/out`. Estos diez features
-son los que mejor discriminan patrones AML: los cuatro features
-`mixer_*` distinguen inmediatamente al usuario del mezclador ZK
-(señal más fuerte para las campañas *defi-exploit* y
-*ransomware-cashout*), mientras los `transfer_*` capturan el fan-out
-de structuring (señal principal para *stablecoin-scam*).
-
-Total: 3 + 4 + 2 + 10 = 19 features float32 por dirección. La
-salida del GCN es una probabilidad p_i(v) ∈ [0, 1] por dirección
-visible. Un umbral de 0,5 produce el flag binario que se propaga a
-la capa 2.
-
-**Baselines para comparativa**. El módulo `src/aml/detectors/baselines.py`
-implementa un detector Louvain sobre comunidades (Blondel et al. 2008)
-como baseline no supervisado, un detector GAT alternativo, y el
-detector `PerExchangeDetector` que aplica cualquier detector base a
-cada view por separado. Estos baselines permiten separar la
-contribución de la arquitectura simétrica LLM-vs-LLM del efecto
-absoluto del clasificador GCN.
-
-**Capa 2 — Coordinador LLM cross-exchange** (`LLMDefenderCoordinator`
-en `src/aml/detectors/multi_agent.py`, ~250 líneas dedicadas). Este
-componente implementa la simetría con el coordinador atacante. Recibe
-como input el top-K de direcciones flageadas por cada uno de los tres
-exchanges (K=60 por defecto, seleccionando por probabilidad descendente),
-junto con las features de cada dirección. Construye un prompt
-estructurado que presenta al LLM las tres vistas como bloques
-independientes y le pide una asignación explícita de cada dirección a
-un cluster con justificación textual.
-
-El *system prompt* del coordinador está calibrado para producir entre
-10 y 25 clusters (rango realista para 20 campañas atacantes + benign
-outliers) y para nombrar los clusters con arquetipos AML reconocibles:
-*cross-exchange mixer hub*, *pass-through mixer relay*, *pure mixer
-depositor*, *fan-out distributor*, *consolidation sink*. El output es
-JSON compacto en formato `{cluster_id: [direcciones]}`; un parser
-tolerante (`_parse_llm_clusters`) maneja tanto este formato como una
-variante verbose con reasoning por-cluster, y aplica un *fallback* de
-similaridad coseno si el parseo falla o el LLM asigna direcciones
-inexistentes en el input.
-
-**Detector cosine baseline**. La clase base `MultiAgentDetector`
-implementa la misma interfaz que `LLMDefenderCoordinator` pero
-sustituye el LLM por un algoritmo simple de clustering por similaridad
-coseno sobre los vectores de features (umbral 0,95). Esta clase
-existe explícitamente como *strawman* comparativo para la evaluación
-del Capítulo 8: cualquier ganancia del LLM debe justificarse contra
-esta baseline no paramétrica.
-
-**Métricas** (`src/aml/detectors/eval.py`, ~185 líneas). Se computan
-cuatro métricas clave:
-
-- *F1 binario*: clasificación intra-exchange (¿esta dirección es
-  ilícita?).
-- *Adjusted Rand Index (ARI)*: acuerdo entre el clustering predicho
-  y el ground-truth de actor cluster, corregido por azar.
-- *Homogeneidad*: fracción de clusters puros (todas las direcciones
-  del mismo cluster pertenecen al mismo actor real).
-- *Completitud*: fracción de actores reales cuyas direcciones caen en
-  un único cluster predicho.
-
-## 6.6 Federación y visibilidad parcial
-
-La conversión del grafo global G en las tres vistas {G_1, G_2, G_3}
-se realiza mediante `partial_visibility_split` en
-`src/aml/detectors/dataset.py` (~430 líneas). El algoritmo:
-
-1. Asigna cada dirección v ∈ V a un único exchange
-   X_i ∈ {X_A, X_B, X_C} mediante hashing del hash de v con
-   una semilla determinista.
-2. Define el subgrafo visible de X_i como el conjunto de aristas
-   (u, v) ∈ E tales que u ∈ X_i o v ∈ X_i.
-3. Etiqueta como *KYC-known* (etiqueta accesible para el entrenamiento
-   del clasificador local) sólo aquellas direcciones v ∈ X_i.
-   Las contrapartes de otros exchanges aparecen en el subgrafo pero
-   son etiquetadas como *unknown counterparty*.
-
-Este esquema replica fielmente la asimetría regulatoria descrita en
-el Capítulo 2: un exchange puede observar transacciones incidentes
-en sus usuarios KYC pero no dispone de las etiquetas de las
-contrapartes externas. Es la restricción que hace que el problema
-cross-exchange requiera un coordinador de segundo nivel.
-
-**Inputs de los detectores bajo cada régimen de visibilidad**. La
-diferencia operativa entre *full visibility* (baseline académica
-histórica, no realista bajo MiCA) y *partial visibility federada*
-(régimen de este trabajo) se resume en cuatro dimensiones:
-
-| Dimensión                  | Full visibility (baselines académicos)          | Partial visibility federada (este TFM)                                    |
-|----------------------------|-------------------------------------------------|---------------------------------------------------------------------------|
-| Grafo de entrenamiento     | G global (10 311 nodos, 101 880 aristas)      | Tres subgrafos {G_A, G_B, G_C} inducidos por las aristas incidentes en las direcciones asignadas al exchange respectivo (~55 % de aristas cada uno por overlap de contrapartes) |
-| Features                   | 19 dimensiones computadas sobre G global      | 19 dimensiones computadas sobre el subgrafo G_i: los valores difieren respecto al régimen global (ej. `in_degree` de una contraparte compartida es menor porque cada vista sólo ve una fracción de sus aristas) |
-| Etiquetas de entrenamiento | Todas las 649 direcciones adversariales visibles | Sólo las ~216 direcciones adversariales asignadas a X_i (el resto aparecen como *unknown counterparty*) |
-| Agregación cross-exchange  | Directa sobre el grafo global                   | Vía la capa 2 (coseno o LLM coordinator) sobre *fingerprints* per-address SIN acceso a los grafos crudos de los otros exchanges |
-
-Los detectores del Capítulo 8 se entrenan y reportan **exclusivamente
-bajo partial visibility**. Los benchmarks históricos que operan bajo
-full visibility (Weber et al. 2019 sobre Elliptic, la mayoría de
-GNN AML publicadas) sirven como referencia contextual del techo
-teórico pero no como comparativa directa —replicar sus F1 bajo
-visibilidad parcial requiere un mecanismo cross-exchange que la
-literatura previa no aporta. La contribución arquitectónica del
-presente trabajo (§1.3, contribución 2) es precisamente cerrar ese
-gap con el coordinador de capa 2.
-
-## 6.7 Repositorio y reproducibilidad
-
-El código íntegro está publicado en
-[`github.com/0xAnonsal/aml-thesis`](https://github.com/0xAnonsal/aml-thesis)
-bajo licencia MIT (con la advertencia expresa de que los contratos son
-*research artifacts* con `mint` permissionless y no deben usarse en
-mainnet). El repositorio incluye:
-
-- Suite de tests con más de 300 tests unitarios sobre las cinco capas
-  (`pytest tests/` — cobertura > 85 %).
-- Scripts de reproducción end-to-end para los tres detectores sobre
-  los cuatro datasets (Elliptic++, OpenAML v1, EthereumHeist,
-  simulación propia).
-- Runbook de despliegue Sepolia (`docs/SEPOLIA_DEPLOY.md`) con
-  comandos exactos, verificación en Etherscan, y troubleshooting.
-
-Cada resultado numérico reportado en el Capítulo 8 se acompaña del
-comando `python scripts/<nombre>.py <argumentos>` que lo regenera; los
-resultados en formato JSON residen en `results/` bajo control de
-versiones para trazabilidad.
-
----
-
-## 5.C Lenguajes de programación empleados
-
-El sistema combina cuatro lenguajes distintos, cada uno en su ámbito
-natural: Python para orquestación multi-agente + análisis de datos;
-Solidity para contratos inteligentes on-chain; Circom para el circuito
-zero-knowledge; y JavaScript (via Node.js) para la interfaz off-chain
-con snarkjs. Esta pluralidad es consecuencia directa del dominio del
-problema —cada capa técnica tiene un lenguaje incumbente con
-madurez de librerías y ecosistema— y no una decisión arbitraria.
-
-## 5.1 Python 3.11 — lenguaje principal (≈ 9 000 LOC)
-
-**Rol**: orquestación del sistema completo. Todo el pipeline
-atacante multi-agente, todo el pipeline defensor, la abstracción
-de blockchain, los scripts de reproducción experimental, los tests
-unitarios y de integración. En términos absolutos, ≈ 90 %
-del código propio del proyecto es Python.
-
-**Justificación de la elección**:
-
-1. **Madurez del ecosistema ML**: PyTorch + PyTorch Geometric +
-   scikit-learn + NetworkX no tienen equivalente comparable en
-   ningún otro lenguaje. La detección AML mediante GNN es
-   intrínsecamente una tarea de PyTorch.
-2. **SDK oficial de Anthropic**: `anthropic` (PyPI) es el cliente
-   de referencia para la API de Claude. Alternativas en TypeScript
-   o Go existen pero con menor completitud y actualización más
-   lenta.
-3. **Interfaz web3.py**: cliente Ethereum de referencia. La
-   alternativa `ethers.js` es TypeScript y forzaría un mixed
-   codebase con Python-para-ML + TypeScript-para-blockchain con
-   IPC entre ambos.
-4. **Legibilidad de investigación**: el TFM debe ser inspeccionable
-   por otro investigador AML sin experiencia en tipado estático;
-   Python permite prototipar rápidamente sin *boilerplate* de
-   tipos genéricos.
-
-**Convenciones y estilo**:
-
-- Formato PEP-8 con línea máxima 100 caracteres (verificado por
-  `ruff check` con reglas E/F/I/B/UP).
-- Type hints (typing + `from __future__ import annotations`)
-  en interfaces públicas y clases *dataclass*.
-- Docstrings estilo Google (`Args:`/`Returns:`/`Raises:`) en cada
-  función pública.
-- Ninguna función atacante o detector tiene más de ≈ 150 líneas;
-  los helpers *complejos* (por ejemplo `_mixer_collect_leaves` con su
-  retry loop) están extraídos a métodos privados.
-
-**Estructura del paquete `src/aml/`**:
-
-```
-src/aml/
-├── attackers/     ~2500 LOC — multi-agente ofensivo
-├── detectors/     ~3500 LOC — pipeline defensivo + baselines
-├── chains/        ~1200 LOC — abstraccion blockchain
-├── env/           ~500 LOC — oracle precios + market context
-└── utils/         ~300 LOC — helpers cross-cutting
-```
-
-## 5.2 Solidity 0.8.20 — contratos inteligentes (≈ 800 LOC)
-
-**Rol**: seis contratos on-chain que replican el *stack* DeFi
-sobre el que operan las tipologías reales de blanqueo. Escrito en
-Solidity porque es el lenguaje objetivo canónico de EVM y el único
-soportado por Foundry para tests + compilación directa.
-
-**Justificación de la elección**:
-
-1. **Solidity es EVM-native**: alternativas (Vyper, Yul) son
-   marginales y perderían compatibilidad con el ecosistema de
-   auditoría, herramientas y comunidad AML.
-2. **Foundry ↔ Solidity ↔ Anvil**: cadena de compilación +
-   ejecución + tests en un único lenguaje, sin cross-language
-   FFI ni JS.
-3. **Referencia de Tornado Cash + Uniswap V2**: los contratos
-   adaptados están originalmente en Solidity; reescribirlos en
-   otro lenguaje introduciría riesgo de divergencia semántica del
-   *core* criptográfico.
-
-**Convenciones**:
-
-- Cada contrato marcado con `SPDX-License-Identifier` (MIT para
-  adaptaciones de Tornado, UNLICENSED para *hand-written* research
-  artifacts, GPL-3.0 heredada para el `Verifier.sol` auto-generado).
-- Cabecera de comentario `ATTRIBUTION` en contratos derivados que
-  documenta la fuente + naturaleza de la adaptación.
-- Marcado prominente `NEVER deploy on a real chain` en los mocks
-  con funciones `mint` permissionless.
-- Uso exclusivo de características del lenguaje 0,8+
-  (overflow checks nativos, `receive()`, `struct` con typed
-  members).
-
-**Contratos**:
-
-```
-contracts/
-├── MockUSDT.sol              63 LOC — ERC-20 6 decimales
-├── MockUniswapV2Pool.sol     96 LOC — AMM constant-product
-├── MockTornado.sol          140 LOC — mixer ZK
-├── MerkleTreeWithHistory.sol 154 LOC — arbol append-only
-├── MockBridge.sol            94 LOC — bridge lock-and-release
-├── Verifier.sol             196 LOC — auto-gen snarkjs
-├── IHasher.sol               15 LOC — interfaz MiMC
-└── IVerifier.sol             15 LOC — interfaz Groth16
-```
-
-## 5.3 Circom 2.0 — circuito zero-knowledge (≈ 60 LOC)
-
-**Rol**: el circuito aritmético `withdraw.circom` que define
-matemáticamente la afirmación *"conozco un `(nullifier, secret)`
-cuyo commitment MiMC está en el árbol Merkle representado por
-`root`, y el `nullifierHash` de la retirada es
-`MiMC(nullifier)`"*. La prueba Groth16 sobre este circuito es lo
-que la retirada del mezclador aporta on-chain.
-
-**Justificación de la elección**:
-
-1. **Estándar de facto en el ecosistema Ethereum ZK**: Tornado
-   Cash, Semaphore, la mayoría de zkApps consumidas por proyectos
-   AML de referencia (TRM Labs, Chainalysis Reactor) usan
-   circom + snarkjs + Groth16.
-2. **Toolchain completa**: `circom` (compilador) + `snarkjs`
-   (prover) + `circomlib` (primitivas) + Powers of Tau Hermez
-   (trusted setup público reutilizable) forman un stack cohesivo
-   sin fragmentación entre lenguajes.
-3. **Reproducibilidad**: los `.circom` son texto legible en Git,
-   auditables por terceros. Alternativas como Halo2 (Rust) o
-   Noir (Rust-like) tendrían la barrera de entrada de Rust para
-   los revisores del TFM.
-
-**Alternativas descartadas**:
-
-- **Halo2**: sin trusted setup pero API mucho más baja y madurez
-  posterior; el ecosistema AML aún no lo adopta.
-- **Cairo (Starknet)**: no compatible con EVM sin puente adicional.
-- **Noir**: prometedor pero aún alpha en 2026.
-
-## 5.4 JavaScript / Node.js — puente off-chain (≈ 200 LOC)
-
-**Rol**: script `scripts/zk_helpers.js` que expone tres subcomandos
-consumidos por Python via `subprocess`:
-
-- `node zk_helpers.js mimc <nullifier>` → `MiMC(nullifier)` como int.
-- `node zk_helpers.js mimc2 <nullifier> <secret>` →
-  `MiMC(nullifier, secret)` = commitment como int.
-- `node zk_helpers.js merkle-path <depth> <leaf_idx> <leaves_file>` →
-  JSON con `root`, `pathElements[10]`, `pathIndices[10]`.
-
-Además el script `scripts/install_zk_tools.sh` gestiona la
-instalación de `node`, `circom` (via `cargo install`), `snarkjs`
-(npm global) y `circomlib` (npm global).
-
-**Justificación**:
-
-1. **`circomlibjs` solo existe en JavaScript**: la biblioteca que
-   evalúa MiMC off-chain igual que el contrato Solidity está
-   escrita en JS y no tiene port oficial a Python.
-2. **`snarkjs` es CLI de Node**: la generación de pruebas se
-   invoca inevitablemente como proceso Node.
-3. **Alternativa Rust** (`arkworks-rs`): funciona pero requiere
-   compilación específica del circuito con toolchain paralela
-   circom-rust; añade complejidad sin ganancia clara.
-
-Se aisla el JS al mínimo indispensable —Python delega a Node solo
-para operaciones criptográficas específicas y consume el resultado
-como stdout parseable—.
-
-## 5.5 Bash / shell — scripts de setup (~100 LOC)
-
-**Rol**: scripts idempotentes de setup del entorno ZK:
-
-- `scripts/install_zk_tools.sh` — instala Node + circom + snarkjs.
-- `scripts/setup_zk.sh withdraw` — trusted setup fase 2 del
-  circuito `withdraw` (compila circom → R1CS → wasm → zkey →
-  verifier.sol).
-- `scripts/run_sepolia_full_campaign.sh` — orquesta múltiples
-  campañas Sepolia en secuencia (histórico, no ejercitado en la
-  evaluación final).
-
-**Justificación**: los pasos de setup son secuencias imperativas
-con dependencias entre herramientas de sistema, no lógica de
-dominio. Bash es el estándar para orchestration ligera en Linux
-y todos los usuarios objetivo (investigadores AML sobre WSL o
-Linux nativo) lo conocen.
-
-## 5.6 Markdown — documentación y draft del TFM (≈ 4 000 líneas)
-
-**Rol**: todo el TFM (chapters + anexos) + los `README.md` +
-`ROADMAP.md` + `docs/*.md` están en Markdown.
-
-**Justificación**:
-
-1. **Portabilidad**: convertible a `.docx` (via python-docx o
-   pandoc), PDF (via pandoc + XeLaTeX) o HTML (via cualquier
-   markdown renderer) sin locked-in en un formato propietario.
-2. **Versionado en Git**: los diffs son legibles y permiten
-   revisión línea a línea de cada cambio sin abrir Word.
-3. **Diagramas Mermaid embebidos** (Capítulo 4): syntax highlight
-   + preview integrado en GitHub y VS Code, sin dependencia
-   externa.
-
-Alternativas consideradas y descartadas:
-
-- **LaTeX**: superior en tipografía matemática pero introduce una
-  fricción de compilación innecesaria para el volumen matemático
-  de este trabajo.
-- **Word directo**: pierde versionado + reproducibilidad + integración
-  con el resto del código.
-
-## 5.7 Resumen cuantitativo
-
-| Lenguaje    | LOC aprox.   | % del código propio | Rol                        |
-|-------------|--------------|---------------------|----------------------------|
-| Python      | 9 000        | ~86 %               | orquestación + ML + tests   |
-| Solidity    | 800          | ~8 %                | contratos on-chain          |
-| JavaScript  | 200          | ~2 %                | puente ZK snarkjs           |
-| Bash        | 100          | ~1 %                | setup toolchain             |
-| Circom      | 60           | ~0.6 %              | circuito ZK withdraw        |
-| Markdown    | ~4 000       | —                   | documentación (no ejecutable) |
-
-La proporción refleja el diseño: Python domina porque la
-contribución novel (multi-agente LLM sobre grafo federado) vive
-en Python; Solidity + Circom son necesarios pero minimalistas.
-El mixing de lenguajes se justifica por incumbencia técnica —cada
-lenguaje aporta su ecosistema— y se controla mediante interfaces
-finas (subprocess a Node, RPC JSON-RPC a Anvil/Sepolia,
-`solc`/`forge` a Solidity).
-
----
 
 ## 5.D Datasets y parámetros
 
