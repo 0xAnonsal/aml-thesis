@@ -81,18 +81,6 @@ por dataset.
 
 ![Figura 1. Arquitectura del sistema dual multi-agente: atacante LLM (Opus 4.7) ejecuta transacciones on-chain; los 3 exchanges federados observan sólo sus vistas locales KYC-verificadas; el coordinador LLM defensor (Haiku 4.5) razona sobre fingerprints agregados sin acceso a datos crudos.](tfm/figures/architecture.png)
 
-### 5.0.5 Implicaciones regulatorias
-
-La arquitectura propuesta es directamente aplicable al despliegue
-comercial post-MiCA (Reglamento (UE) 2023/1114, vigencia plena 2027):
-
-- **Rec. 16 FATF** (travel rule): cada exchange comparte fingerprints
-  agregados, no PII, cumpliendo la restricción de compartición.
-- **Rec. 20 FATF** (transparencia SAR): el LLM coordinator produce
-  razonamiento textual auditable por rol AML (§8.7).
-- **MiCA art. 63** (transparencia algorítmica): los outputs LLM son
-  interpretables por un compliance officer sin conocimiento de ML.
-
 ## 5.A Vista general de la arquitectura
 
 El sistema se organiza en cinco capas integradas verticalmente. En la

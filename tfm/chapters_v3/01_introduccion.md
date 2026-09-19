@@ -354,7 +354,7 @@ existentes.
 
 ## 1.7 Estructura del documento
 
-El TFM se organiza en siete capítulos más anexos:
+El TFM se organiza en seis capítulos más anexos:
 
 - **Capítulo 2 — Estado del arte y conceptos previos**. Revisión de
   los trabajos previos: (i) tipologías AML según FATF y la evolución
@@ -364,37 +364,31 @@ El TFM se organiza en siete capítulos más anexos:
   on-chain; (v) mezcladores basados en pruebas ZK. Incluye también
   los conceptos técnicos previos que el lector necesita (LLMs,
   laundering en criptomonedas, arquitectura de exchanges, Sepolia
-  y Anvil).
-- **Capítulo 3 — Limitaciones del estado del arte y motivación del
-  TFM**. Articula por qué el trabajo previo —a pesar de sus
-  contribuciones— deja abiertas cinco brechas concretas: limitaciones
-  de los LLMs previos a 2024 (menos capaces, más caros, ventanas de
-  contexto reducidas), problemas metodológicos de los datasets
-  académicos (label leakage, escala insuficiente, estatismo),
-  carencias de los simuladores adversariales, y por qué el contexto
-  tecnológico y regulatorio de 2026 hace viable este TFM.
-- **Capítulo 4 — Análisis del problema y tecnologías**. Justificación
+  y Anvil), un análisis de la brecha identificada frente al estado
+  del arte y una discusión del contexto tecnológico de 2024-2026 que
+  hace viable el enfoque del TFM.
+- **Capítulo 3 — Análisis del problema y tecnologías**. Justificación
   técnica de cada capa del stack (Solidity, Foundry/Anvil, PyTorch
   Geometric, snarkjs, Anthropic SDK, CoinGecko) y detalle de los
   modelos LLM empleados (Opus 4.7 atacante, Sonnet 4.6 defensor
   headline, Haiku 4.5 defensor bulk).
-- **Capítulo 5 — Diseño, dataset y lenguajes**. Reúne el diseño
+- **Capítulo 4 — Diseño, dataset y lenguajes**. Reúne el diseño
   arquitectónico del sistema (vista de cinco capas, arquitecturas
   atacante/defensor, federación bajo visibilidad parcial), los seis
   lenguajes de programación empleados con LOC por lenguaje, y la
   especificación de datasets (propios + Elliptic++/OpenAML/EthereumHeist),
   particionado federado, configuración de detectores y parámetros LLM.
-- **Capítulo 6 — Experimentos y resultados (attack + defense)**.
+- **Capítulo 5 — Experimentos y resultados (attack + defense)**.
   Presenta primero la parte offensive (campañas del atacante
   multi-agente, incluyendo validación real sobre Sepolia con
   contratos desplegados y verificados), luego la parte defensive
   (detección binaria, atribución cross-exchange, ablations
-  metodológicas: hard-negative, cross-domain EthereumHeist,
-  post-hoc cluster merge P1-71, silhouette auto-tune P1-73, Sonnet
-  vs Haiku, held-out con seeds nunca vistos, multi-campaign LOCO,
-  campaign-id vs role-attribution, feature ablation). Cierra con
-  la auditoría metodológica de memorización y las limitaciones.
-- **Capítulo 7 — Visibilidad parcial, conclusiones y findings**.
+  metodológicas: hard-negative, cross-domain EthereumHeist, post-hoc
+  cluster merge, silhouette auto-tune, Sonnet vs Haiku, held-out con
+  seeds nunca vistos, multi-campaign LOCO, campaign-id vs
+  role-attribution, feature ablation). Cierra con la auditoría
+  metodológica de memorización y las limitaciones.
+- **Capítulo 6 — Visibilidad parcial, conclusiones y findings**.
   Argumenta la novedad central del TFM (federación por exchange con
   visibilidad parcial, patrón que ningún trabajo previo ha
   explorado), presenta once decisiones clave de diseño, y cierra

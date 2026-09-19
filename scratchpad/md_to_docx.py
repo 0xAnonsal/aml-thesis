@@ -37,10 +37,8 @@ YEAR = "2026"
 
 CHAPTER_ORDER = [
     "00_portada.md",
-    "00b_glosario.md",
     "01_introduccion.md",
     "02_estado_arte_conceptos.md",
-    "03_limitaciones_previas.md",
     "04_analisis_tecnologias.md",
     "05_diseno_dataset.md",
     "06_experimentos_resultados.md",

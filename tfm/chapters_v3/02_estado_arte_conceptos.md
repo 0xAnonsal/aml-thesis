@@ -307,3 +307,39 @@ motivan el enfoque de este TFM:
 
 El sistema descrito en los capítulos siguientes aborda las cuatro
 simultáneamente.
+
+## 2.7 Limitaciones históricas de los modelos LLM y contexto tecnológico 2024-2026
+
+Antes de 2024, las capacidades de los modelos de lenguaje grandes
+disponibles no permitían el tipo de razonamiento estructurado necesario
+para clustering AML sobre grafos on-chain. Modelos como GPT-3.5 no
+manejaban de forma consistente prompts con centenares de nodos y
+features numéricas, y la tasa de errores de parsing en salidas
+estructuradas era prohibitiva. El coste operativo era también
+prohibitivo: GPT-4 en 2023 tenía un precio de unos 30 USD por millón de
+tokens de entrada y 60 USD por millón de tokens de salida, lo que
+hubiera hecho inviable un pipeline como el propuesto por presupuesto
+académico. Las ventanas de contexto reducidas (8 000-32 000 tokens en la
+generación anterior) impedían procesar los fingerprints de las 180
+direcciones flageadas simultáneamente que el defensor cross-exchange
+necesita. Finalmente, el soporte de tool-use fiable sobre cadenas largas
+—esencial para que el atacante multi-agente ejecute campañas Sepolia de
+seis a ocho horas sin intervención humana— sólo se ha estabilizado en la
+familia Claude 4.x a partir de 2025.
+
+El contexto tecnológico y regulatorio de 2026 hace viable un trabajo con
+el alcance propuesto por tres factores convergentes. Primero, los
+modelos frontera accesibles: Claude Sonnet 4.6 y Haiku 4.5 tienen coste
+aproximado de 3 USD/15 USD (Sonnet) y 0.80 USD/4 USD (Haiku) por millón
+de tokens de entrada/salida respectivamente, entre diez y cuarenta veces
+más baratos que GPT-4 en 2023. Con presupuesto estudiantil de
+aproximadamente 200 EUR (§5.F) se ejecutan veintiséis campañas atacantes
+reales más la evaluación completa del defensor, algo inviable hace dos
+años. Segundo, la infraestructura testnet madura: Sepolia es en 2026
+suficientemente estable y fondeada para simulación adversarial
+realista, y Anvil (Foundry, 2023) proporciona sandbox local instantáneo
+para iteración rápida. Tercero, el marco regulatorio activo (§1.6): MiCA
+plenamente vigente y FATF Travel Rule en implementación activa hacen
+que la necesidad operativa de detectores AML sobre criptoactivos con
+capacidad explicativa —no sólo predictiva— sea el nicho exacto que este
+TFM ocupa.
