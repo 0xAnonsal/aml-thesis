@@ -23,8 +23,8 @@ más determinantes para la contribución del trabajo.
 | 7.5 Oráculo determinista de precios | Precios random / hardcoded | Reproducibilidad exacta entre runs |
 | 7.6 Wrapper LLM provider-agnostic | Anthropic SDK directo | Switching flexible Opus↔Sonnet↔Haiku |
 | 7.7 Particionado federado hash-based | Random split | Estabilidad entre runs, determinismo por seed |
-| 7.8 LOCO-CV como métrica primaria | Split 80/20 estándar | Expone memorización (§8.10 Finding 1: ΔF1 = −0.55) |
-| 7.9 Threshold Louvain calibrado en 0.6 | Threshold default 0.5 | Calibrado empíricamente en §8.5 sweep |
+| 7.8 LOCO-CV como métrica primaria | Split 80/20 estándar | Expone memorización (§5.10 Finding 1: ΔF1 = −0.55) |
+| 7.9 Threshold Louvain calibrado en 0.6 | Threshold default 0.5 | Calibrado empíricamente en §5.5 sweep |
 | 7.10 Persistencia inmediata de mixer notes | Persistencia post-hoc | Elimina dependencia de contexto LLM (P1-61) |
 | 7.11 Reverse swap USDT→ETH en sweep | Sin sweep | Recupera hasta 5 ETH del pool residual post-campaña |
 
@@ -34,7 +34,7 @@ en GCN podría producir F1 similar, pero no ofrecería razonamiento textual
 auditable —capacidad que FATF Rec. 20 y el artículo 63 de MiCA exigen
 para un despliegue regulatorio real. El coste marginal de la simetría es
 despreciable: aproximadamente 0,04 USD por evaluación con Haiku 4.5,
-como se detalla en §8.9.Z. La ganancia en interpretabilidad justifica de
+como se detalla en §4.F Presupuesto. La ganancia en interpretabilidad justifica de
 sobra ese coste.
 
 La adopción de LOCO-CV como métrica primaria desde el primer experimento,
@@ -46,7 +46,7 @@ comportamiento habría pasado desapercibido si la evaluación se hubiera
 limitado a splits 80/20 aleatorios, como ocurre en la mayoría de la
 literatura AML previa [1][2][3]. Louvain, al ser no supervisado, actúa
 como cota inferior confiable de generalización y sirve como *early
-warning* de sobreajuste GCN, según formalizamos en §8.10 Finding 3.
+warning* de sobreajuste GCN, según formalizamos en §5.10 Finding 3.
 
 Finalmente, la decisión de externalizar el control de granularidad al
 post-procesamiento code-level (P1-71) es la que produjo el único
@@ -58,7 +58,7 @@ sobre proximidad de direcciones, pero su decisión cuantitativa —cuántos
 clusters emitir— está sistemáticamente sesgada hacia la
 sobre-fragmentación. Corregir ese sesgo con un merge determinístico
 posterior, en lugar de intentar reeducar al LLM, es lo que llevó el mean
-ARI de 0.001 a 0.159 (§8.9.G). Esta observación se formula como
+ARI de 0.001 a 0.159 (§5.9.G). Esta observación se formula como
 meta-finding publishable: para controlar output cuantitativo discreto de
 un LLM, el post-procesamiento code-level determinístico supera
 sistemáticamente al prompt engineering.
@@ -101,7 +101,7 @@ esquema replica fielmente la asimetría regulatoria post-MiCA descrita
 en el Capítulo 2 §2.1.
 
 **Contribución 3 — Auditoría metodológica de la memorización**. El
-Capítulo 5 §8.10 formaliza tres *findings* publicables independientemente
+Capítulo 5 §5.10 formaliza tres *findings* publicables independientemente
 del sistema propuesto. Sobre la simulación propia, el GCN pierde
 ΔF1 = −0,55 al pasar de *split* 80/20 a LOCO-CV; sobre EthereumHeist
 real, la pérdida es ΔF1 = −0,31; Louvain preserva su F1 en ambos
@@ -125,7 +125,7 @@ red pública.
 
 ### 6.2.2 Trade-off central: interpretabilidad frente a métrica cuantitativa
 
-La discusión del Capítulo 5 §8.8 identifica el hallazgo empírico que
+La discusión del Capítulo 5 §5.8 identifica el hallazgo empírico que
 resume la contribución central del trabajo: la similaridad coseno
 supera al coordinador LLM en ARI raw (0,081 vs 0,013 en simulación;
 0,066 vs 0,040 sobre EthereumHeist real), pero el coordinador LLM
@@ -161,7 +161,7 @@ literatura AML sobre grafos ha reportado sistemáticamente F1 > 0,90
 sobre *datasets* con menos de 30 actor clusters, incluyendo trabajos
 publicados sobre Elliptic (Weber et al. 2019), EthereumHeist (Wu et
 al. 2023) y OpenAML v1 (FINOS 2025). Los resultados del
-Capítulo 5 §8.5 sugieren que esas cifras sobreestiman el rendimiento
+Capítulo 5 §5.5 sugieren que esas cifras sobreestiman el rendimiento
 operativo real por 30-55 puntos absolutos de F1. La recomendación
 metodológica derivada es que los futuros *benchmarks* AML con actor
 clusters escasos deben reportar *leave-one-actor-out* como métrica
@@ -169,7 +169,7 @@ principal, no como *ablation*.
 
 **Lección 2 — Baselines no paramétricos son sorprendentemente
 fuertes**. El baseline de similaridad coseno sobre features de nodo
-(§8.6) supera al coordinador LLM en ARI en ambos *datasets* sin
+(§5.6) supera al coordinador LLM en ARI en ambos *datasets* sin
 requerir entrenamiento supervisado, sin recurso computacional
 significativo, y sin coste monetario. Cualquier propuesta futura de
 detector AML más sofisticado debe justificar su coste marginal
@@ -284,7 +284,7 @@ futuro:
   intervención humana.
 - **P1-63 [FUTURE]** Streaming API + context compression. Elimina
   el context inflation crash que hizo fallar los intentos
-  stablecoin-scam de 41k USDT (§8.9.B).
+  stablecoin-scam de 41k USDT (§5.9.B).
 - **P1-64/65 [IMPLEMENTED]** Chain trace completeness bugs fixed
   (post-2026-09-10). Datasets Anvil generados desde entonces tienen
   traces completas incluyendo anti-strand + rescue phases.
@@ -296,30 +296,30 @@ futuro:
 
 - **P1-55/56/70 [ATTEMPTED, NEGATIVE]** Prompt-level guidance para
   guiar la granularidad de output del LLM. Los tres ablations
-  fallaron consistentemente (§8.9.F). Publishable como
+  fallaron consistentemente (§5.9.F). Publishable como
   meta-finding: prompt engineering no controla output cuantitativo
   discreto del LLM. Ver §6.2.4.28 síntesis.
 - **P1-68 [FUTURE]** LLM re-scoring bidireccional. Para reducir el
   background FPR residual, el LLM re-evalúa las address flagged por
   Louvain con conocimiento explícito de los otros flagged
   addresses. Impacto esperado: precision → 1.000 en 5/5 datasets.
-- **P1-69 [IMPLEMENTED]** Hard-negative training (§8.9.D.2). Cerró
+- **P1-69 [IMPLEMENTED]** Hard-negative training (§5.9.D.2). Cerró
   el label leakage con inyección de 500 background addresses como
   benigns duros durante fit.
 - **P1-71 [IMPLEMENTED, POSITIVE]** Post-hoc cluster merge por
   centroid distance. Primera intervención positiva del defensor.
-  Mean ARI 0.001 → 0.159 (~160×). Ver §8.9.G.
+  Mean ARI 0.001 → 0.159 (~160×). Ver §5.9.G.
 - **P1-72 [ATTEMPTED, NEGATIVE]** Feature enrichment con pagerank
   + betweenness + clustering coefficient (19→22 dim). ARI empeoró
   0.011. Confirma que el signal está en features de flow, no en
   topología global.
 - **P1-73 [IMPLEMENTED, POSITIVE]** Silhouette auto-tune de
   `max_clusters`. Quita el caveat metodológico de P1-71 (necesitar
-  oracle k). Ver §8.9.H.
+  oracle k). Ver §5.9.H.
 - **P1-74 [ATTEMPTED, ANTI-EXPECTED]** Sonnet 4.6 + P1-71 sobre 5
   datasets. Sonnet es peor final que Haiku (0.078 vs 0.159) y 3× más
   caro. Configuración Pareto-óptima confirmada: **Haiku 4.5 + P1-71 +
-  P1-73**. Ver §8.9.I.
+  P1-73**. Ver §5.9.I.
 
 #### 6.2.4.28 Síntesis del control de output del LLM
 
@@ -392,7 +392,7 @@ arquitectura definitiva descrita en los Capítulos 6 y 7.
 La contribución central del trabajo, tal como se ha sustanciado a
 través de los ocho capítulos anteriores, no es que el LLM defensor
 supere numéricamente al *baseline* coseno —no lo hace, y el
-Capítulo 5 §8.8 lo argumenta detenidamente—. La contribución es
+Capítulo 5 §5.8 lo argumenta detenidamente—. La contribución es
 demostrar que un *pipeline* AML sobre grafos puede producir
 *simultáneamente* *flags* binarios operativamente accionables
 (mediante el clasificador GCN local) y justificaciones textuales
@@ -429,17 +429,17 @@ en Tecnologías del Sector Financiero (FinTech) UC3M (actualizada
   pipelines LLM-agent + downstream computation.
 - **CB7 — Aplicación de conocimientos a entornos complejos**.
   Cubierta por la validación cross-domain sobre EthereumHeist
-  (§8.9.E, dataset externo con 633k nodos nunca visto en desarrollo)
-  y multi-campaign LOCO (§8.9.K, 7 campañas simultáneas sobre grafo
+  (§5.9.E, dataset externo con 633k nodos nunca visto en desarrollo)
+  y multi-campaign LOCO (§5.9.K, 7 campañas simultáneas sobre grafo
   combinado 34k nodos).
 - **CB8 — Integración con reflexión ético-social**. Cubierta por la
   reflexión sobre implicaciones regulatorias FATF/MiCA (§2.1, §3.4),
-  el análisis de limitaciones (§8.11) y la declaración honesta de
+  el análisis de limitaciones (§6.2.4.29) y la declaración honesta de
   4 ablations negativas (P1-55/56/70/72) que rechazaron hipótesis
   iniciales.
 - **CB9 — Comunicación clara**. Cubierta por la estructura del TFM:
   resumen bilingüe (§1), tabla ejecutiva de findings (§6.2) y cost
-  summary (§8.9.Z).
+  summary (§4.F Presupuesto).
 - **CB10 — Aprendizaje autodirigido**. Cubierta por el arco completo:
   el autor partió sin experiencia previa en Solidity, ZK proofs o
   LLM agents y desarrolló los tres stacks durante los 5 meses del
@@ -462,16 +462,16 @@ en Tecnologías del Sector Financiero (FinTech) UC3M (actualizada
   disciplina aisladamente resolvería el problema.
 - **CG4 — Composiciones escritas con originalidad**. Cubierta por
   este documento (>4 000 líneas Markdown técnico original) y los
-  meta-findings: «F1=1.000 era noise-de-seed» (§8.9.J), «role vs
-  campaign attribution» (§8.9.49), «smaller cheaper LLM + right
-  post-processing beats larger» (§8.9.I), «mixer features tienen
-  RF importance = 0» (§8.9.L).
+  meta-findings: «F1=1.000 era noise-de-seed» (§5.9.J), «role vs
+  campaign attribution» (§5.9), «smaller cheaper LLM + right
+  post-processing beats larger» (§5.9.I), «mixer features tienen
+  RF importance = 0» (§5.9.L).
 
 ### 7.C.3 Competencias Específicas
 
 - **CE1 — Mercados financieros**. Cubierta por el tratamiento formal
   de tipologías FATF (§2.1), marco regulatorio MiCA / Rec.16 / Rec.20
-  (§2.1, §3.4) y economía real de campañas (§8.9.B).
+  (§2.1, §3.4) y economía real de campañas (§5.9.B).
 - **CE2 — Tecnologías del sector financiero**. Cubierta por el
   análisis técnico del stack blockchain (§3), justificación
   Foundry/Solidity/Anthropic y diseño de infraestructura
@@ -485,7 +485,7 @@ en Tecnologías del Sector Financiero (FinTech) UC3M (actualizada
 - **CE5 — Herramientas para grandes cantidades de datos**. Cubierta
   por el procesamiento del grafo combinado EthereumHeist (633k
   nodos, 2.4M transacciones) vía NetworkX + numpy + pandas y por el
-  particionado federado sobre grafos de hasta 34k nodos (§8.9.K).
+  particionado federado sobre grafos de hasta 34k nodos (§5.9.K).
 
 ### 7.C.4 Materia del Máster asociada
 

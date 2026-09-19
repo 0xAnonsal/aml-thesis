@@ -479,7 +479,7 @@ generativa**.
 **Interpretación de los resultados y hallazgos del Capítulo 5**. Las
 conclusiones sobre el trade-off ARI vs interpretabilidad (§5.8), la
 auditoría de memorización (§5.10) y las lecciones metodológicas del
-Capítulo 10 §6.3 reflejan el análisis crítico del autor sobre los
+Capítulo 6 §6.3 reflejan el análisis crítico del autor sobre los
 datos empíricos observados.
 
 ### H.4 Trazabilidad y verificabilidad

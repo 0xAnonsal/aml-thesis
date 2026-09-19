@@ -20,7 +20,7 @@ aritméticas —crítico para contratos que gestionan valor— y sintaxis
 moderna que reduce boilerplate frente a 0,7. Los contratos usan
 únicamente características estándar del lenguaje sin dependencias
 externas (`OpenZeppelin`, `Uniswap V2 core`) para minimizar la
-superficie de código, justificado en el Capítulo 7 §7.1.
+superficie de código, justificado en el Capítulo 6 §7.1.
 
 ### 3.1.2 Foundry (toolchain compilación + ejecución)
 
@@ -289,4 +289,4 @@ madura (> 2 años de estabilidad), open source, y su reemplazo
 por una alternativa comparable requeriría cambio mínimo del código
 (en particular el *wrapper* LLM que permite sustituir Anthropic por
 OpenAI/Google/etc. con reimplementación de una única interfaz —ver
-Capítulo 7 §7.6).
+Capítulo 6 §7.6).
