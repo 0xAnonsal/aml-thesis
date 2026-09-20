@@ -21,7 +21,7 @@ Trabajo Fin de Máster: **"Detección adversarial multi-agente de blanqueo de ca
 | `06_experimentos_resultados.md` | Cap. 5 — Experimentos y resultados |
 | `07_visibilidad_conclusiones.md` | Cap. 6 — Visibilidad parcial, conclusiones, limitaciones, competencias |
 | `08_bibliografia.md` | Bibliografía |
-| `A_anexos.md` | Anexos A (prompts), F (repositorio), G (atribuciones), H (declaración de IA) |
+| `A_anexos.md` | Anexos A (prompts), B (repositorio), C (atribuciones), D (declaración de IA) |
 
 ## Regenerar el docx desde Markdown
 
