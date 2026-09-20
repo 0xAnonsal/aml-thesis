@@ -1,0 +1,26 @@
+Run:        2026-09-09T16-21-24_benign_seed200
+Kind:       benign (negative class for detector training)
+Users:      66 (started 50)
+Activities: 1000 requested
+
+Activity breakdown:
+  business_chain       51
+  exchange_deposit     325
+  exchange_withdrawal  267
+  hub_broadcast        39
+  medium_eth_transfer  17
+  mint_usdt            22
+  new_user             16
+  skipped              32
+  sub999_invoice       44
+  swap_eth_for_usdt    37
+  swap_usdt_for_eth    25
+  transfer_eth         61
+  transfer_usdt        61
+  whale_transfer       3
+
+Chain txs traced: 1481
+With pool:        True
+Wall clock:       129.1s
+
+Artifacts: results/benign_medium_v57/2026-09-09T16-21-24_benign_seed200

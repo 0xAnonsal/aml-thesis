@@ -1,0 +1,36 @@
+{
+  "run_name": "2026-09-09T16-20-52_benign_seed42",
+  "kind": "benign",
+  "seed": 42,
+  "num_users": 20,
+  "num_txs": 100,
+  "with_pool": true,
+  "timestamp_utc": "2026-09-09T16-20-52",
+  "wall_clock_seconds": 1.6587932109832764,
+  "anvil_chain_id": 31337,
+  "deploy_end_block": 5,
+  "end_block": 229,
+  "activity_counts": {
+    "transfer_usdt": 8,
+    "transfer_eth": 7,
+    "swap_eth_for_usdt": 4,
+    "swap_usdt_for_eth": 1,
+    "mint_usdt": 3,
+    "new_user": 4,
+    "hub_broadcast": 5,
+    "business_chain": 3,
+    "sub999_invoice": 6,
+    "medium_eth_transfer": 1,
+    "whale_transfer": 0,
+    "exchange_deposit": 26,
+    "exchange_withdrawal": 29,
+    "skipped": 3
+  },
+  "args": {
+    "num_users": 20,
+    "num_txs": 100,
+    "seed": 42,
+    "out": "results/benign_smoke_v57",
+    "with_pool": true
+  }
+}
