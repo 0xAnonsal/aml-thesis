@@ -1,0 +1,2636 @@
+{
+  "dataset": "/home/anon/aml-results/batch_2026-06-26/dataset.pkl",
+  "nodes": 10311,
+  "edges": 101880,
+  "n_runs": 420,
+  "n_attacker_runs": 20,
+  "seed": 42,
+  "protocol": "split 80/20 by run (seed 42) + leave-one-run-out; attacker folds -> P/R/F1 on held-out labelled nodes; benign folds -> FPR on held-out labelled benign nodes",
+  "split_80_20": {
+    "train_runs": 336,
+    "test_runs": 84,
+    "train_attacker_runs": 15,
+    "test_attacker_runs": 5,
+    "train_labeled": 8185,
+    "train_positive": 416,
+    "test_labeled": 2114,
+    "test_positive": 233,
+    "detectors": {
+      "Louvain": {
+        "tp": 233,
+        "fp": 1705,
+        "fn": 0,
+        "tn": 176,
+        "precision": 0.1202,
+        "recall": 1.0,
+        "f1": 0.2146,
+        "fit_time_s": 2.2,
+        "n_test_in_unlabelled_community": 1617
+      },
+      "GCN": {
+        "tp": 233,
+        "fp": 12,
+        "fn": 0,
+        "tn": 1869,
+        "precision": 0.951,
+        "recall": 1.0,
+        "f1": 0.9749,
+        "fit_time_s": 7.0
+      },
+      "MultiAgent": {
+        "tp": 229,
+        "fp": 64,
+        "fn": 4,
+        "tn": 1817,
+        "precision": 0.7816,
+        "recall": 0.9828,
+        "f1": 0.8707,
+        "fit_time_s": 3.4
+      }
+    }
+  },
+  "loco_summary": {
+    "Louvain": {
+      "n_attacker_folds": 20,
+      "n_benign_folds": 40,
+      "attacker_f1_mean": 0.9324,
+      "attacker_f1_std": 0.1363,
+      "attacker_precision_mean": 0.8957,
+      "attacker_precision_std": 0.1858,
+      "attacker_recall_mean": 1.0,
+      "attacker_recall_std": 0.0,
+      "attacker_f1_min": 0.5,
+      "attacker_f1_max": 1.0,
+      "attacker_pooled_precision": 0.9101,
+      "attacker_pooled_recall": 1.0,
+      "benign_fpr_mean": 0.7852,
+      "benign_fpr_std": 0.3981,
+      "benign_fp_total": 757,
+      "benign_n_total": 974,
+      "all_folds_f1_mean_INCLUDING_benign_zeros": 0.3108,
+      "delta_f1_vs_split": 0.7178
+    },
+    "GCN": {
+      "n_attacker_folds": 20,
+      "n_benign_folds": 40,
+      "attacker_f1_mean": 0.9324,
+      "attacker_f1_std": 0.1363,
+      "attacker_precision_mean": 0.8957,
+      "attacker_precision_std": 0.1858,
+      "attacker_recall_mean": 1.0,
+      "attacker_recall_std": 0.0,
+      "attacker_f1_min": 0.5,
+      "attacker_f1_max": 1.0,
+      "attacker_pooled_precision": 0.9101,
+      "attacker_pooled_recall": 1.0,
+      "benign_fpr_mean": 0.0,
+      "benign_fpr_std": 0.0,
+      "benign_fp_total": 0,
+      "benign_n_total": 974,
+      "all_folds_f1_mean_INCLUDING_benign_zeros": 0.3108,
+      "delta_f1_vs_split": -0.0425
+    },
+    "MultiAgent": {
+      "n_attacker_folds": 20,
+      "n_benign_folds": 40,
+      "attacker_f1_mean": 0.9293,
+      "attacker_f1_std": 0.136,
+      "attacker_precision_mean": 0.8953,
+      "attacker_precision_std": 0.1859,
+      "attacker_recall_mean": 0.9941,
+      "attacker_recall_std": 0.0181,
+      "attacker_f1_min": 0.5,
+      "attacker_f1_max": 1.0,
+      "attacker_pooled_precision": 0.9092,
+      "attacker_pooled_recall": 0.9895,
+      "benign_fpr_mean": 0.0378,
+      "benign_fpr_std": 0.0525,
+      "benign_fp_total": 37,
+      "benign_n_total": 974,
+      "all_folds_f1_mean_INCLUDING_benign_zeros": 0.3098,
+      "delta_f1_vs_split": 0.0586
+    }
+  },
+  "loco_per_fold": [
+    {
+      "fold": 0,
+      "held_out": "2026-06-26T13-46-01_defi-exploit_seed53",
+      "kind": "attacker",
+      "n_labeled_test": 20,
+      "n_positive_test": 18,
+      "detectors": {
+        "Louvain": {
+          "tp": 18,
+          "fp": 2,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.9,
+          "recall": 1.0,
+          "f1": 0.9474,
+          "n_flagged": 20,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 18,
+          "fp": 2,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.9,
+          "recall": 1.0,
+          "f1": 0.9474,
+          "n_flagged": 20
+        },
+        "MultiAgent": {
+          "tp": 18,
+          "fp": 2,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.9,
+          "recall": 1.0,
+          "f1": 0.9474,
+          "n_flagged": 20
+        }
+      }
+    },
+    {
+      "fold": 1,
+      "held_out": "2026-06-26T13-49-38_defi-exploit_seed59",
+      "kind": "attacker",
+      "n_labeled_test": 25,
+      "n_positive_test": 23,
+      "detectors": {
+        "Louvain": {
+          "tp": 23,
+          "fp": 2,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.92,
+          "recall": 1.0,
+          "f1": 0.9583,
+          "n_flagged": 25,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 23,
+          "fp": 2,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.92,
+          "recall": 1.0,
+          "f1": 0.9583,
+          "n_flagged": 25
+        },
+        "MultiAgent": {
+          "tp": 23,
+          "fp": 2,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.92,
+          "recall": 1.0,
+          "f1": 0.9583,
+          "n_flagged": 25
+        }
+      }
+    },
+    {
+      "fold": 2,
+      "held_out": "2026-06-26T13-53-54_defi-exploit_seed61",
+      "kind": "attacker",
+      "n_labeled_test": 18,
+      "n_positive_test": 17,
+      "detectors": {
+        "Louvain": {
+          "tp": 17,
+          "fp": 1,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.9444,
+          "recall": 1.0,
+          "f1": 0.9714,
+          "n_flagged": 18,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 17,
+          "fp": 1,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.9444,
+          "recall": 1.0,
+          "f1": 0.9714,
+          "n_flagged": 18
+        },
+        "MultiAgent": {
+          "tp": 17,
+          "fp": 1,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.9444,
+          "recall": 1.0,
+          "f1": 0.9714,
+          "n_flagged": 18
+        }
+      }
+    },
+    {
+      "fold": 3,
+      "held_out": "2026-06-26T13-57-32_defi-exploit_seed67",
+      "kind": "attacker",
+      "n_labeled_test": 22,
+      "n_positive_test": 22,
+      "detectors": {
+        "Louvain": {
+          "tp": 22,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 22,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 22,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 22
+        },
+        "MultiAgent": {
+          "tp": 22,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 22
+        }
+      }
+    },
+    {
+      "fold": 4,
+      "held_out": "2026-06-26T14-02-17_defi-exploit_seed71",
+      "kind": "attacker",
+      "n_labeled_test": 22,
+      "n_positive_test": 21,
+      "detectors": {
+        "Louvain": {
+          "tp": 21,
+          "fp": 1,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.9545,
+          "recall": 1.0,
+          "f1": 0.9767,
+          "n_flagged": 22,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 21,
+          "fp": 1,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.9545,
+          "recall": 1.0,
+          "f1": 0.9767,
+          "n_flagged": 22
+        },
+        "MultiAgent": {
+          "tp": 21,
+          "fp": 1,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.9545,
+          "recall": 1.0,
+          "f1": 0.9767,
+          "n_flagged": 22
+        }
+      }
+    },
+    {
+      "fold": 5,
+      "held_out": "2026-06-26T14-06-31_defi-exploit_seed73",
+      "kind": "attacker",
+      "n_labeled_test": 28,
+      "n_positive_test": 24,
+      "detectors": {
+        "Louvain": {
+          "tp": 24,
+          "fp": 4,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.8571,
+          "recall": 1.0,
+          "f1": 0.9231,
+          "n_flagged": 28,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 24,
+          "fp": 4,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.8571,
+          "recall": 1.0,
+          "f1": 0.9231,
+          "n_flagged": 28
+        },
+        "MultiAgent": {
+          "tp": 24,
+          "fp": 4,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.8571,
+          "recall": 1.0,
+          "f1": 0.9231,
+          "n_flagged": 28
+        }
+      }
+    },
+    {
+      "fold": 6,
+      "held_out": "2026-06-26T14-10-18_defi-exploit_seed79",
+      "kind": "attacker",
+      "n_labeled_test": 30,
+      "n_positive_test": 10,
+      "detectors": {
+        "Louvain": {
+          "tp": 10,
+          "fp": 20,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.3333,
+          "recall": 1.0,
+          "f1": 0.5,
+          "n_flagged": 30,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 10,
+          "fp": 20,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.3333,
+          "recall": 1.0,
+          "f1": 0.5,
+          "n_flagged": 30
+        },
+        "MultiAgent": {
+          "tp": 10,
+          "fp": 20,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.3333,
+          "recall": 1.0,
+          "f1": 0.5,
+          "n_flagged": 30
+        }
+      }
+    },
+    {
+      "fold": 7,
+      "held_out": "2026-06-26T14-14-34_defi-exploit_seed83",
+      "kind": "attacker",
+      "n_labeled_test": 18,
+      "n_positive_test": 16,
+      "detectors": {
+        "Louvain": {
+          "tp": 16,
+          "fp": 2,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.8889,
+          "recall": 1.0,
+          "f1": 0.9412,
+          "n_flagged": 18,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 16,
+          "fp": 2,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.8889,
+          "recall": 1.0,
+          "f1": 0.9412,
+          "n_flagged": 18
+        },
+        "MultiAgent": {
+          "tp": 16,
+          "fp": 2,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.8889,
+          "recall": 1.0,
+          "f1": 0.9412,
+          "n_flagged": 18
+        }
+      }
+    },
+    {
+      "fold": 8,
+      "held_out": "2026-06-26T14-18-54_defi-exploit_seed89",
+      "kind": "attacker",
+      "n_labeled_test": 16,
+      "n_positive_test": 16,
+      "detectors": {
+        "Louvain": {
+          "tp": 16,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 16,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 16,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 16
+        },
+        "MultiAgent": {
+          "tp": 16,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 16
+        }
+      }
+    },
+    {
+      "fold": 9,
+      "held_out": "2026-06-26T14-21-15_defi-exploit_seed97",
+      "kind": "attacker",
+      "n_labeled_test": 24,
+      "n_positive_test": 10,
+      "detectors": {
+        "Louvain": {
+          "tp": 10,
+          "fp": 14,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.4167,
+          "recall": 1.0,
+          "f1": 0.5882,
+          "n_flagged": 24,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 10,
+          "fp": 14,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.4167,
+          "recall": 1.0,
+          "f1": 0.5882,
+          "n_flagged": 24
+        },
+        "MultiAgent": {
+          "tp": 10,
+          "fp": 14,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.4167,
+          "recall": 1.0,
+          "f1": 0.5882,
+          "n_flagged": 24
+        }
+      }
+    },
+    {
+      "fold": 10,
+      "held_out": "2026-06-26T15-08-23_stablecoin-scam_seed61",
+      "kind": "attacker",
+      "n_labeled_test": 89,
+      "n_positive_test": 84,
+      "detectors": {
+        "Louvain": {
+          "tp": 84,
+          "fp": 5,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.9438,
+          "recall": 1.0,
+          "f1": 0.9711,
+          "n_flagged": 89,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 84,
+          "fp": 5,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.9438,
+          "recall": 1.0,
+          "f1": 0.9711,
+          "n_flagged": 89
+        },
+        "MultiAgent": {
+          "tp": 84,
+          "fp": 5,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.9438,
+          "recall": 1.0,
+          "f1": 0.9711,
+          "n_flagged": 89
+        }
+      }
+    },
+    {
+      "fold": 11,
+      "held_out": "2026-06-26T15-40-12_ransomware-cashout_seed71",
+      "kind": "attacker",
+      "n_labeled_test": 32,
+      "n_positive_test": 29,
+      "detectors": {
+        "Louvain": {
+          "tp": 29,
+          "fp": 3,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.9062,
+          "recall": 1.0,
+          "f1": 0.9508,
+          "n_flagged": 32,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 29,
+          "fp": 3,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.9062,
+          "recall": 1.0,
+          "f1": 0.9508,
+          "n_flagged": 32
+        },
+        "MultiAgent": {
+          "tp": 29,
+          "fp": 3,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.9062,
+          "recall": 1.0,
+          "f1": 0.9508,
+          "n_flagged": 32
+        }
+      }
+    },
+    {
+      "fold": 12,
+      "held_out": "2026-06-29T15-51-15_stablecoin-scam_seed53",
+      "kind": "attacker",
+      "n_labeled_test": 59,
+      "n_positive_test": 59,
+      "detectors": {
+        "Louvain": {
+          "tp": 59,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 59,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 59,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 59
+        },
+        "MultiAgent": {
+          "tp": 59,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 59
+        }
+      }
+    },
+    {
+      "fold": 13,
+      "held_out": "2026-06-29T16-03-00_stablecoin-scam_seed59",
+      "kind": "attacker",
+      "n_labeled_test": 47,
+      "n_positive_test": 47,
+      "detectors": {
+        "Louvain": {
+          "tp": 47,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 47,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 47,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 47
+        },
+        "MultiAgent": {
+          "tp": 47,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 47
+        }
+      }
+    },
+    {
+      "fold": 14,
+      "held_out": "2026-06-29T16-10-57_stablecoin-scam_seed67",
+      "kind": "attacker",
+      "n_labeled_test": 51,
+      "n_positive_test": 51,
+      "detectors": {
+        "Louvain": {
+          "tp": 51,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 51,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 51,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 51
+        },
+        "MultiAgent": {
+          "tp": 48,
+          "fp": 0,
+          "fn": 3,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 0.9412,
+          "f1": 0.9697,
+          "n_flagged": 48
+        }
+      }
+    },
+    {
+      "fold": 15,
+      "held_out": "2026-06-29T16-17-50_stablecoin-scam_seed71",
+      "kind": "attacker",
+      "n_labeled_test": 80,
+      "n_positive_test": 68,
+      "detectors": {
+        "Louvain": {
+          "tp": 68,
+          "fp": 12,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.85,
+          "recall": 1.0,
+          "f1": 0.9189,
+          "n_flagged": 80,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 68,
+          "fp": 12,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.85,
+          "recall": 1.0,
+          "f1": 0.9189,
+          "n_flagged": 80
+        },
+        "MultiAgent": {
+          "tp": 64,
+          "fp": 12,
+          "fn": 4,
+          "tn": 0,
+          "precision": 0.8421,
+          "recall": 0.9412,
+          "f1": 0.8889,
+          "n_flagged": 76
+        }
+      }
+    },
+    {
+      "fold": 16,
+      "held_out": "2026-06-29T16-27-48_ransomware-cashout_seed53",
+      "kind": "attacker",
+      "n_labeled_test": 41,
+      "n_positive_test": 41,
+      "detectors": {
+        "Louvain": {
+          "tp": 41,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 41,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 41,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 41
+        },
+        "MultiAgent": {
+          "tp": 41,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 41
+        }
+      }
+    },
+    {
+      "fold": 17,
+      "held_out": "2026-06-29T16-33-49_ransomware-cashout_seed59",
+      "kind": "attacker",
+      "n_labeled_test": 34,
+      "n_positive_test": 34,
+      "detectors": {
+        "Louvain": {
+          "tp": 34,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 34,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 34,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 34
+        },
+        "MultiAgent": {
+          "tp": 34,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 34
+        }
+      }
+    },
+    {
+      "fold": 18,
+      "held_out": "2026-06-29T16-38-46_ransomware-cashout_seed61",
+      "kind": "attacker",
+      "n_labeled_test": 43,
+      "n_positive_test": 43,
+      "detectors": {
+        "Louvain": {
+          "tp": 43,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 43,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 43,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 43
+        },
+        "MultiAgent": {
+          "tp": 43,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 43
+        }
+      }
+    },
+    {
+      "fold": 19,
+      "held_out": "2026-06-29T16-45-24_ransomware-cashout_seed67",
+      "kind": "attacker",
+      "n_labeled_test": 35,
+      "n_positive_test": 35,
+      "detectors": {
+        "Louvain": {
+          "tp": 35,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 35,
+          "n_test_in_unlabelled_community": 0
+        },
+        "GCN": {
+          "tp": 35,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 35
+        },
+        "MultiAgent": {
+          "tp": 35,
+          "fp": 0,
+          "fn": 0,
+          "tn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "n_flagged": 35
+        }
+      }
+    },
+    {
+      "fold": 20,
+      "held_out": "2026-07-03T21-55-49_benign_seed527",
+      "kind": "benign",
+      "n_labeled_test": 25,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 25,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 25,
+          "n_test_in_unlabelled_community": 25,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 25,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 25,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 21,
+      "held_out": "2026-07-03T21-30-24_benign_seed257",
+      "kind": "benign",
+      "n_labeled_test": 22,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 22,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "n_test_in_unlabelled_community": 0,
+          "fpr": 0.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 22,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 22,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 22,
+      "held_out": "2026-07-03T21-26-04_benign_seed212",
+      "kind": "benign",
+      "n_labeled_test": 25,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 25,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "n_test_in_unlabelled_community": 0,
+          "fpr": 0.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 25,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "tn": 24,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 1,
+          "fpr": 0.04
+        }
+      }
+    },
+    {
+      "fold": 23,
+      "held_out": "2026-07-03T22-02-29_benign_seed579",
+      "kind": "benign",
+      "n_labeled_test": 23,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 23,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "n_test_in_unlabelled_community": 0,
+          "fpr": 0.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 23,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "tn": 22,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 1,
+          "fpr": 0.0435
+        }
+      }
+    },
+    {
+      "fold": 24,
+      "held_out": "2026-07-03T21-38-24_benign_seed340",
+      "kind": "benign",
+      "n_labeled_test": 23,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 23,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 23,
+          "n_test_in_unlabelled_community": 23,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 23,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 23,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 25,
+      "held_out": "2026-07-03T21-36-58_benign_seed325",
+      "kind": "benign",
+      "n_labeled_test": 26,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 26,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "n_test_in_unlabelled_community": 0,
+          "fpr": 0.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 26,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 26,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 26,
+      "held_out": "2026-07-03T21-35-55_benign_seed314",
+      "kind": "benign",
+      "n_labeled_test": 24,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 24,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 24,
+          "n_test_in_unlabelled_community": 24,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 24,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "tn": 23,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 1,
+          "fpr": 0.0417
+        }
+      }
+    },
+    {
+      "fold": 27,
+      "held_out": "2026-07-03T21-31-48_benign_seed271",
+      "kind": "benign",
+      "n_labeled_test": 28,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 27,
+          "fn": 0,
+          "tn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 27,
+          "n_test_in_unlabelled_community": 27,
+          "fpr": 0.9643
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 28,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 2,
+          "fn": 0,
+          "tn": 26,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 2,
+          "fpr": 0.0714
+        }
+      }
+    },
+    {
+      "fold": 28,
+      "held_out": "2026-07-03T22-02-12_benign_seed577",
+      "kind": "benign",
+      "n_labeled_test": 26,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 24,
+          "fn": 0,
+          "tn": 2,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 24,
+          "n_test_in_unlabelled_community": 24,
+          "fpr": 0.9231
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 26,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "tn": 25,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 1,
+          "fpr": 0.0385
+        }
+      }
+    },
+    {
+      "fold": 29,
+      "held_out": "2026-07-03T21-29-56_benign_seed252",
+      "kind": "benign",
+      "n_labeled_test": 27,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 26,
+          "fn": 0,
+          "tn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 26,
+          "n_test_in_unlabelled_community": 26,
+          "fpr": 0.963
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 27,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "tn": 26,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 1,
+          "fpr": 0.037
+        }
+      }
+    },
+    {
+      "fold": 30,
+      "held_out": "2026-07-03T21-57-36_benign_seed546",
+      "kind": "benign",
+      "n_labeled_test": 22,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 22,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 22,
+          "n_test_in_unlabelled_community": 22,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 22,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "tn": 21,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 1,
+          "fpr": 0.0455
+        }
+      }
+    },
+    {
+      "fold": 31,
+      "held_out": "2026-07-03T21-51-25_benign_seed479",
+      "kind": "benign",
+      "n_labeled_test": 23,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 22,
+          "fn": 0,
+          "tn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 22,
+          "n_test_in_unlabelled_community": 22,
+          "fpr": 0.9565
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 23,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "tn": 22,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 1,
+          "fpr": 0.0435
+        }
+      }
+    },
+    {
+      "fold": 32,
+      "held_out": "2026-07-03T21-29-11_benign_seed244",
+      "kind": "benign",
+      "n_labeled_test": 23,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 23,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 23,
+          "n_test_in_unlabelled_community": 23,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 23,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 23,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 33,
+      "held_out": "2026-07-03T21-53-32_benign_seed502",
+      "kind": "benign",
+      "n_labeled_test": 24,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 24,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 24,
+          "n_test_in_unlabelled_community": 24,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 24,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "tn": 23,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 1,
+          "fpr": 0.0417
+        }
+      }
+    },
+    {
+      "fold": 34,
+      "held_out": "2026-07-03T21-45-38_benign_seed416",
+      "kind": "benign",
+      "n_labeled_test": 25,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 24,
+          "fn": 0,
+          "tn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 24,
+          "n_test_in_unlabelled_community": 24,
+          "fpr": 0.96
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 25,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 25,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 35,
+      "held_out": "2026-07-03T21-26-27_benign_seed216",
+      "kind": "benign",
+      "n_labeled_test": 27,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 27,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "n_test_in_unlabelled_community": 0,
+          "fpr": 0.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 27,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 27,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 36,
+      "held_out": "2026-07-03T21-26-21_benign_seed215",
+      "kind": "benign",
+      "n_labeled_test": 28,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 27,
+          "fn": 0,
+          "tn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 27,
+          "n_test_in_unlabelled_community": 0,
+          "fpr": 0.9643
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 28,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 28,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 37,
+      "held_out": "2026-07-03T21-29-28_benign_seed247",
+      "kind": "benign",
+      "n_labeled_test": 26,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 25,
+          "fn": 0,
+          "tn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 25,
+          "n_test_in_unlabelled_community": 0,
+          "fpr": 0.9615
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 26,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 26,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 38,
+      "held_out": "2026-07-03T21-35-36_benign_seed311",
+      "kind": "benign",
+      "n_labeled_test": 22,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 22,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 22,
+          "n_test_in_unlabelled_community": 22,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 22,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 22,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 39,
+      "held_out": "2026-07-03T21-36-24_benign_seed319",
+      "kind": "benign",
+      "n_labeled_test": 22,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 21,
+          "fn": 0,
+          "tn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 21,
+          "n_test_in_unlabelled_community": 21,
+          "fpr": 0.9545
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 22,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "tn": 21,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 1,
+          "fpr": 0.0455
+        }
+      }
+    },
+    {
+      "fold": 40,
+      "held_out": "2026-07-03T21-49-31_benign_seed458",
+      "kind": "benign",
+      "n_labeled_test": 23,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 22,
+          "fn": 0,
+          "tn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 22,
+          "n_test_in_unlabelled_community": 22,
+          "fpr": 0.9565
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 23,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 6,
+          "fn": 0,
+          "tn": 17,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 6,
+          "fpr": 0.2609
+        }
+      }
+    },
+    {
+      "fold": 41,
+      "held_out": "2026-07-03T21-54-05_benign_seed508",
+      "kind": "benign",
+      "n_labeled_test": 29,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 29,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "n_test_in_unlabelled_community": 0,
+          "fpr": 0.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 29,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 29,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 42,
+      "held_out": "2026-07-03T21-26-10_benign_seed213",
+      "kind": "benign",
+      "n_labeled_test": 21,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 21,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 21,
+          "n_test_in_unlabelled_community": 21,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 21,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 21,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 43,
+      "held_out": "2026-07-03T21-52-10_benign_seed487",
+      "kind": "benign",
+      "n_labeled_test": 23,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 23,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 23,
+          "n_test_in_unlabelled_community": 23,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 23,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 23,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 44,
+      "held_out": "2026-07-03T21-34-34_benign_seed301",
+      "kind": "benign",
+      "n_labeled_test": 28,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 27,
+          "fn": 0,
+          "tn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 27,
+          "n_test_in_unlabelled_community": 27,
+          "fpr": 0.9643
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 28,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 2,
+          "fn": 0,
+          "tn": 26,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 2,
+          "fpr": 0.0714
+        }
+      }
+    },
+    {
+      "fold": 45,
+      "held_out": "2026-07-03T22-00-47_benign_seed566",
+      "kind": "benign",
+      "n_labeled_test": 26,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 26,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 26,
+          "n_test_in_unlabelled_community": 26,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 26,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 26,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 46,
+      "held_out": "2026-07-03T21-56-18_benign_seed532",
+      "kind": "benign",
+      "n_labeled_test": 28,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 28,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "n_test_in_unlabelled_community": 0,
+          "fpr": 0.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 28,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "tn": 27,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 1,
+          "fpr": 0.0357
+        }
+      }
+    },
+    {
+      "fold": 47,
+      "held_out": "2026-07-03T21-59-50_benign_seed559",
+      "kind": "benign",
+      "n_labeled_test": 22,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 22,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 22,
+          "n_test_in_unlabelled_community": 22,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 22,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 3,
+          "fn": 0,
+          "tn": 19,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 3,
+          "fpr": 0.1364
+        }
+      }
+    },
+    {
+      "fold": 48,
+      "held_out": "2026-07-03T21-45-25_benign_seed414",
+      "kind": "benign",
+      "n_labeled_test": 26,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 25,
+          "fn": 0,
+          "tn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 25,
+          "n_test_in_unlabelled_community": 25,
+          "fpr": 0.9615
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 26,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "tn": 25,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 1,
+          "fpr": 0.0385
+        }
+      }
+    },
+    {
+      "fold": 49,
+      "held_out": "2026-07-03T21-35-43_benign_seed312",
+      "kind": "benign",
+      "n_labeled_test": 27,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 26,
+          "fn": 0,
+          "tn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 26,
+          "n_test_in_unlabelled_community": 26,
+          "fpr": 0.963
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 27,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 2,
+          "fn": 0,
+          "tn": 25,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 2,
+          "fpr": 0.0741
+        }
+      }
+    },
+    {
+      "fold": 50,
+      "held_out": "2026-07-03T21-46-52_benign_seed429",
+      "kind": "benign",
+      "n_labeled_test": 21,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 21,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 21,
+          "n_test_in_unlabelled_community": 21,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 21,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 21,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 51,
+      "held_out": "2026-07-03T21-53-27_benign_seed501",
+      "kind": "benign",
+      "n_labeled_test": 22,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 22,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 22,
+          "n_test_in_unlabelled_community": 22,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 22,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 22,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 52,
+      "held_out": "2026-07-03T21-38-35_benign_seed342",
+      "kind": "benign",
+      "n_labeled_test": 26,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 26,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 26,
+          "n_test_in_unlabelled_community": 26,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 26,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 2,
+          "fn": 0,
+          "tn": 24,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 2,
+          "fpr": 0.0769
+        }
+      }
+    },
+    {
+      "fold": 53,
+      "held_out": "2026-07-03T21-25-12_benign_seed203",
+      "kind": "benign",
+      "n_labeled_test": 22,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 22,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "n_test_in_unlabelled_community": 0,
+          "fpr": 0.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 22,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "tn": 21,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 1,
+          "fpr": 0.0455
+        }
+      }
+    },
+    {
+      "fold": 54,
+      "held_out": "2026-07-03T22-03-40_benign_seed588",
+      "kind": "benign",
+      "n_labeled_test": 24,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 24,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 24,
+          "n_test_in_unlabelled_community": 24,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 24,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "tn": 23,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 1,
+          "fpr": 0.0417
+        }
+      }
+    },
+    {
+      "fold": 55,
+      "held_out": "2026-07-03T21-32-44_benign_seed281",
+      "kind": "benign",
+      "n_labeled_test": 21,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 21,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 21,
+          "n_test_in_unlabelled_community": 21,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 21,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 21,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 56,
+      "held_out": "2026-07-03T21-59-33_benign_seed557",
+      "kind": "benign",
+      "n_labeled_test": 23,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 22,
+          "fn": 0,
+          "tn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 22,
+          "n_test_in_unlabelled_community": 22,
+          "fpr": 0.9565
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 23,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "tn": 22,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 1,
+          "fpr": 0.0435
+        }
+      }
+    },
+    {
+      "fold": 57,
+      "held_out": "2026-07-03T21-41-33_benign_seed374",
+      "kind": "benign",
+      "n_labeled_test": 25,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 25,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 25,
+          "n_test_in_unlabelled_community": 25,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 25,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 4,
+          "fn": 0,
+          "tn": 21,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 4,
+          "fpr": 0.16
+        }
+      }
+    },
+    {
+      "fold": 58,
+      "held_out": "2026-07-03T21-32-32_benign_seed279",
+      "kind": "benign",
+      "n_labeled_test": 21,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 21,
+          "fn": 0,
+          "tn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 21,
+          "n_test_in_unlabelled_community": 21,
+          "fpr": 1.0
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 21,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 21,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        }
+      }
+    },
+    {
+      "fold": 59,
+      "held_out": "2026-07-03T21-35-31_benign_seed310",
+      "kind": "benign",
+      "n_labeled_test": 25,
+      "n_positive_test": 0,
+      "detectors": {
+        "Louvain": {
+          "tp": 0,
+          "fp": 24,
+          "fn": 0,
+          "tn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 24,
+          "n_test_in_unlabelled_community": 24,
+          "fpr": 0.96
+        },
+        "GCN": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 25,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 0,
+          "fpr": 0.0
+        },
+        "MultiAgent": {
+          "tp": 0,
+          "fp": 2,
+          "fn": 0,
+          "tn": 23,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "n_flagged": 2,
+          "fpr": 0.08
+        }
+      }
+    }
+  ]
+}
