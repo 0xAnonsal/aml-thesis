@@ -1,0 +1,48 @@
+{
+  "label": "sepolia_800",
+  "model": "haiku",
+  "nodes": 5775,
+  "edges": 18895,
+  "n_flagged": 5261,
+  "n_common_addrs": 52,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.0441,
+    "fit_time_s": 117.63
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 25,
+      "ari": 0.0124
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": -0.031
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.123
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": 0.0281
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": -0.0132
+    },
+    "max_20": {
+      "max_c": 20,
+      "ari": -0.0341
+    }
+  },
+  "best": "max_5",
+  "delta_vs_baseline": 0.1106,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": 0.0,
+    "delta_vs_baseline": -0.0124
+  },
+  "reasoning_preview": "This batch contains 24 distinct campaigns across three exchanges. Exchange_A's 60 addresses split primarily into a large cohort (cluster 6) of blank-featured nulls/minimal-activity burners (~21 addresses), several micro-clusters of simple single-input receivers (clusters 1\u20132, representing ~7 addresses with log_unique_in=0.69), two standout high-degree aggregation nodes (cluster 3 with in_degree=2,"
+}

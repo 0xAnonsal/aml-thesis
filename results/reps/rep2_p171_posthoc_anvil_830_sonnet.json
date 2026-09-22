@@ -1,0 +1,49 @@
+{
+  "label": "anvil_830",
+  "model": "sonnet",
+  "nodes": 680,
+  "edges": 12174,
+  "n_flagged": 154,
+  "n_common_addrs": 105,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.1313,
+    "fit_time_s": 191.18
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 14,
+      "ari": 0.001
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": -0.006
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.0206
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": 0.0152
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": 0.0005
+    },
+    "max_20": {
+      "max_c": 14,
+      "ari": 0.001,
+      "note": "no merge needed"
+    }
+  },
+  "best": "max_5",
+  "delta_vs_baseline": 0.0195,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": 0.0271,
+    "delta_vs_baseline": 0.0261
+  },
+  "reasoning_preview": "Cluster 0 is the cross-exchange pivot node 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853 (appearing on all three exchanges with mixer_deposit/withdraw patterns and varying degree counts reflecting different local views). Cluster 1 is the shared low-confidence empty-fingerprint address 0x5FbDB2315678afecb367f032d93F642f64180aa3 appearing on all exchanges. Cluster 2 is the mixer-centric campaign groupi"
+}

@@ -1,0 +1,48 @@
+{
+  "label": "sepolia_802",
+  "model": "haiku",
+  "nodes": 22212,
+  "edges": 37033,
+  "n_flagged": 21704,
+  "n_common_addrs": 43,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.0423,
+    "fit_time_s": 121.97
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 26,
+      "ari": 0.0207
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.1948
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.1948
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": -0.0074
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": -0.0203
+    },
+    "max_20": {
+      "max_c": 20,
+      "ari": -0.0084
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.1742,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": -0.0368,
+    "delta_vs_baseline": -0.0574
+  },
+  "reasoning_preview": "This batch contains 26 distinct campaign clusters. Exchange C hosts a dominant USDT-focused money laundering operation with cluster 0 (10 addresses receiving USDT in 6.0\u20136.9 range), cluster 1 (5 dual-input USDT consolidators), cluster 2 (7 high-volume USDT receivers), and the hub address 0x530C18A864523996845cb430e8F76F0E01915867 (cluster 3) acting as a distribution mixer with 27 outbound edges an"
+}

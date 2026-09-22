@@ -1,0 +1,48 @@
+{
+  "label": "anvil_830",
+  "model": "haiku",
+  "nodes": 680,
+  "edges": 12174,
+  "n_flagged": 156,
+  "n_common_addrs": 105,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.0411,
+    "fit_time_s": 103.38
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 22,
+      "ari": 0.0036
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.1622
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.0604
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": 0.0142
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": 0.0311
+    },
+    "max_20": {
+      "max_c": 20,
+      "ari": 0.0057
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.1586,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": 0.2723,
+    "delta_vs_baseline": 0.2687
+  },
+  "reasoning_preview": "This batch contains 159 addresses across three exchanges flagged for suspicious activity. Clustering reveals 22 distinct campaigns: (0) Eight addresses sharing mixer_withdraw_in patterns and single-unit degree\u2014independent mixer users; (1-2) Three high-volume USDT/ETH swap + mixer nodes operating on 4-7 degree with heavy swapping and liquidity mixing\u2014larger laundering hubs; (3) Solo mixer deposit d"
+}

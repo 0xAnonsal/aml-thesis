@@ -1,0 +1,49 @@
+{
+  "label": "sepolia_803",
+  "model": "sonnet",
+  "nodes": 8554,
+  "edges": 23392,
+  "n_flagged": 8039,
+  "n_common_addrs": 79,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.1478,
+    "fit_time_s": 226.81
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 19,
+      "ari": 0.0111
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": -0.0948
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": -0.0389
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": -0.0424
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": -0.0201
+    },
+    "max_20": {
+      "max_c": 19,
+      "ari": 0.0111,
+      "note": "no merge needed"
+    }
+  },
+  "best": "baseline",
+  "delta_vs_baseline": 0.0,
+  "silhouette_auto": {
+    "picked_k": 3,
+    "n_clusters_after": 3,
+    "ari": -0.0948,
+    "delta_vs_baseline": -0.106
+  },
+  "reasoning_preview": "The batch reveals approximately 19 distinct campaigns. Cluster 0 is a singleton cross-exchange mixer hub (0xa6b483...) appearing on all three exchanges with escalating mixer_deposit_in/mixer_withdraw_out degree, acting as the central laundering node. Cluster 1 is a large fan-out campaign centered on 0x30673108... (out_degree=30, ETH distributor) paired with ETH-in\u2192mixer_deposit burners and small E"
+}

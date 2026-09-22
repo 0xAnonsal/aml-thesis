@@ -1,0 +1,48 @@
+{
+  "label": "sepolia_803",
+  "model": "haiku",
+  "nodes": 8554,
+  "edges": 23392,
+  "n_flagged": 8039,
+  "n_common_addrs": 79,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.0462,
+    "fit_time_s": 120.12
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 41,
+      "ari": -0.025
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.1247
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.0656
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": -0.0194
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": -0.0243
+    },
+    "max_20": {
+      "max_c": 20,
+      "ari": -0.0169
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.1496,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": 0.2679,
+    "delta_vs_baseline": 0.2929
+  },
+  "reasoning_preview": "Analysis identified 41 distinct actor clusters from 180 flagged addresses across three exchanges. The primary signal was **specific fingerprint patterns** matched with behavioral archetypes: (1) Small receivers (in_degree=2, log_eth_in~0.05, transfer_eth_in=1.10) form six clusters (0, 7, 9, 27, 28, 39); (2) Small mixers (single edge with mixer_withdraw_in or mixer_deposit_out, log_eth~0.69) form t"
+}

@@ -1,0 +1,49 @@
+{
+  "label": "anvil_830",
+  "model": "sonnet",
+  "nodes": 680,
+  "edges": 12174,
+  "n_flagged": 154,
+  "n_common_addrs": 105,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.1336,
+    "fit_time_s": 192.57
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 17,
+      "ari": 0.0036
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.0369
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.0152
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": -0.004
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": -0.001
+    },
+    "max_20": {
+      "max_c": 17,
+      "ari": 0.0036,
+      "note": "no merge needed"
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.0333,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": 0.0348,
+    "delta_vs_baseline": 0.0312
+  },
+  "reasoning_preview": "Sixteen distinct campaigns were identified: Cluster 0 is the cross-exchange hub address 0xa513e6e4b8f2a923 appearing on all three exchanges with mixer-in/mixer-out activity, alongside low-confidence companion 0x5FbDB231. Cluster 1 is a mixer-deposit/withdraw campaign grouping addresses that exclusively move ETH into or out of mixers (0xc9c6f5 as the large depositor with 8 out-edges and mixer_depos"
+}

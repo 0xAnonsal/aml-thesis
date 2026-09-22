@@ -1,0 +1,49 @@
+{
+  "label": "sepolia_803",
+  "model": "sonnet",
+  "nodes": 8554,
+  "edges": 23392,
+  "n_flagged": 8035,
+  "n_common_addrs": 75,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.1485,
+    "fit_time_s": 219.1
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 16,
+      "ari": 0.0119
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": -0.0985
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": -0.0559
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": -0.015
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": -0.0096
+    },
+    "max_20": {
+      "max_c": 16,
+      "ari": 0.0119,
+      "note": "no merge needed"
+    }
+  },
+  "best": "baseline",
+  "delta_vs_baseline": 0.0,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": -0.0689,
+    "delta_vs_baseline": -0.0807
+  },
+  "reasoning_preview": "Cluster 0 is the core mixer relay campaign centered on the cross-exchange hub 0xa6b4832722f0 (seen on both exchange_A and exchange_B with mixer_deposit_in + mixer_withdraw_out), flanked by identical small-ETH mixer-deposit burners (0x9c7b3D, 0x4d5BBbe, 0xA673741, 0x00Ef3ea2, 0x38a010, 0xe2b448, 0x07F78c) and mixer-withdraw receivers (0x5a5188, 0x3937F3, 0x16808a, 0xEe0E70, 0x3F3edF). Cluster 1 gro"
+}

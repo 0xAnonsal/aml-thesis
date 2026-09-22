@@ -1,0 +1,48 @@
+{
+  "label": "sepolia_803",
+  "model": "haiku",
+  "nodes": 8554,
+  "edges": 23392,
+  "n_flagged": 8039,
+  "n_common_addrs": 77,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.043,
+    "fit_time_s": 115.37
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 52,
+      "ari": 0.0108
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.1232
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": -0.0109
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": -0.0311
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": -0.0346
+    },
+    "max_20": {
+      "max_c": 20,
+      "ari": -0.0163
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.1125,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": 0.2675,
+    "delta_vs_baseline": 0.2567
+  },
+  "reasoning_preview": "This batch contains 180 addresses across three exchanges flagged as suspicious. Clustering identifies 53 distinct campaigns based on fingerprint similarity, volume magnitude, edge-count patterns, and behavior signatures. Key groupings include: (0) eth\u2192usdt swap-out pairs with similar small volumes (0.7 ETH in, ~7 log-USDT out); (1-4) medium-volume USDT inbound clusters with varying degree patterns"
+}

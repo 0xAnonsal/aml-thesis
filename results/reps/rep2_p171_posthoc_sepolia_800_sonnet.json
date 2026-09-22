@@ -1,0 +1,49 @@
+{
+  "label": "sepolia_800",
+  "model": "sonnet",
+  "nodes": 5775,
+  "edges": 18895,
+  "n_flagged": 5261,
+  "n_common_addrs": 52,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.1391,
+    "fit_time_s": 221.05
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 13,
+      "ari": 0.0425
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.1255
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.0032
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": 0.0205
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": 0.0425
+    },
+    "max_20": {
+      "max_c": 13,
+      "ari": 0.0425,
+      "note": "no merge needed"
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.0829,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": -0.0719,
+    "delta_vs_baseline": -0.1145
+  },
+  "reasoning_preview": "Thirteen campaigns were identified based on cross-exchange fingerprint similarity and structural role. Cluster 0 is anchored by two 12-out-degree hub addresses (0x15ce1c8B on exchange_A and 0x991F7060 on exchange_B) that appear to be parallel fan-out distributors in the same campaign, surrounded by single-out-degree exit burners on exchange_B. Cluster 1 centers on the high-complexity USDT hub 0x76"
+}

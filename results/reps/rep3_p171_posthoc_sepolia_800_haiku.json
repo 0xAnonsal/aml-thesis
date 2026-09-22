@@ -1,0 +1,49 @@
+{
+  "label": "sepolia_800",
+  "model": "haiku",
+  "nodes": 5775,
+  "edges": 18895,
+  "n_flagged": 5261,
+  "n_common_addrs": 52,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.0433,
+    "fit_time_s": 117.99
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 17,
+      "ari": 0.03
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.1523
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.0123
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": -0.0167
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": -0.0336
+    },
+    "max_20": {
+      "max_c": 17,
+      "ari": 0.03,
+      "note": "no merge needed"
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.1223,
+  "silhouette_auto": {
+    "picked_k": 8,
+    "n_clusters_after": 8,
+    "ari": -0.0167,
+    "delta_vs_baseline": -0.0467
+  },
+  "reasoning_preview": "Identified 17 distinct campaigns across the three exchanges. Cluster 0 groups high-degree hub/distributor addresses with 2+ outbound edges and multi-recipient patterns (indicating money laundering distribution points). Cluster 1 contains bidirectional swaps with matching in/out transfers (paired transactions suggesting asset conversion). Clusters 2-3 and 7-10 group small single-input receivers wit"
+}

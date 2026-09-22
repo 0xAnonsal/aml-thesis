@@ -1,0 +1,50 @@
+{
+  "label": "sepolia_800",
+  "model": "sonnet",
+  "nodes": 5775,
+  "edges": 18895,
+  "n_flagged": 5261,
+  "n_common_addrs": 52,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.1424,
+    "fit_time_s": 225.87
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 12,
+      "ari": 0.0239
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": -0.1178
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": -0.0493
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": 0.047
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": 0.0239,
+      "note": "no merge needed"
+    },
+    "max_20": {
+      "max_c": 12,
+      "ari": 0.0239,
+      "note": "no merge needed"
+    }
+  },
+  "best": "max_8",
+  "delta_vs_baseline": 0.0231,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": -0.0719,
+    "delta_vs_baseline": -0.0958
+  },
+  "reasoning_preview": "Twelve clusters were identified based on exchange origin, confidence tier, and fingerprint similarity. Cluster 0 (exchange_A conf=1.0): single-in ETH burner wallets with identical in_degree=1/transfer_eth_in=0.69 fingerprints, plus a pass-through node (0x91240d), representing one campaign's leaf layer. Cluster 1 (exchange_A conf=1.0): the dominant blank-feature high-confidence group plus the fan-o"
+}

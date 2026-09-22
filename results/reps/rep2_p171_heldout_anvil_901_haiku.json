@@ -1,0 +1,48 @@
+{
+  "label": "anvil_901",
+  "scenario": "ransomware-cashout",
+  "seed": 901,
+  "model": "haiku",
+  "attacker_dir": "2026-09-14T20-17-56_ransomware-cashout_seed901",
+  "nodes": 290,
+  "edges": 2757,
+  "n_attacker": 49,
+  "phase1": {
+    "louvain_f1": 0.9684,
+    "precision": 1.0,
+    "recall": 0.9388
+  },
+  "phase2": {
+    "llm_cost_usd": 0.0157,
+    "llm_fit_time_s": 32.2,
+    "n_flagged": 49,
+    "baseline_ari": 0.0518,
+    "sweep": {
+      "baseline": {
+        "max_c": 17,
+        "ari": 0.0518
+      },
+      "max_3": {
+        "max_c": 3,
+        "ari": 0.2228
+      },
+      "max_5": {
+        "max_c": 5,
+        "ari": 0.5245
+      },
+      "max_8": {
+        "max_c": 8,
+        "ari": 0.4675
+      },
+      "max_12": {
+        "max_c": 12,
+        "ari": 0.1459
+      }
+    },
+    "silhouette": {
+      "picked_k": 2,
+      "n_clusters_after": 2,
+      "ari": 0.3717
+    }
+  }
+}

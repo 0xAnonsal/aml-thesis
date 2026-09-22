@@ -1,0 +1,49 @@
+{
+  "label": "sepolia_802",
+  "model": "sonnet",
+  "nodes": 22212,
+  "edges": 37033,
+  "n_flagged": 21704,
+  "n_common_addrs": 43,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.144,
+    "fit_time_s": 223.32
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 16,
+      "ari": 0.0059
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": -0.0368
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": -0.0089
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": -0.0835
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": -0.0244
+    },
+    "max_20": {
+      "max_c": 16,
+      "ari": 0.0059,
+      "note": "no merge needed"
+    }
+  },
+  "best": "baseline",
+  "delta_vs_baseline": 0.0,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": 0.0,
+    "delta_vs_baseline": -0.0059
+  },
+  "reasoning_preview": "Sixteen campaigns were identified: Cluster 0 is the largest \u2014 a USDT-based smurfing operation on exchange_C where a hub address (0x530C, out_degree=27, high USDT volume) fed ~22 leaf addresses each receiving log_usdt_in ~6.3\u20136.9 (i.e., ~$500\u2013$1000 USDT each), a classic structuring pattern. Cluster 1 is a matched USDT pass-through pair on exchange_B (in=7.13 log USDT, out=7.13 log USDT), likely sam"
+}

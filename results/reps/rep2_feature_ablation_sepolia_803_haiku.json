@@ -1,0 +1,151 @@
+{
+  "label": "sepolia_803",
+  "model": "haiku",
+  "feature_importance_ranked": [
+    [
+      "in_degree",
+      0.2966
+    ],
+    [
+      "log_unique_in",
+      0.1398
+    ],
+    [
+      "total_degree",
+      0.1271
+    ],
+    [
+      "transfer_usdt_in",
+      0.1209
+    ],
+    [
+      "log_usdt_in",
+      0.0718
+    ],
+    [
+      "out_degree",
+      0.0655
+    ],
+    [
+      "log_usdt_out",
+      0.0542
+    ],
+    [
+      "transfer_usdt_out",
+      0.0367
+    ],
+    [
+      "log_eth_in",
+      0.0272
+    ],
+    [
+      "log_unique_out",
+      0.0223
+    ],
+    [
+      "transfer_eth_in",
+      0.0183
+    ],
+    [
+      "log_eth_out",
+      0.0126
+    ],
+    [
+      "transfer_eth_out",
+      0.0069
+    ],
+    [
+      "swap_in",
+      0.0
+    ],
+    [
+      "mixer_deposit_in",
+      0.0
+    ],
+    [
+      "mixer_withdraw_in",
+      0.0
+    ],
+    [
+      "swap_out",
+      0.0
+    ],
+    [
+      "mixer_deposit_out",
+      0.0
+    ],
+    [
+      "mixer_withdraw_out",
+      0.0
+    ]
+  ],
+  "ablations": {
+    "all_19": {
+      "top_features": [
+        "in_degree",
+        "out_degree",
+        "total_degree",
+        "log_eth_in",
+        "log_eth_out",
+        "log_usdt_in",
+        "log_usdt_out",
+        "log_unique_in",
+        "log_unique_out",
+        "transfer_eth_in",
+        "transfer_usdt_in",
+        "swap_in",
+        "mixer_deposit_in",
+        "mixer_withdraw_in",
+        "transfer_eth_out",
+        "transfer_usdt_out",
+        "swap_out",
+        "mixer_deposit_out",
+        "mixer_withdraw_out"
+      ],
+      "features_kept": 19,
+      "llm_cost_usd": 0.0464,
+      "llm_fit_time_s": 119.54,
+      "baseline_ari": -0.02,
+      "max_c_3_ari": 0.1494,
+      "silhouette_k": 2,
+      "silhouette_ari": 0.2677
+    },
+    "top_10": {
+      "top_features": [
+        "in_degree",
+        "log_unique_in",
+        "total_degree",
+        "transfer_usdt_in",
+        "log_usdt_in",
+        "out_degree",
+        "log_usdt_out",
+        "transfer_usdt_out",
+        "log_eth_in",
+        "log_unique_out"
+      ],
+      "features_kept": 10,
+      "llm_cost_usd": 0.0462,
+      "llm_fit_time_s": 124.61,
+      "baseline_ari": 0.0041,
+      "max_c_3_ari": 0.1247,
+      "silhouette_k": 2,
+      "silhouette_ari": 0.2679
+    },
+    "top_5": {
+      "top_features": [
+        "in_degree",
+        "log_unique_in",
+        "total_degree",
+        "transfer_usdt_in",
+        "log_usdt_in"
+      ],
+      "features_kept": 5,
+      "llm_cost_usd": 0.0436,
+      "llm_fit_time_s": 118.22,
+      "baseline_ari": 0.0236,
+      "max_c_3_ari": 0.0585,
+      "silhouette_k": 2,
+      "silhouette_ari": 0.2679
+    }
+  }
+}

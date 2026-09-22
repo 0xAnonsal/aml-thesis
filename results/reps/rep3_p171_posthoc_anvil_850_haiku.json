@@ -1,0 +1,48 @@
+{
+  "label": "anvil_850",
+  "model": "haiku",
+  "nodes": 582,
+  "edges": 12041,
+  "n_flagged": 64,
+  "n_common_addrs": 36,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.0189,
+    "fit_time_s": 40.71
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 21,
+      "ari": 0.0077
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.1354
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.103
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": 0.0921
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": 0.0504
+    },
+    "max_20": {
+      "max_c": 20,
+      "ari": 0.0077
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.1277,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": 0.4711,
+    "delta_vs_baseline": 0.4634
+  },
+  "reasoning_preview": "Clustering identified 21 distinct actor campaigns within the flagged batch. The primary strategy grouped addresses by specific behavioral and volume signatures rather than generic patterns. Cluster 3 comprises 12 low-activity pure USDT recipient addresses with in_degree=1\u20132 and minimal complexity, representing a discrete cash-in burner campaign. Cluster 2 groups 6 minimal-activity ETH receivers, r"
+}

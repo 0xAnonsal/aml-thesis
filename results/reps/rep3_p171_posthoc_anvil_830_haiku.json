@@ -1,0 +1,48 @@
+{
+  "label": "anvil_830",
+  "model": "haiku",
+  "nodes": 680,
+  "edges": 12174,
+  "n_flagged": 154,
+  "n_common_addrs": 105,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.0402,
+    "fit_time_s": 100.8
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 25,
+      "ari": 0.0004
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.1622
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.071
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": 0.0708
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": 0.0655
+    },
+    "max_20": {
+      "max_c": 20,
+      "ari": 0.0014
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.1619,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": 0.2723,
+    "delta_vs_baseline": 0.2719
+  },
+  "reasoning_preview": "Analysis identified 25 distinct campaign clusters across 159 total addresses. Cluster 0 contains the cross-exchange hub 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853, which appears on all three exchanges with varying fingerprints (mixer deposit/withdraw patterns), suggesting a central mixing coordinator. Clusters 1-3 and 19 form cohesive mixer-focused campaigns with mixer_deposit/withdraw edge patter"
+}

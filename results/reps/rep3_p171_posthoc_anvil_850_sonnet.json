@@ -1,0 +1,49 @@
+{
+  "label": "anvil_850",
+  "model": "sonnet",
+  "nodes": 582,
+  "edges": 12041,
+  "n_flagged": 64,
+  "n_common_addrs": 37,
+  "true_n_clusters": 3,
+  "llm": {
+    "cost_usd": 0.066,
+    "fit_time_s": 84.72
+  },
+  "sweep": {
+    "baseline": {
+      "max_c": 14,
+      "ari": 0.0093
+    },
+    "max_3": {
+      "max_c": 3,
+      "ari": 0.1697
+    },
+    "max_5": {
+      "max_c": 5,
+      "ari": 0.0781
+    },
+    "max_8": {
+      "max_c": 8,
+      "ari": 0.0495
+    },
+    "max_12": {
+      "max_c": 12,
+      "ari": 0.0129
+    },
+    "max_20": {
+      "max_c": 14,
+      "ari": 0.0093,
+      "note": "no merge needed"
+    }
+  },
+  "best": "max_3",
+  "delta_vs_baseline": 0.1604,
+  "silhouette_auto": {
+    "picked_k": 2,
+    "n_clusters_after": 2,
+    "ari": 0.4719,
+    "delta_vs_baseline": 0.4626
+  },
+  "reasoning_preview": "Cluster 0 is the dominant hub (exchange_A 0x70997970, 114-degree, massive ETH+USDT volume) acting as the central coordinator. Cluster 1 groups mid-degree USDT aggregator/swap nodes (degree 6-12, log_usdt_in ~7.7-8.6) that funnel into the hub \u2014 all on exchange_A with nearly identical swap+transfer patterns. Clusters 2 and 3 are two batches of USDT leaf burner addresses (single or double in-degree, "
+}
