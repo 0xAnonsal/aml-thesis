@@ -8,17 +8,17 @@ La versión ampliada en español (con contexto académico) vive como **Anexo C**
 
 ## Contratos Solidity adaptados
 
-### Tornado Cash — [`tornadocash/tornado-core`](https://github.com/tornadocash/tornado-core) (MIT)
+### Tornado Cash — [`tornadocash/tornado-core`](https://github.com/tornadocash/tornado-core) (repositorio GPL-3.0; los ficheros `.sol` llevan cabecera MIT)
 
 | Fichero propio                             | Origen                             | Adaptación                                                                                        |
 |--------------------------------------------|------------------------------------|---------------------------------------------------------------------------------------------------|
 | `contracts/MockTornado.sol`                | `contracts/ETHTornado.sol`         | Denominación única, sin relayer, comentarios ampliados                                            |
 | `contracts/MerkleTreeWithHistory.sol`      | mismo nombre                       | Preservación literal de estructura + hashLeftRight; cambios sólo en comentarios e idioms 0.8+     |
-| `circuits/withdraw.circom`                 | mismo nombre                       | Preservación literal del witness; `LEVELS=10`, `fee=refund=0` (variante no-relayer)               |
+| `circuits/withdraw.circom`                 | mismo nombre                       | Adaptación: witness preservado; profundidad reducida de `Withdraw(20)` a `LEVELS=10`, `fee=refund=0` (sin relayer) |
 
-El *core* criptográfico se preserva sin cambios para garantizar las mismas propiedades de soundness/zero-knowledge que el sistema real.
+El *core* criptográfico se preserva con cambios mínimos (profundidad del árbol, sin relayer) para garantizar las mismas propiedades de soundness/zero-knowledge que el sistema real.
 
-### Uniswap V2 — [`Uniswap/v2-core`](https://github.com/Uniswap/v2-core) (GPL-2.0)
+### Uniswap V2 — [`Uniswap/v2-core`](https://github.com/Uniswap/v2-core) (GPL-3.0)
 
 | Fichero propio                          | Naturaleza                                                                       |
 |-----------------------------------------|-----------------------------------------------------------------------------------|
@@ -28,12 +28,12 @@ El *core* criptográfico se preserva sin cambios para garantizar las mismas prop
 
 ## Primitivas criptográficas y artefactos generados
 
-### snarkjs — [`iden3/snarkjs`](https://github.com/iden3/snarkjs) (GPL-3.0, Copyright 2021 0KIMS association)
+### snarkjs — [`iden3/snarkjs`](https://github.com/iden3/snarkjs) (GPL-3.0, Copyright 2018-2020 0KIMS association)
 
 - `contracts/Verifier.sol` — auto-generado por `snarkjs zkey export solidityverifier`, distribuido sin modificar bajo GPL-3.0 heredada
 - Uso off-chain para generación de pruebas Groth16
 
-### circomlib / circomlibjs — [`iden3/circomlib`](https://github.com/iden3/circomlib) y [`iden3/circomlibjs`](https://github.com/iden3/circomlibjs) (MIT)
+### circomlib / circomlibjs — [`iden3/circomlib`](https://github.com/iden3/circomlib) y [`iden3/circomlibjs`](https://github.com/iden3/circomlibjs) (circomlib LGPL-3.0; circomlibjs GPL-3.0)
 
 - Primitiva MiMCSponge consumida por `circuits/withdraw.circom`
 - Bytecode del contrato MiMCSponge generado por `circomlibjs.mimcSpongecontract.createCode("mimcsponge", 220)` y desplegado por `src/aml/chains/mimc.py`
@@ -59,9 +59,9 @@ El *core* criptográfico se preserva sin cambios para garantizar las mismas prop
 | Dataset            | Cita                                                                                                                                                       | Provisión                                          | Rol                                       |
 |--------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------|-------------------------------------------|
 | **Elliptic**       | Weber et al. 2019, *Anti-Money Laundering in Bitcoin*, arXiv 1908.02591                                                                                    | Kaggle público                                     | Baseline histórico                        |
-| **Elliptic++**     | Elmougy & Liu 2023, *Demystifying Fraudulent Transactions and Illicit Nodes in the Bitcoin Network*, arXiv 2305.15214                                     | GitHub `git-disl/EllipticPlusPlus`                 | Sanity check GCN                          |
-| **EthereumHeist**  | Wu et al. 2023, *Toward Understanding Asset Flows in Crypto Money Laundering...*, IEEE TIFS 18: 1994-2009                                                | Dropbox + GitHub `HxQlaive/EthereumHeist`          | Validación externa real                   |
-| **OpenAML v1**     | FINOS OpenAML v1 (DTCC AI Hackathon dataset), Linux Foundation                                                                                             | GitHub `finos/OpenAML` (`training_data.csv`)       | Sanity check GCN                          |
+| **Elliptic++**     | Elmougy & Liu 2023, *Demystifying Fraudulent Transactions and Illicit Nodes in the Bitcoin Network*, arXiv 2306.06108 (KDD 2023)                                     | GitHub `git-disl/EllipticPlusPlus`                 | Sanity check del pipeline (RF/LR)         |
+| **EthereumHeist**  | Wu et al. 2023, *Toward Understanding Asset Flows in Crypto Money Laundering...*, IEEE TIFS 19: 1994-2009 (2024)                                                | Dropbox (enlace en el artículo)                    | Validación externa real                   |
+| **OpenAML v1**     | FINOS OpenAML v1 (DTCC AI Hackathon dataset), Linux Foundation                                                                                             | GitHub `finos-labs/dtcch-2025-OpenAML` (`Project_DTCC_AI_Hackathon/data/processed.csv`, 45 086 wallets) | Sanity check del pipeline (RF/LR)         |
 | **AMLWorld/AMLSim**| Altman et al. 2023, NeurIPS Datasets and Benchmarks                                                                                                        | GitHub `IBM/AMLSim`                                | Referenciado (no ejecutado)               |
 
 **Datos de precios**: snapshots diarios de CoinGecko API pública gratuita, cacheados en `data/prices/*.csv` para reproducibilidad.
@@ -92,7 +92,7 @@ El *core* criptográfico se preserva sin cambios para garantizar las mismas prop
 | web3.py                | MIT        | RPC hacia Anvil/Sepolia + firma de transacciones        |
 | eth-account            | MIT        | Generación determinista de wallets                      |
 | snarkjs (npm)          | GPL-3.0    | Generación de pruebas Groth16 off-chain                 |
-| circomlibjs (npm)      | MIT        | Bytecode del contrato MiMCSponge on-chain                |
+| circomlibjs (npm)      | GPL-3.0    | Bytecode del contrato MiMCSponge on-chain                |
 | Anthropic SDK          | MIT        | Cliente HTTP para llamar a los modelos Claude          |
 | pytest                 | MIT        | Framework de tests                                     |
 
@@ -110,4 +110,4 @@ El *core* criptográfico se preserva sin cambios para garantizar las mismas prop
 
 - Redistribuir sólo código propio (Python + hand-written contracts + docs) → MIT únicamente
 - Redistribuir el stack ZK completo (incluyendo `Verifier.sol`) → respetar además GPL-3.0 heredada de snarkjs
-- Redistribuir circuitos que dependen de MiMCSponge → respetar MIT de circomlib
+- Redistribuir circuitos que dependen de MiMCSponge → respetar LGPL-3.0 de circomlib y GPL-3.0 de circomlibjs
