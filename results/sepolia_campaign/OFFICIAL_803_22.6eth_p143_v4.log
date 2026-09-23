@@ -1,0 +1,291 @@
+[runner] oracle: campaign_ts=2026-09-05T00:00:00+00:00 eth=$2,456.09 usdt=$1.0002
+[runner] tornado pools discovered: [0.1, 1.0, 10.0] ETH
+======================================================================
+[runner] SEPOLIA CAMPAIGN — 2026-09-08T18-17-57_defi-exploit_seed803_sepolia
+  RPC:          https://eth-sepolia.g.alchemy.com/v2/<redacted>
+  chain_id:     11155111
+  deployer:     0x54539B5ef33cfC3C57b9b572fc77d1e5F1CFf4c4
+  balance:      23.9116 ETH
+  scenario:     defi-exploit
+  amount:       22.6 ETH
+  alice funds:  22.6 ETH
+  model:        sonnet
+  seed:         803
+  out_dir:      results/sepolia_campaign/2026-09-08T18-17-57_defi-exploit_seed803_sepolia
+  gas floor:    3 gwei
+  contracts:
+    usdt     0x665A2176d7beF3bccE52F37F1e64c99D993Aa7Ba
+    pool     0x73AD65939B8a7a4f8bD3FF4a48ab3454be64a8Dc
+    tornado  0xA6b4832722F0455a763baf4a118dEB47B4618681
+    bridge   0x99DFe4eEAbbA728CE1271d0Ba6a0959883986600
+    tornado_pools[0.1 ETH]  0xF28449a1347127e9BAA99A8bFc70Ec35d486ef2C
+    tornado_pools[1 ETH]  0xA6b4832722F0455a763baf4a118dEB47B4618681
+    tornado_pools[10 ETH]  0xdf9f5E174dCF796063af53AFe272B38dD0323E7c
+======================================================================
+[runner] campaign starting at block 11662726
+[runner] oracle pool ETH reserve: 7.5627 ETH (need >= 1.1300 = 5% of campaign)
+[funding] alice=0x30673108b0b9443150751ffC73d5ad4AE8244aa7 funded with 22.6 ETH (tx 48d956aa80346106cb2affb332e5e99b57fc793779a21757502a2db4543cf4c5)
+[runner] alice funded, starting Coordinator...
+[runner] funder pool: 5 wallets, 1.0190 ETH total ($2,502.68), per-funder [0.1352 .. 0.3127]
+[runner] funder amounts: ['0.1352', '0.2123', '0.1957', '0.1630', '0.3127']
+[runner] sub-agent max iterations (adaptive by amount 22.6 ETH): 47
+[llm 20:19:02] → claude-sonnet-4-6 max_tokens=8192 messages=1 tools=5
+[llm 20:19:38] ← claude-sonnet-4-6 36.3s stop=tool_use
+[llm 20:19:38] → claude-sonnet-4-6 max_tokens=8192 messages=1 tools=9
+[llm 20:19:44] ← claude-sonnet-4-6 6.3s stop=tool_use
+[llm 20:19:44] → claude-sonnet-4-6 max_tokens=8192 messages=3 tools=9
+[llm 20:19:56] ← claude-sonnet-4-6 11.9s stop=tool_use
+[llm 20:19:57] → claude-sonnet-4-6 max_tokens=8192 messages=5 tools=9
+[llm 20:20:00] ← claude-sonnet-4-6 3.5s stop=tool_use
+[llm 20:20:00] → claude-sonnet-4-6 max_tokens=8192 messages=7 tools=9
+[llm 20:20:22] ← claude-sonnet-4-6 22.2s stop=tool_use
+[llm 20:22:00] → claude-sonnet-4-6 max_tokens=8192 messages=9 tools=9
+[llm 20:22:22] ← claude-sonnet-4-6 22.1s stop=tool_use
+[llm 20:24:13] → claude-sonnet-4-6 max_tokens=8192 messages=11 tools=9
+[llm 20:24:34] ← claude-sonnet-4-6 21.0s stop=tool_use
+[llm 20:24:35] → claude-sonnet-4-6 max_tokens=8192 messages=13 tools=9
+[llm 20:25:01] ← claude-sonnet-4-6 26.1s stop=tool_use
+[llm 20:25:01] → claude-sonnet-4-6 max_tokens=8192 messages=3 tools=5
+[llm 20:25:05] ← claude-sonnet-4-6 4.1s stop=tool_use
+[llm 20:25:05] → claude-sonnet-4-6 max_tokens=8192 messages=5 tools=5
+[llm 20:25:07] ← claude-sonnet-4-6 2.1s stop=tool_use
+[llm 20:25:30] → claude-sonnet-4-6 max_tokens=8192 messages=7 tools=5
+[llm 20:26:15] ← claude-sonnet-4-6 44.8s stop=tool_use
+[llm 20:26:15] → claude-sonnet-4-6 max_tokens=8192 messages=1 tools=16
+[llm 20:26:26] ← claude-sonnet-4-6 11.0s stop=tool_use
+[llm 20:26:27] → claude-sonnet-4-6 max_tokens=8192 messages=3 tools=16
+[llm 20:26:36] ← claude-sonnet-4-6 9.1s stop=tool_use
+[llm 20:32:24] → claude-sonnet-4-6 max_tokens=8192 messages=5 tools=16
+[llm 20:32:35] ← claude-sonnet-4-6 11.7s stop=tool_use
+[llm 20:39:36] → claude-sonnet-4-6 max_tokens=8192 messages=7 tools=16
+[llm 20:39:49] ← claude-sonnet-4-6 12.4s stop=tool_use
+[llm 20:40:24] → claude-sonnet-4-6 max_tokens=8192 messages=9 tools=16
+[llm 20:40:33] ← claude-sonnet-4-6 9.0s stop=tool_use
+[llm 20:40:37] → claude-sonnet-4-6 max_tokens=8192 messages=11 tools=16
+[llm 20:40:43] ← claude-sonnet-4-6 6.3s stop=tool_use
+[llm 20:40:43] → claude-sonnet-4-6 max_tokens=8192 messages=13 tools=16
+[llm 20:41:00] ← claude-sonnet-4-6 16.5s stop=tool_use
+[llm 20:42:01] → claude-sonnet-4-6 max_tokens=8192 messages=15 tools=16
+[llm 20:42:12] ← claude-sonnet-4-6 10.9s stop=tool_use
+[llm 20:43:36] → claude-sonnet-4-6 max_tokens=8192 messages=17 tools=16
+[llm 20:43:40] ← claude-sonnet-4-6 4.0s stop=tool_use
+[llm 20:43:40] → claude-sonnet-4-6 max_tokens=8192 messages=19 tools=16
+[llm 20:43:42] ← claude-sonnet-4-6 1.7s stop=tool_use
+[llm 20:44:23] → claude-sonnet-4-6 max_tokens=8192 messages=21 tools=16
+[llm 20:44:27] ← claude-sonnet-4-6 3.5s stop=tool_use
+[llm 20:44:59] → claude-sonnet-4-6 max_tokens=8192 messages=23 tools=16
+[llm 20:45:07] ← claude-sonnet-4-6 7.2s stop=tool_use
+[llm 20:45:07] → claude-sonnet-4-6 max_tokens=8192 messages=25 tools=16
+[llm 20:45:16] ← claude-sonnet-4-6 8.8s stop=tool_use
+[llm 20:46:12] → claude-sonnet-4-6 max_tokens=8192 messages=27 tools=16
+[llm 20:46:19] ← claude-sonnet-4-6 7.7s stop=tool_use
+[llm 20:47:13] → claude-sonnet-4-6 max_tokens=8192 messages=29 tools=16
+[llm 20:47:19] ← claude-sonnet-4-6 5.5s stop=tool_use
+[llm 20:48:13] → claude-sonnet-4-6 max_tokens=8192 messages=31 tools=16
+[llm 20:48:23] ← claude-sonnet-4-6 9.6s stop=tool_use
+[llm 20:48:23] → claude-sonnet-4-6 max_tokens=8192 messages=33 tools=16
+[llm 20:48:35] ← claude-sonnet-4-6 12.1s stop=tool_use
+[llm 20:48:38] → claude-sonnet-4-6 max_tokens=8192 messages=35 tools=16
+[llm 20:48:50] ← claude-sonnet-4-6 12.0s stop=tool_use
+[llm 20:49:48] → claude-sonnet-4-6 max_tokens=8192 messages=37 tools=16
+[llm 20:49:57] ← claude-sonnet-4-6 8.9s stop=tool_use
+[llm 20:50:36] → claude-sonnet-4-6 max_tokens=8192 messages=39 tools=16
+[llm 20:50:48] ← claude-sonnet-4-6 12.8s stop=tool_use
+[llm 20:51:12] → claude-sonnet-4-6 max_tokens=8192 messages=41 tools=16
+[llm 20:51:19] ← claude-sonnet-4-6 7.0s stop=tool_use
+[llm 20:51:35] → claude-sonnet-4-6 max_tokens=8192 messages=43 tools=16
+[llm 20:51:46] ← claude-sonnet-4-6 10.8s stop=tool_use
+[llm 20:52:12] → claude-sonnet-4-6 max_tokens=8192 messages=45 tools=16
+[llm 20:52:21] ← claude-sonnet-4-6 9.7s stop=tool_use
+[llm 20:52:47] → claude-sonnet-4-6 max_tokens=8192 messages=47 tools=16
+[llm 20:52:50] ← claude-sonnet-4-6 3.2s stop=tool_use
+[llm 20:53:09] → claude-sonnet-4-6 max_tokens=8192 messages=49 tools=16
+[llm 20:53:22] ← claude-sonnet-4-6 13.9s stop=tool_use
+[llm 20:54:00] → claude-sonnet-4-6 max_tokens=8192 messages=51 tools=16
+[llm 20:54:11] ← claude-sonnet-4-6 10.3s stop=tool_use
+[llm 20:54:24] → claude-sonnet-4-6 max_tokens=8192 messages=53 tools=16
+[llm 20:54:39] ← claude-sonnet-4-6 14.2s stop=tool_use
+[llm 20:55:14] → claude-sonnet-4-6 max_tokens=8192 messages=55 tools=16
+[llm 20:55:23] ← claude-sonnet-4-6 9.4s stop=tool_use
+[llm 20:55:37] → claude-sonnet-4-6 max_tokens=8192 messages=57 tools=16
+[llm 20:55:54] ← claude-sonnet-4-6 17.4s stop=tool_use
+[llm 20:55:55] → claude-sonnet-4-6 max_tokens=8192 messages=59 tools=16
+[llm 20:56:08] ← claude-sonnet-4-6 13.0s stop=tool_use
+[llm 20:56:09] → claude-sonnet-4-6 max_tokens=8192 messages=61 tools=16
+[llm 20:57:13] ← claude-sonnet-4-6 64.5s stop=tool_use
+[llm 20:57:13] → claude-sonnet-4-6 max_tokens=8192 messages=9 tools=5
+[llm 20:57:21] ← claude-sonnet-4-6 8.3s stop=tool_use
+[llm 20:57:42] → claude-sonnet-4-6 max_tokens=8192 messages=11 tools=5
+[llm 20:58:04] ← claude-sonnet-4-6 21.6s stop=tool_use
+[llm 20:58:14] → claude-sonnet-4-6 max_tokens=8192 messages=13 tools=5
+[llm 20:59:20] ← claude-sonnet-4-6 65.6s stop=tool_use
+[llm 20:59:20] → claude-sonnet-4-6 max_tokens=8192 messages=1 tools=10
+[llm 20:59:42] ← claude-sonnet-4-6 22.2s stop=tool_use
+[llm 20:59:42] → claude-sonnet-4-6 max_tokens=8192 messages=3 tools=10
+[llm 21:00:17] ← claude-sonnet-4-6 35.3s stop=tool_use
+[llm 21:00:19] → claude-sonnet-4-6 max_tokens=8192 messages=5 tools=10
+[llm 21:00:53] ← claude-sonnet-4-6 34.2s stop=tool_use
+[llm 21:03:48] → claude-sonnet-4-6 max_tokens=8192 messages=7 tools=10
+[llm 21:04:03] ← claude-sonnet-4-6 14.8s stop=tool_use
+[llm 21:04:36] → claude-sonnet-4-6 max_tokens=8192 messages=9 tools=10
+[llm 21:05:20] ← claude-sonnet-4-6 43.7s stop=tool_use
+[llm 21:07:00] → claude-sonnet-4-6 max_tokens=8192 messages=11 tools=10
+[llm 21:07:30] ← claude-sonnet-4-6 30.1s stop=tool_use
+[llm 21:09:12] → claude-sonnet-4-6 max_tokens=8192 messages=13 tools=10
+[llm 21:09:29] ← claude-sonnet-4-6 17.2s stop=tool_use
+[llm 21:11:00] → claude-sonnet-4-6 max_tokens=8192 messages=15 tools=10
+[llm 21:11:30] ← claude-sonnet-4-6 30.1s stop=tool_use
+[llm 21:11:33] → claude-sonnet-4-6 max_tokens=8192 messages=17 tools=10
+[llm 21:12:01] ← claude-sonnet-4-6 27.7s stop=tool_use
+[llm 21:12:04] → claude-sonnet-4-6 max_tokens=8192 messages=19 tools=10
+[llm 21:13:09] ← claude-sonnet-4-6 64.9s stop=tool_use
+[llm 21:13:09] → claude-sonnet-4-6 max_tokens=8192 messages=15 tools=5
+[llm 21:13:14] ← claude-sonnet-4-6 4.6s stop=tool_use
+[llm 21:13:39] → claude-sonnet-4-6 max_tokens=8192 messages=17 tools=5
+[llm 21:15:02] ← claude-sonnet-4-6 82.9s stop=tool_use
+[llm 21:15:02] → claude-sonnet-4-6 max_tokens=8192 messages=1 tools=10
+[llm 21:15:09] ← claude-sonnet-4-6 6.7s stop=tool_use
+[llm 21:15:10] → claude-sonnet-4-6 max_tokens=8192 messages=3 tools=10
+[llm 21:15:17] ← claude-sonnet-4-6 7.1s stop=tool_use
+[llm 21:15:17] → claude-sonnet-4-6 max_tokens=8192 messages=5 tools=10
+[llm 21:15:22] ← claude-sonnet-4-6 4.9s stop=tool_use
+[llm 21:15:22] → claude-sonnet-4-6 max_tokens=8192 messages=7 tools=10
+[llm 21:15:26] ← claude-sonnet-4-6 4.6s stop=tool_use
+[llm 21:15:26] → claude-sonnet-4-6 max_tokens=8192 messages=9 tools=10
+[llm 21:15:32] ← claude-sonnet-4-6 5.5s stop=tool_use
+[llm 21:15:32] → claude-sonnet-4-6 max_tokens=8192 messages=11 tools=10
+[llm 21:15:37] ← claude-sonnet-4-6 5.1s stop=tool_use
+[llm 21:15:37] → claude-sonnet-4-6 max_tokens=8192 messages=13 tools=10
+[llm 21:15:41] ← claude-sonnet-4-6 3.5s stop=tool_use
+[llm 21:15:41] → claude-sonnet-4-6 max_tokens=8192 messages=15 tools=10
+[llm 21:15:47] ← claude-sonnet-4-6 6.0s stop=tool_use
+[llm 21:15:47] → claude-sonnet-4-6 max_tokens=8192 messages=17 tools=10
+[llm 21:15:50] ← claude-sonnet-4-6 3.0s stop=tool_use
+[llm 21:16:00] → claude-sonnet-4-6 max_tokens=8192 messages=19 tools=10
+[llm 21:16:34] ← claude-sonnet-4-6 34.5s stop=tool_use
+[llm 21:17:25] → claude-sonnet-4-6 max_tokens=8192 messages=21 tools=10
+[llm 21:17:34] ← claude-sonnet-4-6 9.9s stop=tool_use
+[llm 21:18:24] → claude-sonnet-4-6 max_tokens=8192 messages=23 tools=10
+[llm 21:18:34] ← claude-sonnet-4-6 9.5s stop=tool_use
+[llm 21:19:24] → claude-sonnet-4-6 max_tokens=8192 messages=25 tools=10
+[llm 21:19:35] ← claude-sonnet-4-6 10.6s stop=tool_use
+[llm 21:20:12] → claude-sonnet-4-6 max_tokens=8192 messages=27 tools=10
+[llm 21:20:22] ← claude-sonnet-4-6 9.3s stop=tool_use
+[llm 21:21:24] → claude-sonnet-4-6 max_tokens=8192 messages=29 tools=10
+[llm 21:21:28] ← claude-sonnet-4-6 3.9s stop=tool_use
+[llm 21:21:28] → claude-sonnet-4-6 max_tokens=8192 messages=31 tools=10
+[llm 21:21:34] ← claude-sonnet-4-6 6.1s stop=tool_use
+[llm 21:21:34] → claude-sonnet-4-6 max_tokens=8192 messages=33 tools=10
+[llm 21:21:37] ← claude-sonnet-4-6 2.2s stop=tool_use
+[llm 21:21:48] → claude-sonnet-4-6 max_tokens=8192 messages=35 tools=10
+[llm 21:21:52] ← claude-sonnet-4-6 3.8s stop=tool_use
+[llm 21:22:01] → claude-sonnet-4-6 max_tokens=8192 messages=37 tools=10
+[llm 21:22:15] ← claude-sonnet-4-6 14.4s stop=tool_use
+[llm 21:23:49] → claude-sonnet-4-6 max_tokens=8192 messages=39 tools=10
+[llm 21:23:54] ← claude-sonnet-4-6 4.9s stop=tool_use
+[llm 21:23:54] → claude-sonnet-4-6 max_tokens=8192 messages=41 tools=10
+[llm 21:24:03] ← claude-sonnet-4-6 8.4s stop=tool_use
+[llm 21:24:36] → claude-sonnet-4-6 max_tokens=8192 messages=43 tools=10
+[llm 21:24:44] ← claude-sonnet-4-6 7.7s stop=tool_use
+[llm 21:25:12] → claude-sonnet-4-6 max_tokens=8192 messages=45 tools=10
+[llm 21:25:22] ← claude-sonnet-4-6 9.8s stop=tool_use
+[llm 21:25:24] → claude-sonnet-4-6 max_tokens=8192 messages=47 tools=10
+[llm 21:25:36] ← claude-sonnet-4-6 12.3s stop=tool_use
+[llm 21:26:12] → claude-sonnet-4-6 max_tokens=8192 messages=49 tools=10
+[llm 21:26:25] ← claude-sonnet-4-6 12.4s stop=tool_use
+[llm 21:27:24] → claude-sonnet-4-6 max_tokens=8192 messages=51 tools=10
+[llm 21:27:29] ← claude-sonnet-4-6 4.5s stop=tool_use
+[llm 21:27:37] → claude-sonnet-4-6 max_tokens=8192 messages=53 tools=10
+[llm 21:28:11] ← claude-sonnet-4-6 34.3s stop=tool_use
+[llm 21:28:16] → claude-sonnet-4-6 max_tokens=8192 messages=55 tools=10
+[llm 21:28:23] ← claude-sonnet-4-6 7.7s stop=tool_use
+[llm 21:28:49] → claude-sonnet-4-6 max_tokens=8192 messages=57 tools=10
+[llm 21:28:59] ← claude-sonnet-4-6 10.1s stop=tool_use
+[llm 21:29:00] → claude-sonnet-4-6 max_tokens=8192 messages=59 tools=10
+[llm 21:29:37] ← claude-sonnet-4-6 36.4s stop=tool_use
+[llm 21:29:40] → claude-sonnet-4-6 max_tokens=8192 messages=61 tools=10
+[llm 21:30:29] ← claude-sonnet-4-6 49.0s stop=tool_use
+[llm 21:30:29] → claude-sonnet-4-6 max_tokens=8192 messages=19 tools=5
+[llm 21:30:38] ← claude-sonnet-4-6 8.9s stop=tool_use
+[llm 21:31:09] → claude-sonnet-4-6 max_tokens=8192 messages=21 tools=5
+[llm 21:31:51] ← claude-sonnet-4-6 41.5s stop=tool_use
+[llm 21:31:51] → claude-sonnet-4-6 max_tokens=8192 messages=1 tools=10
+[llm 21:31:55] ← claude-sonnet-4-6 4.5s stop=tool_use
+[llm 21:31:56] → claude-sonnet-4-6 max_tokens=8192 messages=3 tools=10
+[llm 21:32:01] ← claude-sonnet-4-6 4.6s stop=tool_use
+[llm 21:32:01] → claude-sonnet-4-6 max_tokens=8192 messages=5 tools=10
+[llm 21:32:08] ← claude-sonnet-4-6 7.3s stop=tool_use
+[llm 21:32:48] → claude-sonnet-4-6 max_tokens=8192 messages=7 tools=10
+[llm 21:32:54] ← claude-sonnet-4-6 5.9s stop=tool_use
+[llm 21:33:00] → claude-sonnet-4-6 max_tokens=8192 messages=9 tools=10
+[llm 21:33:06] ← claude-sonnet-4-6 6.1s stop=tool_use
+[llm 21:33:36] → claude-sonnet-4-6 max_tokens=8192 messages=11 tools=10
+[llm 21:33:43] ← claude-sonnet-4-6 6.6s stop=tool_use
+[llm 21:33:43] → claude-sonnet-4-6 max_tokens=8192 messages=13 tools=10
+[llm 21:34:01] ← claude-sonnet-4-6 17.6s stop=tool_use
+[llm 21:34:01] → claude-sonnet-4-6 max_tokens=8192 messages=23 tools=5
+[llm 21:34:06] ← claude-sonnet-4-6 5.4s stop=tool_use
+[llm 21:34:37] → claude-sonnet-4-6 max_tokens=8192 messages=25 tools=5
+[llm 21:35:15] ← claude-sonnet-4-6 37.2s stop=end_turn
+[runner] campaign done in 4638.2s (77.3 min), stop=end_turn, cost=$6.5298, end block=11663093
+[runner] scanning for stranded wallets...
+[runner] anti-strand: 53 found, 53 rescued, 0 still stranded
+[runner] funder sweep: 5/5 returned 0.7509 ETH to deployer. True gas burned: 0.2681 ETH.
+[runner] extracting chain trace from block 11662726 to 11663093...
+[runner] 42812 txs traced
+[runner] wallets_keys.json saved (141 keys) — gitignored; use scripts/sweep_sepolia.py to reclaim funds
+
+[runner] artifacts written to results/sepolia_campaign/2026-09-08T18-17-57_defi-exploit_seed803_sepolia
+Sepolia campaign — 2026-09-08T18-17-57_defi-exploit_seed803_sepolia
+Chain: Sepolia (11155111)
+Scenario: defi-exploit (DeFi-exploit-style ETH theft. Stolen ETH spread into mixer-sized working wallets...)
+Amount: 22.6 ETH
+Wall clock: 77.3 min
+Blocks: 11662726 -> 11663093 (367 blocks)
+LLM cost: $6.5298 (sonnet)
+Tx traced: 42812
+Attacker wallets: 141
+Burners generated: 74
+Clean exits registered: 60
+Clean exits funded: 54
+Stolen (USD equiv): $55,507.52  (@ 2026-09-05: ETH=$2,456.09)
+Operating capital:  $2,502.68  (funder pool 1.0190 ETH)
+Total attacker cap: $58,010.20
+To exits (nominal USD, mock-pool priced): $31,554.17
+  Nominal recovery of stolen:  56.8%  (inflated if pool ratio distorted)
+
+HONEST recovery (mock-pool-adjusted, capped by ETH swapped in):
+  ETH swapped into pool:     20.3689 ETH
+  ETH direct at exits:       0.0000 ETH
+  USDT at exits (raw):       31,547.29 MockUSDT
+  USDT -> ETH @ market rate: 12.8473 ETH  (market: 2,456 USD/ETH)
+  USDT -> ETH (capped):      12.8473 ETH  (cap = swapped-in ETH)
+  Honest recovery:           12.8473 ETH = $31,554.17
+  Honest recovery %:         56.8%  (capped display: 56.8%)
+
+ETH reconciliation (on-chain balances NOW, every wei accounted for):
+  IN — alice funded from deployer:  22.6000 ETH
+  OUT — honest_recovery (at exits): 12.8473 ETH
+  OUT — alice residual:             1.0180 ETH  (recoverable)
+  OUT — exit wallets ETH dust:      0.2698 ETH  (recoverable)
+  OUT — burners residual:           2.0030 ETH  (recoverable via sweep_sepolia.py)
+  OUT — locked/burned (mixer+pool+gas): 6.4619 ETH
+          - mixer: recoverable via mixer_recover.py
+          - pool:  recoverable via sweep_sepolia.py --reverse-swap
+          - gas:   PERMANENTLY LOST to validators
+
+ECONOMIC EFFICIENCY (real hacker perspective — no double-counting):
+  ETH direct at exits (non-gas-seed):  0.0000 ETH  = $0.00
+  USDT at exits (raw balance):         31,547.29 USDT  = $31,554.17 @ market
+  USDT valued at pool-swapped ETH cap: 12.8473 ETH  (prevents mock-pool ratio distortion inflating the metric)
+  
+  delivered_to_exits_pct (capped):     56.8%  (12.8473 ETH = $31,554.17 / $55,507.52 stolen)
+  attacker_recoverable_pct (residual): 13.4%  (alice_residual + burners_residual — reachable via sweep)
+  total_attacker_controlled_pct:       70.2%  (delivered + still-recoverable, NO double-count with exit ETH dust)
+  economically_lost_pct:               29.8%  (gas + pool slippage — permanent economic loss)
+  intentional_dust_pct:                8.9%  (residuals left in burners by design — real Lazarus ops leave 2-5%)
+Coordinator stopped: end_turn
+
+Etherscan links:
+  Alice: https://sepolia.etherscan.io/address/0x30673108b0b9443150751ffC73d5ad4AE8244aa7
+  Deployer: https://sepolia.etherscan.io/address/0x54539B5ef33cfC3C57b9b572fc77d1e5F1CFf4c4

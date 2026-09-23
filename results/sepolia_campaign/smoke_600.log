@@ -1,0 +1,248 @@
+[runner] oracle: campaign_ts=2026-08-28T00:00:00+00:00 eth=$2,511.46 usdt=$1.0001
+[runner] tornado pools discovered: [0.1, 1.0, 10.0] ETH
+======================================================================
+[runner] SEPOLIA CAMPAIGN — 2026-08-28T16-46-54_defi-exploit_seed600_sepolia
+  RPC:          https://eth-sepolia.g.alchemy.com/v2/<redacted>
+  chain_id:     11155111
+  deployer:     0x54539B5ef33cfC3C57b9b572fc77d1e5F1CFf4c4
+  balance:      22.4589 ETH
+  scenario:     defi-exploit
+  amount:       0.5 ETH
+  alice funds:  0.5 ETH
+  model:        haiku
+  seed:         600
+  out_dir:      results/sepolia_campaign/2026-08-28T16-46-54_defi-exploit_seed600_sepolia
+  gas floor:    3 gwei
+  contracts:
+    usdt     0x665A2176d7beF3bccE52F37F1e64c99D993Aa7Ba
+    pool     0x229cC888FE17c81CD474Ea8eb6F5387f1739a4c4
+    tornado  0x3C42dC28F01F5Fe0D320e5f501e5c7e138057762
+    bridge   0x99DFe4eEAbbA728CE1271d0Ba6a0959883986600
+    tornado_pools[0.1 ETH]  0x8617BD3EB20D6efC1BD09Ea77B5a505C5a2Bd266
+    tornado_pools[1 ETH]  0x3C42dC28F01F5Fe0D320e5f501e5c7e138057762
+    tornado_pools[10 ETH]  0xD83913590e53C699D27280EAbE5000c9967eC3d7
+======================================================================
+[runner] campaign starting at block 11586091
+[funding] alice=0xe68AAe89F62b555220e1d9CBDDF507bBb45e3C7D funded with 0.5 ETH (tx cdff6c839332d19a63c875d151bf925183b9ae6c26bde43d7c1dfa704d2191ac)
+[runner] alice funded, starting Coordinator...
+[runner] funder pool: 2 wallets, 0.0400 ETH total ($100.46), per-funder [0.0200 .. 0.0200]
+[runner] funder amounts: ['0.0200', '0.0200']
+[runner] sub-agent max iterations (adaptive by amount 0.5 ETH): 25
+[llm 18:47:23] → claude-haiku-4-5 max_tokens=8192 messages=1 tools=5
+[llm 18:47:33] ← claude-haiku-4-5 9.4s stop=tool_use
+[llm 18:47:33] → claude-haiku-4-5 max_tokens=8192 messages=1 tools=9
+[llm 18:47:37] ← claude-haiku-4-5 4.2s stop=tool_use
+[llm 18:48:25] → claude-haiku-4-5 max_tokens=8192 messages=3 tools=9
+[llm 18:48:30] ← claude-haiku-4-5 5.9s stop=tool_use
+[llm 18:49:12] → claude-haiku-4-5 max_tokens=8192 messages=5 tools=9
+[llm 18:49:15] ← claude-haiku-4-5 3.5s stop=tool_use
+[llm 18:49:15] → claude-haiku-4-5 max_tokens=8192 messages=7 tools=9
+[llm 18:49:25] ← claude-haiku-4-5 9.4s stop=tool_use
+[llm 18:49:25] → claude-haiku-4-5 max_tokens=8192 messages=3 tools=5
+[llm 18:49:36] ← claude-haiku-4-5 11.3s stop=tool_use
+[llm 18:49:36] → claude-haiku-4-5 max_tokens=8192 messages=1 tools=16
+[llm 18:49:39] ← claude-haiku-4-5 2.9s stop=tool_use
+[llm 18:49:39] → claude-haiku-4-5 max_tokens=8192 messages=3 tools=16
+[llm 18:49:41] ← claude-haiku-4-5 2.1s stop=tool_use
+[llm 18:49:41] → claude-haiku-4-5 max_tokens=8192 messages=5 tools=16
+[llm 18:49:44] ← claude-haiku-4-5 2.7s stop=tool_use
+[llm 18:49:44] → claude-haiku-4-5 max_tokens=8192 messages=7 tools=16
+[llm 18:49:52] ← claude-haiku-4-5 8.2s stop=tool_use
+[llm 18:49:53] → claude-haiku-4-5 max_tokens=8192 messages=9 tools=16
+[llm 18:50:00] ← claude-haiku-4-5 7.3s stop=tool_use
+[llm 18:50:00] → claude-haiku-4-5 max_tokens=8192 messages=11 tools=16
+[llm 18:50:05] ← claude-haiku-4-5 4.4s stop=tool_use
+[llm 18:51:59] → claude-haiku-4-5 max_tokens=8192 messages=13 tools=16
+[llm 18:52:03] ← claude-haiku-4-5 4.3s stop=tool_use
+[llm 18:52:03] → claude-haiku-4-5 max_tokens=8192 messages=15 tools=16
+[llm 18:52:08] ← claude-haiku-4-5 5.4s stop=tool_use
+[llm 18:52:09] → claude-haiku-4-5 max_tokens=8192 messages=17 tools=16
+[llm 18:52:17] ← claude-haiku-4-5 8.8s stop=tool_use
+[llm 18:52:17] → claude-haiku-4-5 max_tokens=8192 messages=19 tools=16
+[llm 18:52:23] ← claude-haiku-4-5 5.8s stop=tool_use
+[llm 18:57:24] → claude-haiku-4-5 max_tokens=8192 messages=21 tools=16
+[llm 18:57:29] ← claude-haiku-4-5 4.9s stop=tool_use
+[llm 18:58:25] → claude-haiku-4-5 max_tokens=8192 messages=23 tools=16
+[llm 18:58:29] ← claude-haiku-4-5 4.1s stop=tool_use
+[llm 18:58:48] → claude-haiku-4-5 max_tokens=8192 messages=25 tools=16
+[llm 18:58:50] ← claude-haiku-4-5 2.9s stop=tool_use
+[llm 18:58:51] → claude-haiku-4-5 max_tokens=8192 messages=27 tools=16
+[llm 18:58:57] ← claude-haiku-4-5 6.1s stop=tool_use
+[llm 18:59:12] → claude-haiku-4-5 max_tokens=8192 messages=29 tools=16
+[llm 18:59:18] ← claude-haiku-4-5 6.4s stop=tool_use
+[llm 18:59:19] → claude-haiku-4-5 max_tokens=8192 messages=31 tools=16
+[llm 18:59:23] ← claude-haiku-4-5 4.1s stop=tool_use
+[llm 18:59:23] → claude-haiku-4-5 max_tokens=8192 messages=33 tools=16
+[llm 18:59:31] ← claude-haiku-4-5 8.0s stop=tool_use
+[llm 18:59:31] → claude-haiku-4-5 max_tokens=8192 messages=35 tools=16
+[llm 18:59:35] ← claude-haiku-4-5 3.9s stop=tool_use
+[llm 18:59:35] → claude-haiku-4-5 max_tokens=8192 messages=37 tools=16
+[llm 18:59:38] ← claude-haiku-4-5 3.1s stop=tool_use
+[llm 18:59:59] → claude-haiku-4-5 max_tokens=8192 messages=39 tools=16
+[llm 19:00:01] ← claude-haiku-4-5 2.4s stop=tool_use
+[llm 19:00:13] → claude-haiku-4-5 max_tokens=8192 messages=41 tools=16
+[llm 19:00:15] ← claude-haiku-4-5 2.1s stop=tool_use
+[llm 19:00:15] → claude-haiku-4-5 max_tokens=8192 messages=43 tools=16
+[llm 19:00:18] ← claude-haiku-4-5 2.4s stop=tool_use
+[llm 19:00:24] → claude-haiku-4-5 max_tokens=8192 messages=45 tools=16
+[llm 19:00:27] ← claude-haiku-4-5 3.3s stop=tool_use
+[llm 19:00:27] → claude-haiku-4-5 max_tokens=8192 messages=47 tools=16
+[llm 19:00:31] ← claude-haiku-4-5 3.7s stop=tool_use
+[llm 19:04:35] → claude-haiku-4-5 max_tokens=8192 messages=49 tools=16
+[llm 19:04:38] ← claude-haiku-4-5 2.6s stop=tool_use
+[llm 19:04:38] → claude-haiku-4-5 max_tokens=8192 messages=5 tools=5
+[llm 19:04:39] ← claude-haiku-4-5 1.1s stop=tool_use
+[llm 19:04:54] → claude-haiku-4-5 max_tokens=8192 messages=7 tools=5
+[llm 19:05:02] ← claude-haiku-4-5 8.2s stop=tool_use
+[llm 19:05:02] → claude-haiku-4-5 max_tokens=8192 messages=1 tools=16
+[llm 19:05:05] ← claude-haiku-4-5 2.7s stop=tool_use
+[llm 19:05:05] → claude-haiku-4-5 max_tokens=8192 messages=3 tools=16
+[llm 19:05:14] ← claude-haiku-4-5 9.1s stop=tool_use
+[llm 19:05:14] → claude-haiku-4-5 max_tokens=8192 messages=9 tools=5
+[llm 19:05:21] ← claude-haiku-4-5 7.4s stop=tool_use
+[llm 19:05:21] → claude-haiku-4-5 max_tokens=8192 messages=1 tools=9
+[llm 19:05:23] ← claude-haiku-4-5 1.6s stop=tool_use
+[llm 19:05:23] → claude-haiku-4-5 max_tokens=8192 messages=3 tools=9
+[llm 19:05:30] ← claude-haiku-4-5 6.7s stop=tool_use
+[llm 19:05:30] → claude-haiku-4-5 max_tokens=8192 messages=11 tools=5
+[llm 19:05:39] ← claude-haiku-4-5 9.3s stop=tool_use
+[llm 19:05:39] → claude-haiku-4-5 max_tokens=8192 messages=1 tools=16
+[llm 19:05:44] ← claude-haiku-4-5 4.6s stop=tool_use
+[llm 19:05:44] → claude-haiku-4-5 max_tokens=8192 messages=3 tools=16
+[llm 19:05:49] ← claude-haiku-4-5 4.9s stop=tool_use
+[llm 19:06:23] → claude-haiku-4-5 max_tokens=8192 messages=5 tools=16
+[llm 19:06:25] ← claude-haiku-4-5 2.0s stop=tool_use
+[llm 19:06:25] → claude-haiku-4-5 max_tokens=8192 messages=7 tools=16
+[llm 19:06:39] ← claude-haiku-4-5 13.6s stop=tool_use
+[llm 19:06:39] → claude-haiku-4-5 max_tokens=8192 messages=13 tools=5
+[llm 19:06:49] ← claude-haiku-4-5 10.7s stop=tool_use
+[llm 19:06:49] → claude-haiku-4-5 max_tokens=8192 messages=1 tools=16
+[llm 19:06:53] ← claude-haiku-4-5 3.3s stop=tool_use
+[llm 19:06:53] → claude-haiku-4-5 max_tokens=8192 messages=3 tools=16
+[llm 19:06:55] ← claude-haiku-4-5 2.2s stop=tool_use
+[llm 19:06:55] → claude-haiku-4-5 max_tokens=8192 messages=5 tools=16
+[llm 19:06:58] ← claude-haiku-4-5 3.1s stop=tool_use
+[llm 19:07:13] → claude-haiku-4-5 max_tokens=8192 messages=7 tools=16
+[llm 19:07:15] ← claude-haiku-4-5 1.6s stop=tool_use
+[llm 19:07:15] → claude-haiku-4-5 max_tokens=8192 messages=9 tools=16
+[llm 19:07:17] ← claude-haiku-4-5 2.2s stop=tool_use
+[llm 19:07:17] → claude-haiku-4-5 max_tokens=8192 messages=11 tools=16
+[llm 19:07:19] ← claude-haiku-4-5 1.9s stop=tool_use
+[llm 19:07:19] → claude-haiku-4-5 max_tokens=8192 messages=13 tools=16
+[llm 19:07:21] ← claude-haiku-4-5 2.0s stop=tool_use
+[llm 19:07:21] → claude-haiku-4-5 max_tokens=8192 messages=15 tools=16
+[llm 19:07:23] ← claude-haiku-4-5 2.1s stop=tool_use
+[llm 19:07:24] → claude-haiku-4-5 max_tokens=8192 messages=17 tools=16
+[llm 19:07:26] ← claude-haiku-4-5 2.1s stop=tool_use
+[llm 19:07:35] → claude-haiku-4-5 max_tokens=8192 messages=19 tools=16
+[llm 19:07:40] ← claude-haiku-4-5 4.4s stop=tool_use
+[llm 19:07:42] → claude-haiku-4-5 max_tokens=8192 messages=21 tools=16
+[llm 19:07:47] ← claude-haiku-4-5 5.3s stop=tool_use
+[llm 19:08:35] → claude-haiku-4-5 max_tokens=8192 messages=23 tools=16
+[llm 19:08:37] ← claude-haiku-4-5 1.8s stop=tool_use
+[llm 19:09:17] → claude-haiku-4-5 max_tokens=8192 messages=25 tools=16
+[llm 19:09:19] ← claude-haiku-4-5 2.2s stop=tool_use
+[llm 19:09:36] → claude-haiku-4-5 max_tokens=8192 messages=27 tools=16
+[llm 19:09:37] ← claude-haiku-4-5 1.6s stop=tool_use
+[llm 19:10:13] → claude-haiku-4-5 max_tokens=8192 messages=29 tools=16
+[llm 19:10:14] ← claude-haiku-4-5 1.4s stop=tool_use
+[llm 19:10:14] → claude-haiku-4-5 max_tokens=8192 messages=31 tools=16
+[llm 19:10:18] ← claude-haiku-4-5 4.5s stop=tool_use
+[llm 19:10:19] → claude-haiku-4-5 max_tokens=8192 messages=33 tools=16
+[llm 19:10:24] ← claude-haiku-4-5 4.9s stop=tool_use
+[llm 19:11:00] → claude-haiku-4-5 max_tokens=8192 messages=35 tools=16
+[llm 19:11:02] ← claude-haiku-4-5 1.5s stop=tool_use
+[llm 19:11:35] → claude-haiku-4-5 max_tokens=8192 messages=37 tools=16
+[llm 19:11:38] ← claude-haiku-4-5 3.3s stop=tool_use
+[llm 19:12:11] → claude-haiku-4-5 max_tokens=8192 messages=39 tools=16
+[llm 19:12:17] ← claude-haiku-4-5 6.3s stop=tool_use
+[llm 19:12:18] → claude-haiku-4-5 max_tokens=8192 messages=41 tools=16
+[llm 19:12:19] ← claude-haiku-4-5 1.5s stop=tool_use
+[llm 19:12:58] → claude-haiku-4-5 max_tokens=8192 messages=43 tools=16
+[llm 19:13:09] ← claude-haiku-4-5 10.7s stop=tool_use
+[llm 19:13:09] → claude-haiku-4-5 max_tokens=8192 messages=15 tools=5
+[llm 19:13:25] ← claude-haiku-4-5 16.1s stop=tool_use
+[llm 19:13:25] → claude-haiku-4-5 max_tokens=8192 messages=1 tools=10
+[llm 19:13:28] ← claude-haiku-4-5 3.0s stop=tool_use
+[llm 19:14:12] → claude-haiku-4-5 max_tokens=8192 messages=3 tools=10
+[llm 19:14:15] ← claude-haiku-4-5 3.2s stop=tool_use
+[llm 19:14:16] → claude-haiku-4-5 max_tokens=8192 messages=5 tools=10
+[llm 19:14:20] ← claude-haiku-4-5 4.1s stop=tool_use
+[llm 19:14:59] → claude-haiku-4-5 max_tokens=8192 messages=7 tools=10
+[llm 19:15:03] ← claude-haiku-4-5 3.4s stop=tool_use
+[llm 19:15:34] → claude-haiku-4-5 max_tokens=8192 messages=9 tools=10
+[llm 19:15:37] ← claude-haiku-4-5 2.5s stop=tool_use
+[llm 19:15:37] → claude-haiku-4-5 max_tokens=8192 messages=11 tools=10
+[llm 19:15:42] ← claude-haiku-4-5 5.1s stop=tool_use
+[llm 19:15:49] → claude-haiku-4-5 max_tokens=8192 messages=13 tools=10
+[llm 19:15:51] ← claude-haiku-4-5 1.9s stop=tool_use
+[llm 19:15:51] → claude-haiku-4-5 max_tokens=8192 messages=15 tools=10
+[llm 19:16:06] ← claude-haiku-4-5 14.8s stop=tool_use
+[llm 19:16:06] → claude-haiku-4-5 max_tokens=8192 messages=17 tools=5
+[llm 19:16:09] ← claude-haiku-4-5 2.7s stop=tool_use
+[llm 19:16:24] → claude-haiku-4-5 max_tokens=8192 messages=19 tools=5
+[llm 19:16:25] ← claude-haiku-4-5 1.5s stop=tool_use
+[llm 19:16:38] → claude-haiku-4-5 max_tokens=8192 messages=21 tools=5
+[llm 19:16:57] ← claude-haiku-4-5 19.3s stop=end_turn
+[runner] campaign done in 1803.3s (30.1 min), stop=end_turn, cost=$0.8451, end block=11586238
+[runner] scanning for stranded wallets...
+[runner] anti-strand: 0 found, 0 rescued, 0 still stranded
+[runner] funder sweep: 2/2 returned 0.0369 ETH to deployer. True gas burned: 0.0031 ETH.
+[runner] extracting chain trace from block 11586091 to 11586238...
+[runner] 22535 txs traced
+[runner] wallets_keys.json saved (42 keys) — gitignored; use scripts/sweep_sepolia.py to reclaim funds
+
+[runner] artifacts written to results/sepolia_campaign/2026-08-28T16-46-54_defi-exploit_seed600_sepolia
+Sepolia campaign — 2026-08-28T16-46-54_defi-exploit_seed600_sepolia
+Chain: Sepolia (11155111)
+Scenario: defi-exploit (DeFi-exploit-style ETH theft. Stolen ETH spread into mixer-sized working wallets...)
+Amount: 0.5 ETH
+Wall clock: 30.1 min
+Blocks: 11586091 -> 11586238 (147 blocks)
+LLM cost: $0.8451 (haiku)
+Tx traced: 22535
+Attacker wallets: 42
+Burners generated: 35
+Clean exits registered: 3
+Clean exits funded: 2
+Stolen (USD equiv): $1,255.73  (@ 2026-08-28: ETH=$2,511.46)
+Operating capital:  $100.46  (funder pool 0.0400 ETH)
+Total attacker cap: $1,356.19
+To exits (nominal USD, mock-pool priced): $502.16
+  Nominal recovery of stolen:  40.0%  (inflated if pool ratio distorted)
+
+HONEST recovery (mock-pool-adjusted, capped by ETH swapped in):
+  ETH swapped into pool:     0.2270 ETH
+  ETH direct at exits:       0.0000 ETH
+  USDT at exits (raw):       502.10 MockUSDT
+  USDT -> ETH @ market rate: 0.1999 ETH  (market: 2,511 USD/ETH)
+  USDT -> ETH (capped):      0.1999 ETH  (cap = swapped-in ETH)
+  Honest recovery:           0.1999 ETH = $502.16
+  Honest recovery %:         40.0%  (capped display: 40.0%)
+
+ETH reconciliation (on-chain balances NOW, every wei accounted for):
+  IN — alice funded from deployer:  0.5000 ETH
+  OUT — honest_recovery (at exits): 0.1999 ETH
+  OUT — alice residual:             0.0002 ETH  (recoverable)
+  OUT — exit wallets ETH dust:      0.0148 ETH  (recoverable)
+  OUT — burners residual:           0.3365 ETH  (recoverable via sweep_sepolia.py)
+  OUT — locked/burned (mixer+pool+gas): -0.0515 ETH
+          - mixer: recoverable via mixer_recover.py
+          - pool:  recoverable via sweep_sepolia.py --reverse-swap
+          - gas:   PERMANENTLY LOST to validators
+
+ECONOMIC EFFICIENCY (real hacker perspective — no double-counting):
+  ETH direct at exits (non-gas-seed):  0.0000 ETH  = $0.00
+  USDT at exits (raw balance):         502.10 USDT  = $502.16 @ market
+  USDT valued at pool-swapped ETH cap: 0.1999 ETH  (prevents mock-pool ratio distortion inflating the metric)
+  
+  delivered_to_exits_pct (capped):     40.0%  (0.1999 ETH = $502.16 / $1,255.73 stolen)
+  attacker_recoverable_pct (residual): 67.4%  (alice_residual + burners_residual — reachable via sweep)
+  total_attacker_controlled_pct:       107.3%  (delivered + still-recoverable, NO double-count with exit ETH dust)
+  economically_lost_pct:               0.0%  (gas + pool slippage — permanent economic loss)
+  intentional_dust_pct:                67.3%  (residuals left in burners by design — real Lazarus ops leave 2-5%)
+Coordinator stopped: end_turn
+
+Etherscan links:
+  Alice: https://sepolia.etherscan.io/address/0xe68AAe89F62b555220e1d9CBDDF507bBb45e3C7D
+  Deployer: https://sepolia.etherscan.io/address/0x54539B5ef33cfC3C57b9b572fc77d1e5F1CFf4c4

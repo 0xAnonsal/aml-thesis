@@ -1,0 +1,43 @@
+[runner] oracle: campaign_ts=2026-09-06T12:00:00+00:00 eth=$2,480.00 usdt=$1.0001
+[runner] tornado pools discovered: [0.1, 1.0, 10.0] ETH
+======================================================================
+[runner] SEPOLIA CAMPAIGN — 2026-09-07T21-50-27_defi-exploit_seed803_sepolia
+  RPC:          https://eth-sepolia.g.alchemy.com/v2/<redacted>
+  chain_id:     11155111
+  deployer:     0x54539B5ef33cfC3C57b9b572fc77d1e5F1CFf4c4
+  balance:      30.0157 ETH
+  scenario:     defi-exploit
+  amount:       22.6 ETH
+  alice funds:  22.6 ETH
+  model:        sonnet
+  seed:         803
+  out_dir:      results/sepolia_campaign/2026-09-07T21-50-27_defi-exploit_seed803_sepolia
+  gas floor:    3 gwei
+  contracts:
+    usdt     0x665A2176d7beF3bccE52F37F1e64c99D993Aa7Ba
+    pool     0x73AD65939B8a7a4f8bD3FF4a48ab3454be64a8Dc
+    tornado  0xA6b4832722F0455a763baf4a118dEB47B4618681
+    bridge   0x99DFe4eEAbbA728CE1271d0Ba6a0959883986600
+    tornado_pools[0.1 ETH]  0xF28449a1347127e9BAA99A8bFc70Ec35d486ef2C
+    tornado_pools[1 ETH]  0xA6b4832722F0455a763baf4a118dEB47B4618681
+    tornado_pools[10 ETH]  0xdf9f5E174dCF796063af53AFe272B38dD0323E7c
+======================================================================
+[runner] campaign starting at block 11656888
+[runner] oracle pool ETH reserve: 1.6139 ETH (need >= 1.1300 = 5% of campaign)
+[funding] alice=0xA1715b8D01f84E4e46d98277895171AADadB827F funded with 22.6 ETH (tx 00ac4aa887530d198a2445fea3242b90036334b9bd8082073377fb69dfa53592)
+[runner] alice funded, starting Coordinator...
+[runner] funder pool: 5 wallets, 1.0190 ETH total ($2,527.05), per-funder [0.1352 .. 0.3127]
+[runner] funder amounts: ['0.1352', '0.2123', '0.1957', '0.1630', '0.3127']
+[runner] sub-agent max iterations (adaptive by amount 22.6 ETH): 47
+Traceback (most recent call last):
+  File "/home/anon/aml-thesis/scripts/run_sepolia_campaign.py", line 1197, in <module>
+    main()
+  File "/home/anon/aml-thesis/scripts/run_sepolia_campaign.py", line 737, in main
+    + "\n\n" + build_market_context(oracle, campaign_ts)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/aml-thesis/src/aml/env/market_context.py", line 138, in build_market_context
+    trx_usd = oracle.price("trx", campaign_ts)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/aml-thesis/src/aml/env/price_oracle.py", line 124, in price
+    raise ValueError(
+ValueError: timestamp 1788696000 (2026-09-06T12:00:00+00:00) is past the latest cached price for 'trx' (2026-09-06T00:00:00+00:00). Re-run scripts/download_prices.py to extend the cache.
