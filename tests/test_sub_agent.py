@@ -186,12 +186,17 @@ def test_sub_agent_placement_scope_executes_transfer():
     with AnvilNode() as node:
         w3 = Web3(Web3.HTTPProvider(node.rpc_url))
         deployer, deployer_key = node.accounts[0], node.private_keys[0]
+        # The deployer is chain infrastructure and is rejected as a sender by
+        # the dispatcher, so the agent's source of funds must be a non-deployer
+        # wallet (a second Anvil account). The deployer stays first (infra).
+        alice, alice_key = node.accounts[1], node.private_keys[1]
         usdt = _deploy_usdt(w3, deployer, deployer_key)
-        _send(w3, usdt.functions.mint(deployer, 1000 * 10**6),
+        _send(w3, usdt.functions.mint(alice, 1000 * 10**6),
               deployer, deployer_key, gas=200_000)
 
         dispatcher = ToolDispatcher(
-            w3=w3, usdt_contract=usdt, wallets={deployer: deployer_key},
+            w3=w3, usdt_contract=usdt,
+            wallets={deployer: deployer_key, alice: alice_key},
         )
         agent = SubAgent(
             LLMClient(), dispatcher,
@@ -206,8 +211,8 @@ def test_sub_agent_placement_scope_executes_transfer():
         )
         result = agent.run(
             objective=(
-                f"Wallet {deployer} holds 1000 USDT. Generate ONE fresh burner "
-                f"wallet and transfer exactly 300 USDT from {deployer} to it. "
+                f"Wallet {alice} holds 1000 USDT. Generate ONE fresh burner "
+                f"wallet and transfer exactly 300 USDT from {alice} to it. "
                 f"Put the burner's address in key_facts under 'burner_address'."
             ),
             system=system,
@@ -233,5 +238,5 @@ def test_sub_agent_placement_scope_executes_transfer():
         assert usdt.functions.balanceOf(burner).call() == 300 * 10**6, (
             f"burner {burner} should hold 300 USDT on-chain"
         )
-        assert usdt.functions.balanceOf(deployer).call() == 700 * 10**6
+        assert usdt.functions.balanceOf(alice).call() == 700 * 10**6
         assert result.cost_usd < 0.02

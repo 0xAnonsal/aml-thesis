@@ -111,11 +111,14 @@ def test_register_clean_exit_creates_seeded_wallet_with_metadata():
         # Output shape
         assert "address" in out
         assert out["exchange_platform"] == "Binance"
-        assert out["gas_seed_eth"] == pytest.approx(0.05, abs=0.001)
+        # P1-29: clean exits are TERMINAL wallets and are no longer auto-
+        # seeded with gas. They only ever receive funds (the sender pays the
+        # gas), so gas_seed_eth is 0.0 and the wallet starts empty on chain.
+        assert out["gas_seed_eth"] == 0.0
 
-        # The wallet is gas-seeded on chain
+        # No gas seeded on chain (terminal wallet — receives only).
         balance = w3.eth.get_balance(out["address"])
-        assert balance == int(0.05 * 10**18)
+        assert balance == 0
 
         # The wallet is now in dispatcher.wallets (signing registry)
         # AND in registered_clean_exits (label registry)

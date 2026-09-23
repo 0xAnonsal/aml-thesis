@@ -56,6 +56,12 @@ needs_circomlibjs = pytest.mark.skipif(
 )
 
 
+needs_snarkjs = pytest.mark.skipif(
+    shutil.which("snarkjs") is None,
+    reason="snarkjs/circom not on PATH (run scripts/setup_zk.sh)",
+)
+
+
 def _raw_tx(signed):
     raw = getattr(signed, "raw_transaction", None) or getattr(signed, "rawTransaction", None)
     if raw is None:
@@ -157,6 +163,7 @@ def _random_field_element() -> int:
 @needs_foundry
 @needs_zk_setup
 @needs_circomlibjs
+@needs_snarkjs
 def test_onchain_verifier_accepts_valid_proof(tmp_path: Path):
     """Off-chain Groth16 proof verifies on-chain via the deployed Verifier.sol."""
     abi, bytecode = _load_verifier_artifact()
@@ -186,6 +193,7 @@ def test_onchain_verifier_accepts_valid_proof(tmp_path: Path):
 @needs_foundry
 @needs_zk_setup
 @needs_circomlibjs
+@needs_snarkjs
 def test_onchain_verifier_rejects_tampered_public_signal(tmp_path: Path):
     """Flipping a public input (recipient) must cause on-chain verification to fail."""
     abi, bytecode = _load_verifier_artifact()
@@ -215,6 +223,7 @@ def test_onchain_verifier_rejects_tampered_public_signal(tmp_path: Path):
 @needs_foundry
 @needs_zk_setup
 @needs_circomlibjs
+@needs_snarkjs
 def test_onchain_verifier_rejects_garbage_proof(tmp_path: Path):
     """Random invalid proof values must verify to false (not revert)."""
     abi, bytecode = _load_verifier_artifact()

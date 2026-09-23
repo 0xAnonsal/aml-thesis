@@ -213,5 +213,12 @@ def test_advance_blocks_moves_chain_forward():
         assert out["block_before"] == block_before
         assert out["blocks_advanced"] == 5000
         assert w3.eth.block_number == block_before + 5000
-        # 5000 blocks * 12 seconds/block = 60000 seconds ~= 16.67 hours
-        assert out["approx_ethereum_seconds"] == 60_000
+        # advance_blocks now draws a randomised APT per-block interval
+        # (12s–12h) instead of a fixed 12s, and reports elapsed chain-time
+        # under "chain_seconds_elapsed" = num_blocks * interval_per_block.
+        assert out["interval_seconds_per_block"] >= 12
+        assert (
+            out["chain_seconds_elapsed"]
+            == 5000 * out["interval_seconds_per_block"]
+        )
+        assert out["chain_seconds_elapsed"] > 0

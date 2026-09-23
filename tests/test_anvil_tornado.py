@@ -60,6 +60,12 @@ needs_circomlibjs = pytest.mark.skipif(
 )
 
 
+needs_snarkjs = pytest.mark.skipif(
+    shutil.which("snarkjs") is None,
+    reason="snarkjs/circom not on PATH (run scripts/setup_zk.sh)",
+)
+
+
 def _raw_tx(signed):
     return getattr(signed, "raw_transaction", None) or getattr(signed, "rawTransaction")
 
@@ -256,6 +262,7 @@ def test_deposit_duplicate_commitment_reverts():
 @needs_foundry
 @needs_zk_setup
 @needs_circomlibjs
+@needs_snarkjs
 def test_zk_laundering_lifecycle_alice_to_charlie(tmp_path: Path):
     """The headline: alice deposits, bob submits the withdraw tx, charlie receives.
 
@@ -300,6 +307,7 @@ def test_zk_laundering_lifecycle_alice_to_charlie(tmp_path: Path):
 @needs_foundry
 @needs_zk_setup
 @needs_circomlibjs
+@needs_snarkjs
 def test_withdraw_unknown_root_reverts(tmp_path: Path):
     """Proof generated against a root that was never deposited reverts."""
     with AnvilNode() as node:
@@ -329,6 +337,7 @@ def test_withdraw_unknown_root_reverts(tmp_path: Path):
 @needs_foundry
 @needs_zk_setup
 @needs_circomlibjs
+@needs_snarkjs
 def test_withdraw_double_nullifier_reverts(tmp_path: Path):
     """Same nullifier can't be spent twice."""
     with AnvilNode() as node:
@@ -366,6 +375,7 @@ def test_withdraw_double_nullifier_reverts(tmp_path: Path):
 @needs_foundry
 @needs_zk_setup
 @needs_circomlibjs
+@needs_snarkjs
 def test_withdraw_invalid_proof_reverts(tmp_path: Path):
     """Tampered proof component → verifier rejects → contract reverts."""
     with AnvilNode() as node:

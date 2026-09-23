@@ -271,8 +271,10 @@ def test_rescue_stranded_wallets_recovers_intentionally_broken_state():
         assert report["rescued"] == 1
         assert report["stranded_after"] == 0
         assert report["stranded_addresses"] == []
-        # And the wallet is now above the gas floor.
-        assert w3.eth.get_balance(stranded_acct.address) >= int(0.049 * 10**18)
+        # And the wallet is now above the gas floor. rescue_stranded_wallets
+        # tops up to the current default gas reserve (_DEFAULT_GAS_RESERVE_ETH
+        # = 0.005 ETH), down from the old 0.05.
+        assert w3.eth.get_balance(stranded_acct.address) >= int(0.0049 * 10**18)
 
 
 @needs_foundry

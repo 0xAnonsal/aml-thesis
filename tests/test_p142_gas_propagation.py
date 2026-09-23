@@ -95,7 +95,11 @@ def test_p142_gas_propagation_end_to_end():
         assert propagated2 > 0, "G+ must propagate gas to burner_layering"
         # Placement should be depleted somewhat but not stranded (post_tx_refuel didn't fire because no funders — that's the point)
 
-        # === Round 3: layering → clean_exit (G+ should NOT propagate gas) ===
+        # === Round 3: layering → clean_exit (G+ NOW propagates 1-tx gas) ===
+        # P1-43: clean_exit's role tx-budget changed from 0 to 1 (the mule's
+        # single off-ramp cash-out), so G+ bundles that gas with the USDT
+        # delivery. Exits are now self-sufficient instead of stranded — the
+        # opposite of the pre-P1-43 "terminal, no gas" behaviour.
         pre_bal_exit = w3.eth.get_balance(clean_exit)
         r = d.dispatch("transfer_usdt", {
             "from_address": layering,
@@ -107,10 +111,10 @@ def test_p142_gas_propagation_end_to_end():
         post_bal_exit = w3.eth.get_balance(clean_exit)
 
         print(f"\n[G+] layering → clean_exit:")
-        print(f"     gas_propagated: {propagated3:.6f} ETH  (expected 0 for terminal)")
-        print(f"     exit bal after: {post_bal_exit/10**18:.6f} ETH  (expected 0)")
-        assert propagated3 == 0.0, "clean_exit must NOT receive gas"
-        assert post_bal_exit == 0, "clean_exit balance must stay 0"
+        print(f"     gas_propagated: {propagated3:.6f} ETH  (expected >0, 1-tx budget)")
+        print(f"     exit bal after: {post_bal_exit/10**18:.6f} ETH  (expected >0)")
+        assert propagated3 > 0, "clean_exit should receive its 1-tx gas budget (P1-43)"
+        assert post_bal_exit > 0, "clean_exit must have ETH after transfer_usdt"
 
         # === Verify: funder pool never fired (empty pool anyway) ===
         assert len(d._funder_pool) == 0, "no funders were bootstrapped"

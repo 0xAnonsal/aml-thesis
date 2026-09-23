@@ -99,8 +99,13 @@ def _deploy_tornado(w3, deployer, deployer_key):
 
     tornado_abi, tornado_bytecode = _load_artifact(TORNADO_ARTIFACT)
     t_factory = w3.eth.contract(abi=tornado_abi, bytecode=tornado_bytecode)
+    # MockTornado's constructor now takes a fixed per-pool denomination as
+    # its fourth argument (see contracts/MockTornado.sol; each denomination
+    # is a separate pool instance, mirroring real Tornado Cash).
     tornado_addr = _send(
-        w3, t_factory.constructor(verifier_addr, mimc.address, MERKLE_DEPTH),
+        w3, t_factory.constructor(
+            verifier_addr, mimc.address, MERKLE_DEPTH, DENOMINATION_WEI,
+        ),
         deployer, deployer_key, gas=10_000_000,
     ).contractAddress
     return w3.eth.contract(address=tornado_addr, abi=tornado_abi)
@@ -120,8 +125,11 @@ def test_mixer_deposit_returns_note_and_records_commitment():
         alice, alice_key = node.accounts[1], node.private_keys[1]
         tornado = _deploy_tornado(w3, deployer, deployer_key)
 
+        # Deployer stays first (chain infra, rejected as a sender); alice is
+        # the attacker wallet that actually deposits.
         dispatcher = ToolDispatcher(
-            w3=w3, usdt_contract=None, wallets={alice: alice_key},
+            w3=w3, usdt_contract=None,
+            wallets={deployer: deployer_key, alice: alice_key},
             tornado_contract=tornado,
         )
         result = dispatcher.dispatch("mixer_deposit", {"from_address": alice})
@@ -283,7 +291,8 @@ def test_mixer_withdraw_unknown_note_returns_error():
         tornado = _deploy_tornado(w3, deployer, deployer_key)
 
         dispatcher = ToolDispatcher(
-            w3=w3, usdt_contract=None, wallets={alice: alice_key},
+            w3=w3, usdt_contract=None,
+            wallets={deployer: deployer_key, alice: alice_key},
             tornado_contract=tornado,
         )
         # Valid format, random components, never deposited
@@ -340,7 +349,8 @@ def test_mixer_batch_deposit_creates_n_notes():
         tornado = _deploy_tornado(w3, deployer, deployer_key)
 
         dispatcher = ToolDispatcher(
-            w3=w3, usdt_contract=None, wallets={alice: alice_key},
+            w3=w3, usdt_contract=None,
+            wallets={deployer: deployer_key, alice: alice_key},
             tornado_contract=tornado,
         )
         result = dispatcher.dispatch("mixer_batch_deposit", {
