@@ -86,9 +86,9 @@ def deploy_pool(
 ) -> Any:
     """Deploy MockUniswapV2Pool, mint+approve+bootstrap. Returns live pool.
 
-    Default bootstrap sets spot at 1 ETH = 2000 USDT (500 ETH / 1M USDT
-    reserves). Override via the bootstrap_* kwargs if a different spot
-    price is needed.
+    Default bootstrap sets spot at 1 ETH = 2000 USDT (5000 ETH / 10M USDT
+    reserves, see POOL_BOOTSTRAP_*). Override via the bootstrap_* kwargs if
+    a different spot price is needed.
     """
     abi, bytecode = load_artifact(POOL_ARTIFACT)
     factory = w3.eth.contract(abi=abi, bytecode=bytecode)

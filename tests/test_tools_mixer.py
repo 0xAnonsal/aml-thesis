@@ -365,9 +365,11 @@ def test_mixer_batch_deposit_creates_n_notes():
 def test_mixer_batch_deposit_exceeds_cap_returns_error():
     """num_deposits > _MAX_MIXER_BATCH → clean cap error before any chain call."""
     from aml.attackers.tools import _MAX_MIXER_BATCH
+    # First wallet is the deployer by convention and is rejected as a sender
+    # before any argument validation, so use a second (attacker) wallet.
     dispatcher = ToolDispatcher(
         w3=Web3(), usdt_contract=None,
-        wallets={"0x" + "1" * 40: "0x" + "0" * 64},
+        wallets={"0x" + "9" * 40: "0x" + "0" * 64, "0x" + "1" * 40: "0x" + "0" * 64},
         tornado_contract=object(),
     )
     result = dispatcher.dispatch("mixer_batch_deposit", {
@@ -392,9 +394,11 @@ def test_mixer_batch_deposit_no_tornado_returns_error():
 
 def test_mixer_batch_deposit_zero_or_negative_returns_error():
     """num_deposits must be positive."""
+    # First wallet is the deployer by convention (rejected as sender), so the
+    # attacker wallet must be a second entry.
     dispatcher = ToolDispatcher(
         w3=Web3(), usdt_contract=None,
-        wallets={"0x" + "1" * 40: "0x" + "0" * 64},
+        wallets={"0x" + "9" * 40: "0x" + "0" * 64, "0x" + "1" * 40: "0x" + "0" * 64},
         tornado_contract=object(),
     )
     for bad_n in (0, -1, -100):

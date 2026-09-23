@@ -5,11 +5,11 @@ Sistemas adversariales multi-agente basados en LLM para investigación en detecc
 - **Red team** — un blanqueador multi-agente LLM (Coordinador + sub-agentes Placement / Layering / Integration alineados con la taxonomía FATF) que opera sobre un simulador EVM real. Utiliza ciclos reales por un mezclador ZK estilo Tornado, swaps Uniswap-V2, structuring en USDT, y fan-out sub-$999 hacia múltiples wallets *clean exit*.
 - **Blue team** — un detector multi-agente colaborativo que realiza clustering a nivel de actor (identificación de wallets relacionadas) bajo visibilidad parcial del grafo — un agente por exchange simulado. Se compara contra detección de comunidades (Louvain) y una baseline GCN estilo Weber 2019.
 
-Consulta [ROADMAP.md](ROADMAP.md) para la propuesta inicial (planteamiento del problema, contribuciones, metodología, datasets, métricas y cronograma). El estado actual del trabajo está reportado en el TFM completo en `tfm/chapters_v3/` (borrador Word en `tfm/TFM_Sinawi_UC3M.docx`).
+Consulta [ROADMAP.md](ROADMAP.md) para la propuesta inicial (planteamiento del problema, contribuciones, metodología, datasets, métricas y cronograma). El documento del TFM es `tfm/TFM_SalehSinawi.docx` (las notas Markdown de `tfm/chapters_v3/` van por detrás del Word; ver `tfm/README.md`). Todas las cifras del TFM se trazan a ficheros de `results/` (ver `results/README.md`).
 
 ## Estado
 
-**Draft del TFM completado (agosto 2026)** — pipeline completo atacante + defensor funcionando end-to-end sobre Anvil local y validado on-chain sobre Sepolia:
+**TFM en revisión final (septiembre 2026)** — pipeline completo atacante + defensor funcionando end-to-end sobre Anvil local y validado on-chain sobre Sepolia:
 
 | Capa | Estado |
 |---|---|
@@ -20,8 +20,9 @@ Consulta [ROADMAP.md](ROADMAP.md) para la propuesta inicial (planteamiento del p
 | Runner de campañas + generador de baseline benigno (artefactos etiquetados) | ✅ |
 | Cargador de runs + extractor del grafo de transacciones + renderer de figuras del TFM | ✅ |
 | Combinador de datasets + partición de visibilidad parcial federada | ✅ |
-| Quinteto de detectores: Louvain + GCN + coseno + LLM Coordinator (Haiku/Sonnet/Opus) | ✅ |
-| Despliegue Sepolia (6 contratos verificables en Etherscan) + campaña real | ✅ |
+| Detectores: Louvain (Fase 1) + GCN + coseno + LLM Coordinator (Haiku/Sonnet; Opus solo en la comparación de la seed 403) | ✅ |
+| Despliegue Sepolia (4 contratos propios verificados en Etherscan + MiMCSponge/Verifier generados + MockOraclePool y 2 pools MockTornado) + campañas oficiales 800/802/803 | ✅ |
+| Evaluación con repeticiones: LOCO por campaña (`results/loco_simulation_precision.json`) y 3 ejecuciones del defensor LLM (`results/reps/`) | ✅ |
 | 342 tests automáticos; los 13 tests ZK requieren ejecutar antes scripts/setup_zk.sh | ✅ |
 
 ## Instalación
@@ -138,6 +139,29 @@ true_actors = true_actor_clusters(ds.runs)
 print("Cosine ARI:", actor_clustering_metrics(true_actors, cosine.actor_clusters))
 print("LLM ARI:   ", actor_clustering_metrics(true_actors, llm.actor_clusters))
 ```
+
+## Reproducir las tablas del TFM
+
+Cada tabla del Capítulo 5 cita el script y el JSON de `results/` del que sale (índice en `results/README.md`). Los principales:
+
+```bash
+# Tablas 9-10: split 80/20 por corrida + LOCO (F1 en campañas atacantes, FPR en benignas no vistas)
+python scripts/loco_simulation_precision.py --benign-folds 40      # -> results/loco_simulation_precision.json
+# Tabla 11: Random Forest sobre EthereumHeist, split 80/20 y leave-one-heist-out
+python scripts/train_ethereum_heist.py && python scripts/loco_ethereum_heist.py
+# Tabla 12: sanity check del pipeline tabular (RF/LR) sobre Elliptic++ y OpenAML v1
+python scripts/baseline_elliptic_pp.py && python scripts/baseline_openaml_v1.py
+# §5.5.4: GCN/GAT sobre el grafo Elliptic original (control de la implementación)
+python scripts/train_baseline.py --model gcn
+# Tablas 17-18: Louvain/GCN sobre los 5 datasets Sepolia/Anvil con corpus benigno + negativos duros
+python scripts/hard_negative_eval.py
+# Tablas 20-26: P1-71/P1-73, ablación de features, held-out 900/901, multi-campaña (3 repeticiones)
+bash scripts/reps/run_reps.sh haiku && bash scripts/reps/run_reps.sh sonnet && python scripts/reps/aggregate_reps.py
+# Figuras 5-7
+python scripts/figures/gen_fig5_v2.py && python scripts/figures/gen_fig6_v2.py && python scripts/figures/gen_fig7_v2.py
+```
+
+Los pasos con LLM requieren `ANTHROPIC_API_KEY` y no son reproducibles bit a bit (por eso las Tablas 20-26 se reportan como media ± desviación sobre tres ejecuciones).
 
 ## Ejecutar la suite de tests
 

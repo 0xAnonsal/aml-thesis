@@ -88,9 +88,12 @@ def test_decode_event_skips_none_contracts():
 
 
 def test_pool_bootstrap_constants_match_design():
-    """500 ETH + 1M USDT → spot price 1 ETH = $2000 (the test fixture)."""
-    assert POOL_BOOTSTRAP_ETH_WEI == 500 * 10**18
-    assert POOL_BOOTSTRAP_USDT_BASE == 1_000_000 * 10**6
+    """5000 ETH + 10M USDT → spot price 1 ETH = $2000 (deep pool so campaign
+    swaps of tens of ETH do not distort the price; see P1-20)."""
+    assert POOL_BOOTSTRAP_ETH_WEI == 5_000 * 10**18
+    assert POOL_BOOTSTRAP_USDT_BASE == 10_000_000 * 10**6
+    spot = (POOL_BOOTSTRAP_USDT_BASE / 10**6) / (POOL_BOOTSTRAP_ETH_WEI / 10**18)
+    assert spot == 2000
 
 
 def test_merkle_depth_matches_zk_circuit_parameter():

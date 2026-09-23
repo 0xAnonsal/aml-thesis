@@ -4,10 +4,10 @@ Trabajo Fin de Máster: **"Detección adversarial multi-agente de blanqueo de ca
 
 ## Qué fichero es el bueno
 
-- **`TFM_Sinawi_UC3M.docx` es el documento canónico**: el que se entrega y se defiende. Las últimas revisiones (referencias cruzadas, marco regulador, citas en línea, pasada de estilo, consistencia con el repositorio) se hicieron directamente sobre el Word.
-- `chapters_v3/*.md` es la fuente Markdown de la que se generó la primera versión de esta estructura (6 capítulos + anexos) con `scratchpad/md_to_docx.py`. Va por detrás del docx.
-- `figures/` — figuras generadas (`scratchpad/gen_*_fig*.py`).
-- `references.bib` — bibliografía en BibTeX (33 entradas, numeradas [1]-[33] en el texto). `references_audit.md` — verificación de cada referencia.
+- **`TFM_SalehSinawi.docx` es el documento canónico**: el que se entrega y se defiende. Todas las revisiones desde agosto de 2026 (cifras trazadas a `results/`, marco regulador, referencias, estilo) se hicieron directamente sobre el Word; al abrirlo, aceptar la actualización de campos (o Ctrl+A, F9) para regenerar los índices.
+- `chapters_v3/*.md` son las notas de trabajo en Markdown de las que salió la primera versión de esta estructura (6 capítulos + anexos) con `scratchpad/md_to_docx.py`. Van muy por detrás del docx: no las uses como fuente de cifras.
+- `figures/` — figuras generadas (`scripts/figures/gen_fig*_v2.py` para las Figuras 5-7 actuales; los ficheros sin `_v2` son versiones anteriores).
+- `references.bib` — bibliografía en BibTeX de una versión anterior (33 entradas). El docx actual tiene 44 referencias numeradas por orden de primera aparición; `references_audit.md` recoge la verificación de cada una.
 
 ## Estructura (`chapters_v3/`)
 
@@ -26,7 +26,7 @@ Trabajo Fin de Máster: **"Detección adversarial multi-agente de blanqueo de ca
 ## Regenerar el docx desde Markdown
 
 ```bash
-python scratchpad/md_to_docx.py   # escribe tfm/TFM_Sinawi_UC3M.docx a partir de chapters_v3/
+python scratchpad/md_to_docx.py   # genera un docx a partir de chapters_v3/ (no sobrescribas TFM_SalehSinawi.docx con él)
 ```
 
 Ojo: sobrescribe el docx canónico con la versión Markdown, que está desactualizada respecto al Word.

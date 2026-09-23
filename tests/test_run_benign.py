@@ -33,9 +33,12 @@ def test_activity_weights_well_formed():
 
 
 def test_activity_weights_sum_close_to_one():
-    """Weights should be normalised-ish so the mix is interpretable as a distribution."""
+    """Weights are relative (random.choices normalises them), but they should
+    stay in the neighbourhood of 1.0 so the mix reads as a distribution.
+    P1-57 re-calibrated them to mainnet-like ratios without renormalising
+    (sum = 0.9355), which is why the tolerance is loose."""
     total = sum(_ACTIVITY_WEIGHTS.values())
-    assert abs(total - 1.0) < 0.01, f"weights sum to {total}, want ~1.0"
+    assert 0.85 <= total <= 1.15, f"weights sum to {total}, want ~1.0"
 
 
 def test_activity_weights_include_required_kinds():
