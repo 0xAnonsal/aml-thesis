@@ -1,0 +1,926 @@
+{
+ "sepolia_800": [
+  {
+   "feature": "log_usdt_out",
+   "d": -4.62,
+   "att_nz": 0.03,
+   "ben_nz": 0.949,
+   "att_mean": 0.218,
+   "ben_mean": 8.873
+  },
+  {
+   "feature": "log_unique_in",
+   "d": -4.31,
+   "att_nz": 0.97,
+   "ben_nz": 0.988,
+   "att_mean": 0.805,
+   "ben_mean": 2.837
+  },
+  {
+   "feature": "transfer_usdt_in",
+   "d": -4.19,
+   "att_nz": 0.505,
+   "ben_nz": 0.988,
+   "att_mean": 0.357,
+   "ben_mean": 2.624
+  },
+  {
+   "feature": "log_eth_in",
+   "d": -3.78,
+   "att_nz": 0.495,
+   "ben_nz": 0.988,
+   "att_mean": 0.14,
+   "ben_mean": 2.923
+  },
+  {
+   "feature": "transfer_usdt_out",
+   "d": -3.62,
+   "att_nz": 0.03,
+   "ben_nz": 0.949,
+   "att_mean": 0.053,
+   "ben_mean": 2.452
+  },
+  {
+   "feature": "log_unique_out",
+   "d": -3.18,
+   "att_nz": 0.283,
+   "ben_nz": 0.961,
+   "att_mean": 0.323,
+   "ben_mean": 2.651
+  },
+  {
+   "feature": "in_degree",
+   "d": -3.07,
+   "att_nz": 0.97,
+   "ben_nz": 0.988,
+   "att_mean": 1.323,
+   "ben_mean": 21.614
+  },
+  {
+   "feature": "total_degree",
+   "d": -2.8,
+   "att_nz": 1.0,
+   "ben_nz": 0.988,
+   "att_mean": 2.596,
+   "ben_mean": 40.91
+  },
+  {
+   "feature": "log_usdt_in",
+   "d": -2.77,
+   "att_nz": 0.505,
+   "ben_nz": 0.988,
+   "att_mean": 3.348,
+   "ben_mean": 10.701
+  },
+  {
+   "feature": "transfer_eth_in",
+   "d": -2.38,
+   "att_nz": 0.495,
+   "ben_nz": 0.988,
+   "att_mean": 0.463,
+   "ben_mean": 1.718
+  },
+  {
+   "feature": "log_eth_out",
+   "d": -2.34,
+   "att_nz": 0.253,
+   "ben_nz": 0.904,
+   "att_mean": 0.123,
+   "ben_mean": 1.766
+  },
+  {
+   "feature": "out_degree",
+   "d": -2.16,
+   "att_nz": 0.283,
+   "ben_nz": 0.961,
+   "att_mean": 1.273,
+   "ben_mean": 19.296
+  },
+  {
+   "feature": "transfer_eth_out",
+   "d": -1.94,
+   "att_nz": 0.253,
+   "ben_nz": 0.894,
+   "att_mean": 0.27,
+   "ben_mean": 1.486
+  },
+  {
+   "feature": "swap_in",
+   "d": -1.3,
+   "att_nz": 0.0,
+   "ben_nz": 0.506,
+   "att_mean": 0.0,
+   "ben_mean": 0.522
+  },
+  {
+   "feature": "swap_out",
+   "d": -1.3,
+   "att_nz": 0.0,
+   "ben_nz": 0.506,
+   "att_mean": 0.0,
+   "ben_mean": 0.522
+  },
+  {
+   "feature": "mixer_deposit_in",
+   "d": 0.0,
+   "att_nz": 0.0,
+   "ben_nz": 0.0,
+   "att_mean": 0.0,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_withdraw_in",
+   "d": 0.0,
+   "att_nz": 0.0,
+   "ben_nz": 0.0,
+   "att_mean": 0.0,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_deposit_out",
+   "d": 0.0,
+   "att_nz": 0.0,
+   "ben_nz": 0.0,
+   "att_mean": 0.0,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_withdraw_out",
+   "d": 0.0,
+   "att_nz": 0.0,
+   "ben_nz": 0.0,
+   "att_mean": 0.0,
+   "ben_mean": 0.0
+  }
+ ],
+ "sepolia_802": [
+  {
+   "feature": "log_unique_in",
+   "d": -5.01,
+   "att_nz": 1.0,
+   "ben_nz": 1.0,
+   "att_mean": 0.819,
+   "ben_mean": 2.871
+  },
+  {
+   "feature": "log_usdt_out",
+   "d": -4.86,
+   "att_nz": 0.029,
+   "ben_nz": 0.96,
+   "att_mean": 0.243,
+   "ben_mean": 8.979
+  },
+  {
+   "feature": "transfer_usdt_in",
+   "d": -4.21,
+   "att_nz": 0.612,
+   "ben_nz": 1.0,
+   "att_mean": 0.475,
+   "ben_mean": 2.655
+  },
+  {
+   "feature": "log_eth_in",
+   "d": -4.0,
+   "att_nz": 0.408,
+   "ben_nz": 1.0,
+   "att_mean": 0.142,
+   "ben_mean": 2.958
+  },
+  {
+   "feature": "transfer_usdt_out",
+   "d": -3.74,
+   "att_nz": 0.029,
+   "ben_nz": 0.96,
+   "att_mean": 0.055,
+   "ben_mean": 2.481
+  },
+  {
+   "feature": "log_unique_out",
+   "d": -3.4,
+   "att_nz": 0.243,
+   "ben_nz": 0.972,
+   "att_mean": 0.288,
+   "ben_mean": 2.682
+  },
+  {
+   "feature": "in_degree",
+   "d": -3.15,
+   "att_nz": 1.0,
+   "ben_nz": 1.0,
+   "att_mean": 1.505,
+   "ben_mean": 21.871
+  },
+  {
+   "feature": "total_degree",
+   "d": -2.74,
+   "att_nz": 1.0,
+   "ben_nz": 1.0,
+   "att_mean": 2.951,
+   "ben_mean": 41.397
+  },
+  {
+   "feature": "log_usdt_in",
+   "d": -2.69,
+   "att_nz": 0.612,
+   "ben_nz": 1.0,
+   "att_mean": 4.145,
+   "ben_mean": 10.828
+  },
+  {
+   "feature": "transfer_eth_in",
+   "d": -2.52,
+   "att_nz": 0.398,
+   "ben_nz": 1.0,
+   "att_mean": 0.409,
+   "ben_mean": 1.738
+  },
+  {
+   "feature": "log_eth_out",
+   "d": -2.4,
+   "att_nz": 0.243,
+   "ben_nz": 0.915,
+   "att_mean": 0.13,
+   "ben_mean": 1.787
+  },
+  {
+   "feature": "transfer_eth_out",
+   "d": -2.07,
+   "att_nz": 0.243,
+   "ben_nz": 0.905,
+   "att_mean": 0.248,
+   "ben_mean": 1.504
+  },
+  {
+   "feature": "out_degree",
+   "d": -1.99,
+   "att_nz": 0.243,
+   "ben_nz": 0.972,
+   "att_mean": 1.447,
+   "ben_mean": 19.526
+  },
+  {
+   "feature": "swap_in",
+   "d": -1.31,
+   "att_nz": 0.0,
+   "ben_nz": 0.512,
+   "att_mean": 0.0,
+   "ben_mean": 0.528
+  },
+  {
+   "feature": "swap_out",
+   "d": -1.31,
+   "att_nz": 0.0,
+   "ben_nz": 0.512,
+   "att_mean": 0.0,
+   "ben_mean": 0.528
+  },
+  {
+   "feature": "mixer_withdraw_in",
+   "d": 0.14,
+   "att_nz": 0.01,
+   "ben_nz": 0.0,
+   "att_mean": 0.007,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_deposit_out",
+   "d": 0.14,
+   "att_nz": 0.01,
+   "ben_nz": 0.0,
+   "att_mean": 0.007,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_deposit_in",
+   "d": 0.0,
+   "att_nz": 0.0,
+   "ben_nz": 0.0,
+   "att_mean": 0.0,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_withdraw_out",
+   "d": 0.0,
+   "att_nz": 0.0,
+   "ben_nz": 0.0,
+   "att_mean": 0.0,
+   "ben_mean": 0.0
+  }
+ ],
+ "sepolia_803": [
+  {
+   "feature": "log_unique_in",
+   "d": -4.2,
+   "att_nz": 0.978,
+   "ben_nz": 0.988,
+   "att_mean": 0.852,
+   "ben_mean": 2.837
+  },
+  {
+   "feature": "transfer_usdt_in",
+   "d": -4.08,
+   "att_nz": 0.575,
+   "ben_nz": 0.988,
+   "att_mean": 0.413,
+   "ben_mean": 2.624
+  },
+  {
+   "feature": "log_eth_in",
+   "d": -3.65,
+   "att_nz": 0.582,
+   "ben_nz": 0.988,
+   "att_mean": 0.312,
+   "ben_mean": 2.923
+  },
+  {
+   "feature": "transfer_usdt_out",
+   "d": -3.26,
+   "att_nz": 0.179,
+   "ben_nz": 0.949,
+   "att_mean": 0.201,
+   "ben_mean": 2.452
+  },
+  {
+   "feature": "log_unique_out",
+   "d": -3.04,
+   "att_nz": 0.381,
+   "ben_nz": 0.961,
+   "att_mean": 0.424,
+   "ben_mean": 2.651
+  },
+  {
+   "feature": "in_degree",
+   "d": -3.02,
+   "att_nz": 0.978,
+   "ben_nz": 0.988,
+   "att_mean": 1.575,
+   "ben_mean": 21.614
+  },
+  {
+   "feature": "log_usdt_out",
+   "d": -2.99,
+   "att_nz": 0.179,
+   "ben_nz": 0.949,
+   "att_mean": 1.276,
+   "ben_mean": 8.873
+  },
+  {
+   "feature": "total_degree",
+   "d": -2.76,
+   "att_nz": 0.978,
+   "ben_nz": 0.988,
+   "att_mean": 2.948,
+   "ben_mean": 40.91
+  },
+  {
+   "feature": "log_usdt_in",
+   "d": -2.6,
+   "att_nz": 0.575,
+   "ben_nz": 0.988,
+   "att_mean": 3.825,
+   "ben_mean": 10.701
+  },
+  {
+   "feature": "log_eth_out",
+   "d": -2.33,
+   "att_nz": 0.246,
+   "ben_nz": 0.904,
+   "att_mean": 0.196,
+   "ben_mean": 1.766
+  },
+  {
+   "feature": "transfer_eth_in",
+   "d": -2.26,
+   "att_nz": 0.515,
+   "ben_nz": 0.988,
+   "att_mean": 0.503,
+   "ben_mean": 1.718
+  },
+  {
+   "feature": "out_degree",
+   "d": -2.1,
+   "att_nz": 0.381,
+   "ben_nz": 0.961,
+   "att_mean": 1.373,
+   "ben_mean": 19.296
+  },
+  {
+   "feature": "transfer_eth_out",
+   "d": -2.08,
+   "att_nz": 0.179,
+   "ben_nz": 0.894,
+   "att_mean": 0.202,
+   "ben_mean": 1.486
+  },
+  {
+   "feature": "swap_in",
+   "d": -1.3,
+   "att_nz": 0.0,
+   "ben_nz": 0.506,
+   "att_mean": 0.0,
+   "ben_mean": 0.522
+  },
+  {
+   "feature": "swap_out",
+   "d": -1.3,
+   "att_nz": 0.0,
+   "ben_nz": 0.506,
+   "att_mean": 0.0,
+   "ben_mean": 0.522
+  },
+  {
+   "feature": "mixer_withdraw_in",
+   "d": 0.38,
+   "att_nz": 0.067,
+   "ben_nz": 0.0,
+   "att_mean": 0.047,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_deposit_out",
+   "d": 0.38,
+   "att_nz": 0.067,
+   "ben_nz": 0.0,
+   "att_mean": 0.047,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_deposit_in",
+   "d": 0.0,
+   "att_nz": 0.0,
+   "ben_nz": 0.0,
+   "att_mean": 0.0,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_withdraw_out",
+   "d": 0.0,
+   "att_nz": 0.0,
+   "ben_nz": 0.0,
+   "att_mean": 0.0,
+   "ben_mean": 0.0
+  }
+ ],
+ "anvil_830": [
+  {
+   "feature": "transfer_usdt_in",
+   "d": -3.86,
+   "att_nz": 0.361,
+   "ben_nz": 0.973,
+   "att_mean": 0.286,
+   "ben_mean": 2.583
+  },
+  {
+   "feature": "log_usdt_out",
+   "d": -3.66,
+   "att_nz": 0.065,
+   "ben_nz": 0.934,
+   "att_mean": 0.502,
+   "ben_mean": 8.736
+  },
+  {
+   "feature": "log_eth_in",
+   "d": -3.54,
+   "att_nz": 0.671,
+   "ben_nz": 0.973,
+   "att_mean": 0.227,
+   "ben_mean": 2.878
+  },
+  {
+   "feature": "log_unique_in",
+   "d": -3.32,
+   "att_nz": 0.968,
+   "ben_nz": 0.973,
+   "att_mean": 0.935,
+   "ben_mean": 2.793
+  },
+  {
+   "feature": "transfer_usdt_out",
+   "d": -3.3,
+   "att_nz": 0.065,
+   "ben_nz": 0.934,
+   "att_mean": 0.093,
+   "ben_mean": 2.414
+  },
+  {
+   "feature": "log_usdt_in",
+   "d": -3.02,
+   "att_nz": 0.361,
+   "ben_nz": 0.973,
+   "att_mean": 2.363,
+   "ben_mean": 10.536
+  },
+  {
+   "feature": "log_unique_out",
+   "d": -2.66,
+   "att_nz": 0.406,
+   "ben_nz": 0.946,
+   "att_mean": 0.488,
+   "ben_mean": 2.61
+  },
+  {
+   "feature": "in_degree",
+   "d": -2.55,
+   "att_nz": 0.968,
+   "ben_nz": 0.973,
+   "att_mean": 2.226,
+   "ben_mean": 21.28
+  },
+  {
+   "feature": "total_degree",
+   "d": -2.21,
+   "att_nz": 0.974,
+   "ben_nz": 0.973,
+   "att_mean": 4.406,
+   "ben_mean": 40.278
+  },
+  {
+   "feature": "log_eth_out",
+   "d": -1.7,
+   "att_nz": 0.406,
+   "ben_nz": 0.89,
+   "att_mean": 0.281,
+   "ben_mean": 1.738
+  },
+  {
+   "feature": "transfer_eth_in",
+   "d": -1.68,
+   "att_nz": 0.6,
+   "ben_nz": 0.973,
+   "att_mean": 0.653,
+   "ben_mean": 1.691
+  },
+  {
+   "feature": "transfer_eth_out",
+   "d": -1.59,
+   "att_nz": 0.368,
+   "ben_nz": 0.88,
+   "att_mean": 0.389,
+   "ben_mean": 1.463
+  },
+  {
+   "feature": "out_degree",
+   "d": -1.53,
+   "att_nz": 0.406,
+   "ben_nz": 0.946,
+   "att_mean": 2.181,
+   "ben_mean": 18.998
+  },
+  {
+   "feature": "swap_in",
+   "d": -1.04,
+   "att_nz": 0.065,
+   "ben_nz": 0.498,
+   "att_mean": 0.06,
+   "ben_mean": 0.514
+  },
+  {
+   "feature": "swap_out",
+   "d": -1.04,
+   "att_nz": 0.065,
+   "ben_nz": 0.498,
+   "att_mean": 0.06,
+   "ben_mean": 0.514
+  },
+  {
+   "feature": "mixer_withdraw_in",
+   "d": 0.39,
+   "att_nz": 0.071,
+   "ben_nz": 0.0,
+   "att_mean": 0.049,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_deposit_out",
+   "d": 0.21,
+   "att_nz": 0.026,
+   "ben_nz": 0.0,
+   "att_mean": 0.034,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_deposit_in",
+   "d": 0.0,
+   "att_nz": 0.0,
+   "ben_nz": 0.0,
+   "att_mean": 0.0,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_withdraw_out",
+   "d": 0.0,
+   "att_nz": 0.0,
+   "ben_nz": 0.0,
+   "att_mean": 0.0,
+   "ben_mean": 0.0
+  }
+ ],
+ "anvil_850": [
+  {
+   "feature": "log_eth_in",
+   "d": -3.89,
+   "att_nz": 0.662,
+   "ben_nz": 1.0,
+   "att_mean": 0.322,
+   "ben_mean": 2.958
+  },
+  {
+   "feature": "log_unique_in",
+   "d": -3.83,
+   "att_nz": 1.0,
+   "ben_nz": 1.0,
+   "att_mean": 1.057,
+   "ben_mean": 2.871
+  },
+  {
+   "feature": "transfer_usdt_in",
+   "d": -3.78,
+   "att_nz": 0.549,
+   "ben_nz": 1.0,
+   "att_mean": 0.496,
+   "ben_mean": 2.655
+  },
+  {
+   "feature": "transfer_usdt_out",
+   "d": -3.35,
+   "att_nz": 0.211,
+   "ben_nz": 0.96,
+   "att_mean": 0.205,
+   "ben_mean": 2.481
+  },
+  {
+   "feature": "log_unique_out",
+   "d": -2.81,
+   "att_nz": 0.437,
+   "ben_nz": 0.972,
+   "att_mean": 0.558,
+   "ben_mean": 2.682
+  },
+  {
+   "feature": "log_usdt_out",
+   "d": -2.77,
+   "att_nz": 0.211,
+   "ben_nz": 0.96,
+   "att_mean": 1.586,
+   "ben_mean": 8.979
+  },
+  {
+   "feature": "log_usdt_in",
+   "d": -2.48,
+   "att_nz": 0.549,
+   "ben_nz": 1.0,
+   "att_mean": 4.022,
+   "ben_mean": 10.828
+  },
+  {
+   "feature": "in_degree",
+   "d": -2.44,
+   "att_nz": 1.0,
+   "ben_nz": 1.0,
+   "att_mean": 3.056,
+   "ben_mean": 21.871
+  },
+  {
+   "feature": "total_degree",
+   "d": -1.88,
+   "att_nz": 1.0,
+   "ben_nz": 1.0,
+   "att_mean": 5.873,
+   "ben_mean": 41.397
+  },
+  {
+   "feature": "transfer_eth_in",
+   "d": -1.76,
+   "att_nz": 0.648,
+   "ben_nz": 1.0,
+   "att_mean": 0.713,
+   "ben_mean": 1.738
+  },
+  {
+   "feature": "transfer_eth_out",
+   "d": -1.68,
+   "att_nz": 0.254,
+   "ben_nz": 0.905,
+   "att_mean": 0.336,
+   "ben_mean": 1.504
+  },
+  {
+   "feature": "out_degree",
+   "d": -1.38,
+   "att_nz": 0.437,
+   "ben_nz": 0.972,
+   "att_mean": 2.817,
+   "ben_mean": 19.526
+  },
+  {
+   "feature": "log_eth_out",
+   "d": -1.35,
+   "att_nz": 0.437,
+   "ben_nz": 0.915,
+   "att_mean": 0.438,
+   "ben_mean": 1.787
+  },
+  {
+   "feature": "swap_in",
+   "d": -0.74,
+   "att_nz": 0.211,
+   "ben_nz": 0.512,
+   "att_mean": 0.176,
+   "ben_mean": 0.528
+  },
+  {
+   "feature": "swap_out",
+   "d": -0.74,
+   "att_nz": 0.211,
+   "ben_nz": 0.512,
+   "att_mean": 0.176,
+   "ben_mean": 0.528
+  },
+  {
+   "feature": "mixer_withdraw_in",
+   "d": 0.43,
+   "att_nz": 0.085,
+   "ben_nz": 0.0,
+   "att_mean": 0.059,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_deposit_out",
+   "d": 0.32,
+   "att_nz": 0.056,
+   "ben_nz": 0.0,
+   "att_mean": 0.049,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_deposit_in",
+   "d": 0.0,
+   "att_nz": 0.0,
+   "ben_nz": 0.0,
+   "att_mean": 0.0,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_withdraw_out",
+   "d": 0.0,
+   "att_nz": 0.0,
+   "ben_nz": 0.0,
+   "att_mean": 0.0,
+   "ben_mean": 0.0
+  }
+ ],
+ "dataset_pkl": [
+  {
+   "feature": "log_eth_in",
+   "d": -4.09,
+   "att_nz": 1.0,
+   "ben_nz": 1.0,
+   "att_mean": 0.208,
+   "ben_mean": 2.368
+  },
+  {
+   "feature": "log_unique_in",
+   "d": -3.18,
+   "att_nz": 1.0,
+   "ben_nz": 1.0,
+   "att_mean": 1.085,
+   "ben_mean": 2.123
+  },
+  {
+   "feature": "transfer_usdt_in",
+   "d": -2.94,
+   "att_nz": 0.656,
+   "ben_nz": 0.994,
+   "att_mean": 0.566,
+   "ben_mean": 1.918
+  },
+  {
+   "feature": "log_usdt_in",
+   "d": -2.63,
+   "att_nz": 0.656,
+   "ben_nz": 0.994,
+   "att_mean": 3.985,
+   "ben_mean": 9.913
+  },
+  {
+   "feature": "in_degree",
+   "d": -2.6,
+   "att_nz": 1.0,
+   "ben_nz": 1.0,
+   "att_mean": 2.33,
+   "ben_mean": 9.056
+  },
+  {
+   "feature": "log_unique_out",
+   "d": -2.08,
+   "att_nz": 0.558,
+   "ben_nz": 0.95,
+   "att_mean": 0.529,
+   "ben_mean": 1.757
+  },
+  {
+   "feature": "transfer_usdt_out",
+   "d": -1.9,
+   "att_nz": 0.353,
+   "ben_nz": 0.92,
+   "att_mean": 0.372,
+   "ben_mean": 1.602
+  },
+  {
+   "feature": "total_degree",
+   "d": -1.83,
+   "att_nz": 1.0,
+   "ben_nz": 1.0,
+   "att_mean": 3.556,
+   "ben_mean": 15.944
+  },
+  {
+   "feature": "log_usdt_out",
+   "d": -1.67,
+   "att_nz": 0.353,
+   "ben_nz": 0.92,
+   "att_mean": 2.182,
+   "ben_mean": 6.52
+  },
+  {
+   "feature": "swap_in",
+   "d": -1.31,
+   "att_nz": 0.022,
+   "ben_nz": 0.551,
+   "att_mean": 0.022,
+   "ben_mean": 0.486
+  },
+  {
+   "feature": "swap_out",
+   "d": -1.31,
+   "att_nz": 0.022,
+   "ben_nz": 0.551,
+   "att_mean": 0.022,
+   "ben_mean": 0.486
+  },
+  {
+   "feature": "out_degree",
+   "d": -1.1,
+   "att_nz": 0.558,
+   "ben_nz": 0.95,
+   "att_mean": 1.227,
+   "ben_mean": 6.887
+  },
+  {
+   "feature": "transfer_eth_out",
+   "d": -0.97,
+   "att_nz": 0.117,
+   "ben_nz": 0.55,
+   "att_mean": 0.097,
+   "ben_mean": 0.485
+  },
+  {
+   "feature": "transfer_eth_in",
+   "d": -0.9,
+   "att_nz": 1.0,
+   "ben_nz": 1.0,
+   "att_mean": 0.765,
+   "ben_mean": 0.991
+  },
+  {
+   "feature": "log_eth_out",
+   "d": -0.84,
+   "att_nz": 0.231,
+   "ben_nz": 0.688,
+   "att_mean": 0.158,
+   "ben_mean": 0.657
+  },
+  {
+   "feature": "mixer_withdraw_in",
+   "d": 0.49,
+   "att_nz": 0.106,
+   "ben_nz": 0.0,
+   "att_mean": 0.074,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_deposit_out",
+   "d": 0.49,
+   "att_nz": 0.106,
+   "ben_nz": 0.0,
+   "att_mean": 0.074,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_deposit_in",
+   "d": 0.0,
+   "att_nz": 0.0,
+   "ben_nz": 0.0,
+   "att_mean": 0.0,
+   "ben_mean": 0.0
+  },
+  {
+   "feature": "mixer_withdraw_out",
+   "d": 0.0,
+   "att_nz": 0.0,
+   "ben_nz": 0.0,
+   "att_mean": 0.0,
+   "ben_mean": 0.0
+  }
+ ]
+}

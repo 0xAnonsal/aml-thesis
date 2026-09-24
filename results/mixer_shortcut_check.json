@@ -1,0 +1,1130 @@
+{
+ "sepolia_800": {
+  "full_graph": {
+   "attackers": 99,
+   "benign": 510,
+   "background": 5166,
+   "att_mixer_any": 0.0,
+   "ben_mixer_any": 0.0,
+   "bg_mixer_any": 0.0,
+   "att_swap_any": 0.0,
+   "ben_swap_any": 0.506,
+   "rule_mixer_PRF": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "rule_swap_PRF": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "per_feature_att_ben_nonzero": {
+    "mixer_deposit_in": [
+     0.0,
+     0.0
+    ],
+    "mixer_withdraw_in": [
+     0.0,
+     0.0
+    ],
+    "mixer_deposit_out": [
+     0.0,
+     0.0
+    ],
+    "mixer_withdraw_out": [
+     0.0,
+     0.0
+    ],
+    "swap_in": [
+     0.0,
+     0.506
+    ],
+    "swap_out": [
+     0.0,
+     0.506
+    ]
+   }
+  },
+  "views": {
+   "exchange_A": {
+    "attackers": 34,
+    "benign": 158,
+    "background": 1685,
+    "att_mixer_any": 0.0,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.0,
+    "att_swap_any": 0.0,
+    "ben_swap_any": 0.519,
+    "rule_mixer_PRF": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "rule_swap_PRF": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.0,
+      0.519
+     ],
+     "swap_out": [
+      0.0,
+      0.519
+     ]
+    }
+   },
+   "exchange_B": {
+    "attackers": 31,
+    "benign": 182,
+    "background": 1714,
+    "att_mixer_any": 0.0,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.0,
+    "att_swap_any": 0.0,
+    "ben_swap_any": 0.478,
+    "rule_mixer_PRF": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "rule_swap_PRF": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.0,
+      0.478
+     ],
+     "swap_out": [
+      0.0,
+      0.478
+     ]
+    }
+   },
+   "exchange_C": {
+    "attackers": 34,
+    "benign": 170,
+    "background": 1781,
+    "att_mixer_any": 0.0,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.0,
+    "att_swap_any": 0.0,
+    "ben_swap_any": 0.524,
+    "rule_mixer_PRF": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "rule_swap_PRF": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.0,
+      0.524
+     ],
+     "swap_out": [
+      0.0,
+      0.524
+     ]
+    }
+   }
+  }
+ },
+ "sepolia_802": {
+  "full_graph": {
+   "attackers": 103,
+   "benign": 504,
+   "background": 21605,
+   "att_mixer_any": 0.019,
+   "ben_mixer_any": 0.0,
+   "bg_mixer_any": 0.0,
+   "att_swap_any": 0.0,
+   "ben_swap_any": 0.512,
+   "rule_mixer_PRF": [
+    1.0,
+    0.019,
+    0.038
+   ],
+   "rule_swap_PRF": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "per_feature_att_ben_nonzero": {
+    "mixer_deposit_in": [
+     0.0,
+     0.0
+    ],
+    "mixer_withdraw_in": [
+     0.01,
+     0.0
+    ],
+    "mixer_deposit_out": [
+     0.01,
+     0.0
+    ],
+    "mixer_withdraw_out": [
+     0.0,
+     0.0
+    ],
+    "swap_in": [
+     0.0,
+     0.512
+    ],
+    "swap_out": [
+     0.0,
+     0.512
+    ]
+   }
+  },
+  "views": {
+   "exchange_A": {
+    "attackers": 37,
+    "benign": 175,
+    "background": 7154,
+    "att_mixer_any": 0.054,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.0,
+    "att_swap_any": 0.0,
+    "ben_swap_any": 0.503,
+    "rule_mixer_PRF": [
+     1.0,
+     0.054,
+     0.103
+    ],
+    "rule_swap_PRF": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.027,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.027,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.0,
+      0.503
+     ],
+     "swap_out": [
+      0.0,
+      0.503
+     ]
+    }
+   },
+   "exchange_B": {
+    "attackers": 32,
+    "benign": 169,
+    "background": 7231,
+    "att_mixer_any": 0.0,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.0,
+    "att_swap_any": 0.0,
+    "ben_swap_any": 0.491,
+    "rule_mixer_PRF": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "rule_swap_PRF": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.0,
+      0.491
+     ],
+     "swap_out": [
+      0.0,
+      0.491
+     ]
+    }
+   },
+   "exchange_C": {
+    "attackers": 34,
+    "benign": 160,
+    "background": 7236,
+    "att_mixer_any": 0.0,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.0,
+    "att_swap_any": 0.0,
+    "ben_swap_any": 0.544,
+    "rule_mixer_PRF": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "rule_swap_PRF": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.0,
+      0.544
+     ],
+     "swap_out": [
+      0.0,
+      0.544
+     ]
+    }
+   }
+  }
+ },
+ "sepolia_803": {
+  "full_graph": {
+   "attackers": 134,
+   "benign": 510,
+   "background": 7910,
+   "att_mixer_any": 0.134,
+   "ben_mixer_any": 0.0,
+   "bg_mixer_any": 0.0,
+   "att_swap_any": 0.0,
+   "ben_swap_any": 0.506,
+   "rule_mixer_PRF": [
+    1.0,
+    0.134,
+    0.237
+   ],
+   "rule_swap_PRF": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "per_feature_att_ben_nonzero": {
+    "mixer_deposit_in": [
+     0.0,
+     0.0
+    ],
+    "mixer_withdraw_in": [
+     0.067,
+     0.0
+    ],
+    "mixer_deposit_out": [
+     0.067,
+     0.0
+    ],
+    "mixer_withdraw_out": [
+     0.0,
+     0.0
+    ],
+    "swap_in": [
+     0.0,
+     0.506
+    ],
+    "swap_out": [
+     0.0,
+     0.506
+    ]
+   }
+  },
+  "views": {
+   "exchange_A": {
+    "attackers": 49,
+    "benign": 173,
+    "background": 2556,
+    "att_mixer_any": 0.122,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.0,
+    "att_swap_any": 0.0,
+    "ben_swap_any": 0.538,
+    "rule_mixer_PRF": [
+     1.0,
+     0.122,
+     0.218
+    ],
+    "rule_swap_PRF": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.061,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.061,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.0,
+      0.538
+     ],
+     "swap_out": [
+      0.0,
+      0.538
+     ]
+    }
+   },
+   "exchange_B": {
+    "attackers": 33,
+    "benign": 161,
+    "background": 2637,
+    "att_mixer_any": 0.242,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.0,
+    "att_swap_any": 0.0,
+    "ben_swap_any": 0.484,
+    "rule_mixer_PRF": [
+     1.0,
+     0.242,
+     0.39
+    ],
+    "rule_swap_PRF": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.121,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.121,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.0,
+      0.484
+     ],
+     "swap_out": [
+      0.0,
+      0.484
+     ]
+    }
+   },
+   "exchange_C": {
+    "attackers": 52,
+    "benign": 176,
+    "background": 2733,
+    "att_mixer_any": 0.077,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.0,
+    "att_swap_any": 0.0,
+    "ben_swap_any": 0.494,
+    "rule_mixer_PRF": [
+     1.0,
+     0.077,
+     0.143
+    ],
+    "rule_swap_PRF": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.038,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.038,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.0,
+      0.494
+     ],
+     "swap_out": [
+      0.0,
+      0.494
+     ]
+    }
+   }
+  }
+ },
+ "anvil_830": {
+  "full_graph": {
+   "attackers": 155,
+   "benign": 518,
+   "background": 7,
+   "att_mixer_any": 0.097,
+   "ben_mixer_any": 0.0,
+   "bg_mixer_any": 0.143,
+   "att_swap_any": 0.065,
+   "ben_swap_any": 0.498,
+   "rule_mixer_PRF": [
+    1.0,
+    0.097,
+    0.176
+   ],
+   "rule_swap_PRF": [
+    0.037,
+    0.065,
+    0.047
+   ],
+   "per_feature_att_ben_nonzero": {
+    "mixer_deposit_in": [
+     0.0,
+     0.0
+    ],
+    "mixer_withdraw_in": [
+     0.071,
+     0.0
+    ],
+    "mixer_deposit_out": [
+     0.026,
+     0.0
+    ],
+    "mixer_withdraw_out": [
+     0.0,
+     0.0
+    ],
+    "swap_in": [
+     0.065,
+     0.498
+    ],
+    "swap_out": [
+     0.065,
+     0.498
+    ]
+   }
+  },
+  "views": {
+   "exchange_A": {
+    "attackers": 60,
+    "benign": 176,
+    "background": 5,
+    "att_mixer_any": 0.1,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.2,
+    "att_swap_any": 0.05,
+    "ben_swap_any": 0.483,
+    "rule_mixer_PRF": [
+     1.0,
+     0.1,
+     0.182
+    ],
+    "rule_swap_PRF": [
+     0.034,
+     0.05,
+     0.041
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.067,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.033,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.05,
+      0.483
+     ],
+     "swap_out": [
+      0.05,
+      0.483
+     ]
+    }
+   },
+   "exchange_B": {
+    "attackers": 36,
+    "benign": 168,
+    "background": 5,
+    "att_mixer_any": 0.167,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.2,
+    "att_swap_any": 0.056,
+    "ben_swap_any": 0.53,
+    "rule_mixer_PRF": [
+     1.0,
+     0.167,
+     0.286
+    ],
+    "rule_swap_PRF": [
+     0.022,
+     0.056,
+     0.031
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.139,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.028,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.056,
+      0.53
+     ],
+     "swap_out": [
+      0.056,
+      0.53
+     ]
+    }
+   },
+   "exchange_C": {
+    "attackers": 59,
+    "benign": 174,
+    "background": 7,
+    "att_mixer_any": 0.051,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.143,
+    "att_swap_any": 0.085,
+    "ben_swap_any": 0.483,
+    "rule_mixer_PRF": [
+     1.0,
+     0.051,
+     0.097
+    ],
+    "rule_swap_PRF": [
+     0.056,
+     0.085,
+     0.068
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.034,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.017,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.085,
+      0.483
+     ],
+     "swap_out": [
+      0.085,
+      0.483
+     ]
+    }
+   }
+  }
+ },
+ "anvil_850": {
+  "full_graph": {
+   "attackers": 71,
+   "benign": 504,
+   "background": 7,
+   "att_mixer_any": 0.141,
+   "ben_mixer_any": 0.0,
+   "bg_mixer_any": 0.143,
+   "att_swap_any": 0.211,
+   "ben_swap_any": 0.512,
+   "rule_mixer_PRF": [
+    1.0,
+    0.141,
+    0.247
+   ],
+   "rule_swap_PRF": [
+    0.055,
+    0.211,
+    0.087
+   ],
+   "per_feature_att_ben_nonzero": {
+    "mixer_deposit_in": [
+     0.0,
+     0.0
+    ],
+    "mixer_withdraw_in": [
+     0.085,
+     0.0
+    ],
+    "mixer_deposit_out": [
+     0.056,
+     0.0
+    ],
+    "mixer_withdraw_out": [
+     0.0,
+     0.0
+    ],
+    "swap_in": [
+     0.211,
+     0.512
+    ],
+    "swap_out": [
+     0.211,
+     0.512
+    ]
+   }
+  },
+  "views": {
+   "exchange_A": {
+    "attackers": 32,
+    "benign": 174,
+    "background": 6,
+    "att_mixer_any": 0.125,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.167,
+    "att_swap_any": 0.188,
+    "ben_swap_any": 0.466,
+    "rule_mixer_PRF": [
+     1.0,
+     0.125,
+     0.222
+    ],
+    "rule_swap_PRF": [
+     0.069,
+     0.188,
+     0.101
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.031,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.094,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.188,
+      0.466
+     ],
+     "swap_out": [
+      0.188,
+      0.466
+     ]
+    }
+   },
+   "exchange_B": {
+    "attackers": 24,
+    "benign": 149,
+    "background": 5,
+    "att_mixer_any": 0.083,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.2,
+    "att_swap_any": 0.125,
+    "ben_swap_any": 0.584,
+    "rule_mixer_PRF": [
+     1.0,
+     0.083,
+     0.154
+    ],
+    "rule_swap_PRF": [
+     0.033,
+     0.125,
+     0.053
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.083,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.125,
+      0.584
+     ],
+     "swap_out": [
+      0.125,
+      0.584
+     ]
+    }
+   },
+   "exchange_C": {
+    "attackers": 15,
+    "benign": 181,
+    "background": 6,
+    "att_mixer_any": 0.267,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.167,
+    "att_swap_any": 0.4,
+    "ben_swap_any": 0.497,
+    "rule_mixer_PRF": [
+     1.0,
+     0.267,
+     0.421
+    ],
+    "rule_swap_PRF": [
+     0.062,
+     0.4,
+     0.108
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.2,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.067,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.4,
+      0.497
+     ],
+     "swap_out": [
+      0.4,
+      0.497
+     ]
+    }
+   }
+  }
+ },
+ "dataset_pkl": {
+  "full_graph": {
+   "attackers": 649,
+   "benign": 9650,
+   "background": 12,
+   "att_mixer_any": 0.19,
+   "ben_mixer_any": 0.0,
+   "bg_mixer_any": 0.083,
+   "att_swap_any": 0.022,
+   "ben_swap_any": 0.551,
+   "rule_mixer_PRF": [
+    1.0,
+    0.19,
+    0.319
+   ],
+   "rule_swap_PRF": [
+    0.003,
+    0.022,
+    0.005
+   ],
+   "per_feature_att_ben_nonzero": {
+    "mixer_deposit_in": [
+     0.0,
+     0.0
+    ],
+    "mixer_withdraw_in": [
+     0.106,
+     0.0
+    ],
+    "mixer_deposit_out": [
+     0.106,
+     0.0
+    ],
+    "mixer_withdraw_out": [
+     0.0,
+     0.0
+    ],
+    "swap_in": [
+     0.022,
+     0.551
+    ],
+    "swap_out": [
+     0.022,
+     0.551
+    ]
+   }
+  },
+  "views": {
+   "exchange_A": {
+    "attackers": 224,
+    "benign": 3114,
+    "background": 9,
+    "att_mixer_any": 0.228,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.111,
+    "att_swap_any": 0.031,
+    "ben_swap_any": 0.553,
+    "rule_mixer_PRF": [
+     1.0,
+     0.228,
+     0.371
+    ],
+    "rule_swap_PRF": [
+     0.004,
+     0.031,
+     0.007
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.143,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.125,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.031,
+      0.553
+     ],
+     "swap_out": [
+      0.031,
+      0.553
+     ]
+    }
+   },
+   "exchange_B": {
+    "attackers": 220,
+    "benign": 3220,
+    "background": 7,
+    "att_mixer_any": 0.182,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.143,
+    "att_swap_any": 0.005,
+    "ben_swap_any": 0.551,
+    "rule_mixer_PRF": [
+     1.0,
+     0.182,
+     0.308
+    ],
+    "rule_swap_PRF": [
+     0.001,
+     0.005,
+     0.001
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.086,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.105,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.005,
+      0.551
+     ],
+     "swap_out": [
+      0.005,
+      0.551
+     ]
+    }
+   },
+   "exchange_C": {
+    "attackers": 205,
+    "benign": 3316,
+    "background": 6,
+    "att_mixer_any": 0.156,
+    "ben_mixer_any": 0.0,
+    "bg_mixer_any": 0.167,
+    "att_swap_any": 0.029,
+    "ben_swap_any": 0.548,
+    "rule_mixer_PRF": [
+     1.0,
+     0.156,
+     0.27
+    ],
+    "rule_swap_PRF": [
+     0.003,
+     0.029,
+     0.006
+    ],
+    "per_feature_att_ben_nonzero": {
+     "mixer_deposit_in": [
+      0.0,
+      0.0
+     ],
+     "mixer_withdraw_in": [
+      0.088,
+      0.0
+     ],
+     "mixer_deposit_out": [
+      0.088,
+      0.0
+     ],
+     "mixer_withdraw_out": [
+      0.0,
+      0.0
+     ],
+     "swap_in": [
+      0.029,
+      0.548
+     ],
+     "swap_out": [
+      0.029,
+      0.548
+     ]
+    }
+   }
+  }
+ }
+}
