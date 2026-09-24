@@ -62,7 +62,8 @@ El *core* criptográfico se preserva con cambios mínimos (profundidad del árbo
 | **Elliptic++**     | Elmougy & Liu 2023, *Demystifying Fraudulent Transactions and Illicit Nodes in the Bitcoin Network*, arXiv 2306.06108 (KDD 2023)                                     | GitHub `git-disl/EllipticPlusPlus`                 | Sanity check del pipeline (RF/LR)         |
 | **EthereumHeist**  | Wu et al. 2023, *Toward Understanding Asset Flows in Crypto Money Laundering...*, IEEE TIFS 19: 1994-2009 (2024)                                                | Dropbox (enlace en el artículo)                    | Validación externa real                   |
 | **OpenAML v1**     | FINOS OpenAML v1 (DTCC AI Hackathon dataset), Linux Foundation                                                                                             | GitHub `finos-labs/dtcch-2025-OpenAML` (`Project_DTCC_AI_Hackathon/data/processed.csv`, 45 086 wallets) | Sanity check del pipeline (RF/LR)         |
-| **AMLWorld/AMLSim**| Altman et al. 2023, NeurIPS Datasets and Benchmarks                                                                                                        | GitHub `IBM/AMLSim`                                | Referenciado (no ejecutado)               |
+| **AMLWorld**       | Altman et al. 2023, NeurIPS Datasets and Benchmarks (dataset sintético de IBM, sucesor de AMLSim)                                                          | Kaggle `ealtman2019/ibm-transactions-for-anti-money-laundering-aml` | Referenciado (no ejecutado)               |
+| **AMLSim**         | Suzumura & Kanezashi 2021, simulador de transacciones AML basado en reglas (IBM)                                                                          | GitHub `IBM/AMLSim`                                | Referenciado (no ejecutado)               |
 
 **Datos de precios**: snapshots diarios de CoinGecko API pública gratuita, cacheados en `data/prices/*.csv` para reproducibilidad.
 

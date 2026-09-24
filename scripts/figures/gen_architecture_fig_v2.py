@@ -20,7 +20,7 @@ ax.text(7, 9.1, 'Atacante LLM + 3 exchanges federados con visibilidad parcial + 
 att = FancyBboxPatch((0.3, 6.2), 3.5, 2.3, boxstyle="round,pad=0.05", facecolor=c_attacker, edgecolor='black', linewidth=1.5, alpha=0.85)
 ax.add_patch(att)
 ax.text(2.05, 8.15, 'ATACANTE LLM', ha='center', fontsize=11, fontweight='bold', color='white')
-ax.text(2.05, 7.78, 'Coordinador Opus 4.7', ha='center', fontsize=9, color='white')
+ax.text(2.05, 7.78, 'Coordinador (Sonnet 4.6)', ha='center', fontsize=9, color='white')
 ax.text(2.05, 7.48, '+ 3 sub-agentes FATF (Sonnet 4.6):', ha='center', fontsize=8, color='white')
 ax.text(2.05, 7.18, '• Placement  • Layering  • Integration', ha='center', fontsize=8, color='white')
 ax.text(2.05, 6.85, 'herramientas: mixer ZK, swaps DEX,', ha='center', fontsize=8, color='white')
@@ -28,29 +28,31 @@ ax.text(2.05, 6.55, 'structuring sub-umbral, burners', ha='center', fontsize=8, 
 chain = FancyBboxPatch((4.5, 5.3), 9.2, 1.6, boxstyle="round,pad=0.05", facecolor=c_chain, edgecolor='black', linewidth=1.5, alpha=0.85)
 ax.add_patch(chain)
 ax.text(9.1, 6.55, 'CAPA BLOCKCHAIN: Ethereum (Anvil-dev / Sepolia-prod)', ha='center', fontsize=11, fontweight='bold', color='white')
-ax.text(9.1, 6.1, '6 contratos verificados: MockUSDT · MockUniswapV2Pool · MockTornado (ZK) · MockBridge · MiMCSponge · Verifier',
-        ha='center', fontsize=8, color='white')
-ax.text(9.1, 5.7, 'Grafo de transacciones ERC-20 + ETH nativas + eventos on-chain (chain_trace.jsonl)', ha='center', fontsize=8, color='white')
-ax.add_patch(FancyArrowPatch((2.05, 6.2), (2.05, 5.6), arrowstyle='->', mutation_scale=20, color='black', linewidth=2))
-ax.text(2.55, 5.85, 'ejecuta tx\non-chain', fontsize=8, color='black')
+ax.text(9.1, 6.15, '4 contratos propios verificados en Etherscan (MockUSDT · MockUniswapV2Pool · MockTornado ZK · MockBridge)', ha='center', fontsize=8, color='white')
+ax.text(9.1, 5.85, '+ MiMCSponge (bytecode) y Verifier (generado por snarkjs)', ha='center', fontsize=8, color='white')
+ax.text(9.1, 5.5, 'Grafo de transacciones ERC-20 + ETH nativas + eventos on-chain (chain_trace.jsonl)', ha='center', fontsize=8, color='white')
+ax.add_patch(FancyArrowPatch((3.85, 6.9), (4.5, 6.45), arrowstyle='->', mutation_scale=20, color='black', linewidth=2))
+ax.text(3.6, 7.15, 'ejecuta tx on-chain', fontsize=8, color='black', ha='left')
 names = ['Exchange 1\n(tipo Binance)', 'Exchange 2\n(tipo Coinbase)', 'Exchange 3\n(tipo Kraken)']
 xs = [1.5, 5.5, 9.5]
 for i, (name, xpos) in enumerate(zip(names, xs)):
     ax.add_patch(FancyBboxPatch((xpos, 2.8), 3, 1.8, boxstyle="round,pad=0.05", facecolor=c_exchange, edgecolor='black', linewidth=1.5, alpha=0.85))
-    ax.text(xpos + 1.5, 4.3, name, ha='center', fontsize=10, fontweight='bold', color='white')
+    ax.text(xpos + 1.5, 4.52, name, ha='center', va='top', fontsize=10, fontweight='bold', color='white')
     ax.text(xpos + 1.5, 3.75, f'Vista LOCAL V_{i + 1}', ha='center', fontsize=9, color='white')
     ax.text(xpos + 1.5, 3.45, '(solo sus usuarios con KYC)', ha='center', fontsize=7.5, color='white')
     ax.text(xpos + 1.5, 3.1, 'Louvain Fase 1 → F1', ha='center', fontsize=8, color='white', style='italic')
-    ax.add_patch(FancyArrowPatch((xpos + 1.5, 5.3), (xpos + 1.5, 4.6), arrowstyle='->', mutation_scale=15, color='black', linewidth=1.5))
+    x0 = max(xpos + 1.5, 4.9)   # the chain box starts at x=4.5: exchange 1 gets a diagonal arrow from its left edge
+    ax.add_patch(FancyArrowPatch((x0, 5.3), (xpos + 1.5, 4.62), arrowstyle='->', mutation_scale=15, color='black', linewidth=1.5))
 coord = FancyBboxPatch((3.5, 0.5), 7, 1.8, boxstyle="round,pad=0.05", facecolor=c_coord, edgecolor='black', linewidth=1.5, alpha=0.85)
 ax.add_patch(coord)
 ax.text(7, 1.95, 'COORDINADOR DEFENSOR LLM', ha='center', fontsize=11, fontweight='bold', color='white')
 ax.text(7, 1.55, 'Haiku 4.5 + fusión post-hoc P1-71 + elección automática de k por silhouette (P1-73)', ha='center', fontsize=8.5, color='white')
 ax.text(7, 1.2, 'Recibe fingerprints agregados (19 dimensiones) → propone actor clusters cross-exchange', ha='center', fontsize=8.5, color='white')
-ax.text(7, 0.85, 'SALIDA: (a) F1 binario  (b) ARI de actor clusters  (c) razonamiento textual auditable', ha='center', fontsize=8.5, color='white', style='italic')
+ax.text(7, 0.85, 'SALIDA: (a) ARI de actor clusters  (b) razonamiento textual auditable  (el F1 binario lo da Louvain, Fase 1)', ha='center', fontsize=7.6, color='white', style='italic')
 for xpos in xs:
-    ax.add_patch(FancyArrowPatch((xpos + 1.5, 2.8), (7, 2.3), arrowstyle='->', mutation_scale=15, color='black', linewidth=1.5, connectionstyle="arc3,rad=0.1"))
-ax.text(7, 2.55, 'fingerprints AGREGADOS de 19 dimensiones (NO datos crudos)', ha='center', fontsize=8, color='#c0392b', fontweight='bold')
+    ax.add_patch(FancyArrowPatch((xpos + 1.5, 2.8), (7, 2.3), arrowstyle='->', mutation_scale=15, color='black', linewidth=1.5, connectionstyle="arc3,rad=0.1", zorder=2))
+ax.text(7, 2.55, 'fingerprints AGREGADOS de 19 dimensiones (NO datos crudos)', ha='center', fontsize=8, color='#c0392b', fontweight='bold', zorder=5,
+        bbox=dict(facecolor='white', edgecolor='none', pad=1.5))
 ax.text(0.3, 0.15, '● Novedad: cada exchange solo ve su subgrafo local; el coordinador razona sobre fingerprints sin acceder a datos crudos',
         fontsize=8.5, color='#c0392b', fontweight='bold')
 plt.tight_layout()
@@ -59,7 +61,7 @@ print('Wrote fig1_architecture_v2.png')
 
 # ================= FIGURA 2: flujo end-to-end (seed 803) =================
 fig, ax = plt.subplots(figsize=(13, 5), dpi=140)
-ax.set_xlim(0, 15); ax.set_ylim(0, 7); ax.axis('off')
+ax.set_xlim(-0.35, 15.35); ax.set_ylim(0, 7); ax.axis('off')
 ax.text(7.5, 6.7, 'Flujo end-to-end de una campaña atacante y su detección', ha='center', fontsize=14, fontweight='bold')
 ax.text(7.5, 6.35, 'Ejemplo: seed 803 (defi-exploit, 22,6 ETH, Sepolia real)', ha='center', fontsize=9, style='italic', color='gray')
 phases = [
