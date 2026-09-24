@@ -21,12 +21,17 @@ Capítulo 5 del TFM (`tfm/TFM_SalehSinawi.docx`). Los directorios de campaña (`
 | `reps/aggregate.json` | `scripts/reps/aggregate_reps.py` | Medias ± σ de todo lo anterior |
 | `eval_defender_seed403_comparison.json`, `eval_detection_seed403.json` | `scripts/eval_llm_defender_seed403.py` | §5.9.7 (cinco configuraciones del defensor, Opus incluido) |
 | `sepolia_campaign/*/summary.txt`, `anvil*/*/summary.txt` | `scripts/run_sepolia_campaign.py`, `aml.attackers.run_campaign` | Tabla 16 (coste LLM y *honest recovery* por campaña) |
+| `feature_separation_full_graph.json`, `mixer_shortcut_check.json` | `scripts/feature_separation_check.py`, `scripts/mixer_shortcut_check.py` | §5.9.4 y §5.10 (separación por feature con d de Cohen y regla «mixer ⇒ atacante», calculadas sobre el grafo completo como las ve el GCN; corrigen las comprobaciones 2 y 4 de `audit_f1_memorization.json`) |
 
 ## Ficheros superados (se conservan por trazabilidad)
 
 - `audit_f1_memorization.json` — primera auditoría LOCO (pickle anterior de 10 campañas atacantes + 10 benignas). Su
   media de F1 (0,42) incluía los 10 folds benignos, donde F1 = 0 por construcción; el protocolo corregido está en
-  `loco_simulation_precision.json` (§5.10, Hallazgo 1).
+  `loco_simulation_precision.json` (§5.10, Hallazgo 1). Sus comprobaciones 2 (d de Cohen por feature) y 4 (regla
+  «mixer ⇒ atacante») calculaban los features solo sobre los nodos etiquetados, y `extract_features` descarta las
+  aristas con un extremo fuera de esa lista (los contratos no están etiquetados), por lo que las columnas `mixer_*` y
+  `swap_*` salían a cero; la versión correcta, sobre el grafo completo, está en `feature_separation_full_graph.json` y
+  `mixer_shortcut_check.json`.
 - `loco_simulation_3detectors.json` — ejecución con un error de script (los tres detectores devuelven valores
   idénticos); no se cita en el TFM.
 - `eval_sepolia_*seed100/500*.json`, `eval_sepolia_gcn_experiments.json` — evaluaciones de las campañas de
