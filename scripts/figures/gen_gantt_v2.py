@@ -15,7 +15,7 @@ phases = [
     ('F2 Simulador ofensivo',                4, 6, 5, '#55a868'),
     ('F3 Iteraciones Anvil-dev → Sepolia',   9, 8, 3, '#c44e52'),
     ('F4 Despliegue Sepolia',               17, 5, 3, '#8172b2'),
-    ('F5 Defensor + ablaciones',            18, 3, 4, '#ccb974'),
+    ('F5 Defensor + ablaciones',            18, 4, 4, '#ccb974'),
     ('F6 Redacción memoria + defensa',      19, 4, 3, '#64b5cd'),
 ]
 fig, ax = plt.subplots(figsize=(12, 4.6), dpi=150)
@@ -31,14 +31,14 @@ for i, (lab, s, real, est, col) in enumerate(phases):
     else:
         ax.text(s - 0.5 + real + 0.2, y, txt, va='center', ha='left', fontsize=8.6, color='#222222')
 ax.set_yticks(range(1, len(phases) + 1)); ax.set_yticklabels([p[0] for p in phases][::-1], fontsize=9.5)
-ax.set_xlim(0.5, 22.5); ax.set_xticks(range(1, 23)); ax.set_xticklabels([str(w) for w in range(1, 23)], fontsize=8.5)
-ax.set_xlabel('Semana (abril - septiembre 2026)', fontsize=10)
+ax.set_xlim(0.5, 23.2); ax.set_xticks(range(1, 23)); ax.set_xticklabels([str(w) for w in range(1, 23)], fontsize=8.5)
+ax.set_xlabel('Semana (S1 = semana del 27 de abril de 2026; S22 termina el 27 de septiembre)', fontsize=10)
 ax.grid(axis='x', alpha=0.3); ax.set_axisbelow(True)
 for sp in ('top', 'right'): ax.spines[sp].set_visible(False)
 ax.legend(handles=[Patch(facecolor='#999999', edgecolor='black', label='Duración real'),
                    Line2D([0], [0], color='black', linewidth=2.2, label='Duración estimada (Tabla 6)')],
           loc='lower left', fontsize=8.5, framealpha=0.95)
-ax.set_title('Total: 21 semanas estimadas, 22 de calendario (29 sumando fases; F4-F6 en paralelo desde mediados de agosto)', loc='right', fontsize=8.5, color='#555555', style='italic')
+ax.set_title('Total: 21 semanas estimadas, 22 de calendario (30 sumando fases; F4-F6 en paralelo desde finales de agosto)', loc='right', fontsize=8.5, color='#555555', style='italic')
 fig.tight_layout()
 fig.savefig(OUT / 'fig3_gantt_v2.png', dpi=150, bbox_inches='tight', facecolor='white')
 print('Wrote', OUT / 'fig3_gantt_v2.png')
