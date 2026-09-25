@@ -17,10 +17,10 @@ for ds, (col, mk) in style.items():
     ys = [H[ds][f'max_{k}']['mean'] for k in KS]; es = [H[ds][f'max_{k}']['std'] for k in KS]
     ax.errorbar(KS, ys, yerr=es, marker=mk, label=ds, color=col, linewidth=1.8, markersize=7, capsize=3)
 if HE:
-    ax.plot(KS, [HE.get(f'max_{k}') for k in KS], marker='*', label='EthereumHeist (1 ejecución)', color='#9b59b6', linewidth=1.8, markersize=10, linestyle='--')
+    ax.plot(KS, [HE.get(f'max_{k}') for k in KS], marker='*', label='EthereumHeist (ARI por hackeo, 1 ejecución)', color='#9b59b6', linewidth=1.8, markersize=10, linestyle='--')
 ax.axhline(y=0, color='black', linestyle='-', alpha=0.3, linewidth=0.8)
 ax.set_xlabel('max_clusters (parámetro de la fusión post-hoc P1-71)')
-ax.set_ylabel('ARI (atribución por rol; media ± σ sobre 3 ejecuciones)')
+ax.set_ylabel('ARI (datasets propios: por rol, media ± σ de 3 ejecuciones;\nEthereumHeist: por hackeo, 1 ejecución)', fontsize=9)
 ax.set_xticks(KS)
 ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f'{v:.1f}'.replace('.', ',')))
 ax.legend(loc='upper right', framealpha=0.95, ncol=2, fontsize=8.5)

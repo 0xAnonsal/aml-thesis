@@ -28,17 +28,17 @@ ax.text(2.05, 6.55, 'structuring sub-umbral, burners', ha='center', fontsize=8, 
 chain = FancyBboxPatch((4.5, 5.3), 9.2, 1.6, boxstyle="round,pad=0.05", facecolor=c_chain, edgecolor='black', linewidth=1.5, alpha=0.85)
 ax.add_patch(chain)
 ax.text(9.1, 6.55, 'CAPA BLOCKCHAIN: Ethereum (Anvil-dev / Sepolia-prod)', ha='center', fontsize=11, fontweight='bold', color='white')
-ax.text(9.1, 6.15, '4 contratos propios verificados en Etherscan (MockUSDT · MockUniswapV2Pool · MockTornado ZK · MockBridge)', ha='center', fontsize=8, color='white')
-ax.text(9.1, 5.85, '+ MiMCSponge (bytecode) y Verifier (generado por snarkjs)', ha='center', fontsize=8, color='white')
+ax.text(9.1, 6.2, '4 contratos propios: MockUSDT · pool ETH/USDT · MockTornado ZK · MockBridge (verificados en Etherscan', ha='center', fontsize=8, color='white')
+ax.text(9.1, 5.9, 'en su primer despliegue) + MiMCSponge (bytecode) y Verifier (generado por snarkjs)', ha='center', fontsize=8, color='white')
 ax.text(9.1, 5.5, 'Grafo de transacciones ERC-20 + ETH nativas + eventos on-chain (chain_trace.jsonl)', ha='center', fontsize=8, color='white')
 ax.add_patch(FancyArrowPatch((3.85, 6.9), (4.5, 6.45), arrowstyle='->', mutation_scale=20, color='black', linewidth=2))
-ax.text(3.6, 7.15, 'ejecuta tx on-chain', fontsize=8, color='black', ha='left')
-names = ['Exchange 1\n(tipo Binance)', 'Exchange 2\n(tipo Coinbase)', 'Exchange 3\n(tipo Kraken)']
+ax.text(4.0, 7.08, 'ejecuta tx on-chain', fontsize=8, color='black', ha='left')
+names = ['exchange_A\n(tipo Binance)', 'exchange_B\n(tipo Coinbase)', 'exchange_C\n(tipo Kraken)']
 xs = [1.5, 5.5, 9.5]
 for i, (name, xpos) in enumerate(zip(names, xs)):
     ax.add_patch(FancyBboxPatch((xpos, 2.8), 3, 1.8, boxstyle="round,pad=0.05", facecolor=c_exchange, edgecolor='black', linewidth=1.5, alpha=0.85))
     ax.text(xpos + 1.5, 4.52, name, ha='center', va='top', fontsize=10, fontweight='bold', color='white')
-    ax.text(xpos + 1.5, 3.75, f'Vista LOCAL V_{i + 1}', ha='center', fontsize=9, color='white')
+    ax.text(xpos + 1.5, 3.75, f'Vista local X_{"ABC"[i]}', ha='center', fontsize=9, color='white')
     ax.text(xpos + 1.5, 3.45, '(solo sus usuarios con KYC)', ha='center', fontsize=7.5, color='white')
     ax.text(xpos + 1.5, 3.1, 'Louvain Fase 1 → F1', ha='center', fontsize=8, color='white', style='italic')
     x0 = max(xpos + 1.5, 4.9)   # the chain box starts at x=4.5: exchange 1 gets a diagonal arrow from its left edge
@@ -88,7 +88,7 @@ metrics = [
 for label, value, xc in metrics:
     ax.text(xc, 1.4, label, ha='center', fontsize=8.5, color='#34495e')
     ax.text(xc, 0.9, value, ha='center', fontsize=11, fontweight='bold', color='#2c3e50')
-ax.text(7.5, 0.2, 'Campaña atacante: 77 min, 42 812 tx trazadas, 134 direcciones atacantes etiquetadas (141 wallets creadas), coste LLM 6,53 USD (Sonnet).\nFuentes: summary.txt de la seed 803, results/reps/aggregate.json, results/hard_neg_eval_sepolia_803.json',
+ax.text(7.5, 0.2, 'Campaña atacante: 77 min, 134 direcciones atacantes etiquetadas (141 wallets creadas), coste LLM 6,53 USD (Sonnet). La traza recoge 42 812 tx de Sepolia\nen los 367 bloques de la campaña, con el fondo de la red incluido (la campaña en sí son unas 200). Fuentes: summary.txt de la seed 803, results/reps/aggregate.json, results/hard_neg_eval_sepolia_803.json',
         ha='center', fontsize=7.8, color='#7f8c8d', style='italic')
 plt.tight_layout()
 fig.savefig(OUT / 'fig2_flow_v2.png', dpi=150, bbox_inches='tight', facecolor='white'); plt.close()
