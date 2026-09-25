@@ -88,7 +88,7 @@ metrics = [
 for label, value, xc in metrics:
     ax.text(xc, 1.4, label, ha='center', fontsize=8.5, color='#34495e')
     ax.text(xc, 0.9, value, ha='center', fontsize=11, fontweight='bold', color='#2c3e50')
-ax.text(7.5, 0.2, 'Campaña atacante: 77 min, 42 812 tx trazadas, 141 wallets, coste LLM 6,53 USD (Sonnet). Fuentes: summary.txt de la seed 803, results/reps/aggregate.json, results/hard_neg_eval_sepolia_803.json',
+ax.text(7.5, 0.2, 'Campaña atacante: 77 min, 42 812 tx trazadas, 134 direcciones atacantes etiquetadas (141 wallets creadas), coste LLM 6,53 USD (Sonnet). Fuentes: summary.txt de la seed 803, results/reps/aggregate.json, results/hard_neg_eval_sepolia_803.json',
         ha='center', fontsize=7.8, color='#7f8c8d', style='italic')
 plt.tight_layout()
 fig.savefig(OUT / 'fig2_flow_v2.png', dpi=150, bbox_inches='tight', facecolor='white'); plt.close()
