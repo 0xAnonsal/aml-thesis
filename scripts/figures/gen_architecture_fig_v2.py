@@ -61,22 +61,22 @@ print('Wrote fig1_architecture_v2.png')
 
 # ================= FIGURA 2: flujo end-to-end (seed 803) =================
 fig, ax = plt.subplots(figsize=(13, 5), dpi=140)
-ax.set_xlim(-0.35, 15.35); ax.set_ylim(0, 7); ax.axis('off')
+ax.set_xlim(-0.6, 15.6); ax.set_ylim(-0.25, 7); ax.axis('off')
 ax.text(7.5, 6.7, 'Flujo end-to-end de una campaña atacante y su detección', ha='center', fontsize=14, fontweight='bold')
 ax.text(7.5, 6.35, 'Ejemplo: seed 803 (defi-exploit, 22,6 ETH, Sepolia real)', ha='center', fontsize=9, style='italic', color='gray')
 phases = [
     ('PLACEMENT\n(origen del exploit)', '1. Alice roba 22,6 ETH\ndel pool DEX vulnerable', 1, '#e74c3c'),
-    ('LAYERING\n(mixer + swaps)', '2. Mixer ZK (Groth16)\n+ swaps Uniswap V2\n+ cadena de burners', 4, '#e67e22'),
+    ('LAYERING\n(mixer + swaps)', '2. Mixer ZK (Groth16)\n+ swaps DEX (pool a\nprecio de oráculo)\n+ cadena de burners', 4, '#e67e22'),
     ('INTEGRATION\n(cash-out)', '3. Structuring sub-umbral\n(999 USD) → 60 clean exits\nregistradas, 54 fondeadas', 7, '#f1c40f'),
     ('DETECCIÓN\n(3 exchanges)', '4. Louvain Fase 1\nsobre vistas parciales\n→ direcciones marcadas', 10, '#2ecc71'),
     ('CLUSTERING\n(LLM + P1-71)', '5. Haiku 4.5 + fusión\n→ actor clusters\ncon razonamiento', 13, '#9b59b6'),
 ]
 for name, desc, xc, color in phases:
-    ax.add_patch(FancyBboxPatch((xc - 1.1, 2.8), 2.2, 2.5, boxstyle="round,pad=0.05", facecolor=color, edgecolor='black', linewidth=1.5, alpha=0.85))
-    ax.text(xc, 4.9, name, ha='center', fontsize=10, fontweight='bold', color='white')
-    ax.text(xc, 3.7, desc, ha='center', fontsize=8, color='white')
+    ax.add_patch(FancyBboxPatch((xc - 1.35, 2.7), 2.7, 2.7, boxstyle="round,pad=0.05", facecolor=color, edgecolor='black', linewidth=1.5, alpha=0.85))
+    ax.text(xc, 4.8, name, ha='center', va='center', fontsize=9, fontweight='bold', color='white')
+    ax.text(xc, 3.5, desc, ha='center', va='center', fontsize=7.6, color='white', linespacing=1.25)
 for i in range(len(phases) - 1):
-    ax.add_patch(FancyArrowPatch((phases[i][2] + 1.1, 4.05), (phases[i + 1][2] - 1.1, 4.05), arrowstyle='->', mutation_scale=25, color='black', linewidth=2))
+    ax.add_patch(FancyArrowPatch((phases[i][2] + 1.38, 4.05), (phases[i + 1][2] - 1.38, 4.05), arrowstyle='->', mutation_scale=12, color='black', linewidth=2))
 ax.text(7.5, 1.9, 'RESULTADOS EMPÍRICOS (seed 803, defi-exploit, Sepolia real):', ha='center', fontsize=10, fontweight='bold', color='#2c3e50')
 metrics = [
     ('Recuperación honesta', '56,8 %', 1),
@@ -88,7 +88,7 @@ metrics = [
 for label, value, xc in metrics:
     ax.text(xc, 1.4, label, ha='center', fontsize=8.5, color='#34495e')
     ax.text(xc, 0.9, value, ha='center', fontsize=11, fontweight='bold', color='#2c3e50')
-ax.text(7.5, 0.2, 'Campaña atacante: 77 min, 42 812 tx trazadas, 134 direcciones atacantes etiquetadas (141 wallets creadas), coste LLM 6,53 USD (Sonnet). Fuentes: summary.txt de la seed 803, results/reps/aggregate.json, results/hard_neg_eval_sepolia_803.json',
+ax.text(7.5, 0.2, 'Campaña atacante: 77 min, 42 812 tx trazadas, 134 direcciones atacantes etiquetadas (141 wallets creadas), coste LLM 6,53 USD (Sonnet).\nFuentes: summary.txt de la seed 803, results/reps/aggregate.json, results/hard_neg_eval_sepolia_803.json',
         ha='center', fontsize=7.8, color='#7f8c8d', style='italic')
 plt.tight_layout()
 fig.savefig(OUT / 'fig2_flow_v2.png', dpi=150, bbox_inches='tight', facecolor='white'); plt.close()
