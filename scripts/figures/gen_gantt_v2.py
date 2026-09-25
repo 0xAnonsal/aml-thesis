@@ -13,10 +13,10 @@ OUT = Path(__file__).parent
 phases = [
     ('F1 Análisis y diseño',                 1, 3, 3, '#4c72b0'),
     ('F2 Simulador ofensivo',                4, 6, 5, '#55a868'),
-    ('F3 Iteraciones Anvil-dev → Sepolia',  10, 4, 3, '#c44e52'),
-    ('F4 Despliegue Sepolia',               13, 5, 3, '#8172b2'),
-    ('F5 Defensor + ablaciones',            17, 3, 4, '#ccb974'),
-    ('F6 Redacción memoria + defensa',      20, 3, 3, '#64b5cd'),
+    ('F3 Iteraciones Anvil-dev → Sepolia',   9, 8, 3, '#c44e52'),
+    ('F4 Despliegue Sepolia',               17, 5, 3, '#8172b2'),
+    ('F5 Defensor + ablaciones',            18, 3, 4, '#ccb974'),
+    ('F6 Redacción memoria + defensa',      19, 4, 3, '#64b5cd'),
 ]
 fig, ax = plt.subplots(figsize=(12, 4.6), dpi=150)
 for i, (lab, s, real, est, col) in enumerate(phases):
@@ -38,7 +38,7 @@ for sp in ('top', 'right'): ax.spines[sp].set_visible(False)
 ax.legend(handles=[Patch(facecolor='#999999', edgecolor='black', label='Duración real'),
                    Line2D([0], [0], color='black', linewidth=2.2, label='Duración estimada (Tabla 6)')],
           loc='lower left', fontsize=8.5, framealpha=0.95)
-ax.set_title('Total: 21 semanas estimadas, 22 reales (solapes F3/F4 y F4/F5)', loc='right', fontsize=8.5, color='#555555', style='italic')
+ax.set_title('Total: 21 semanas estimadas, 22 de calendario (29 sumando fases; F4-F6 en paralelo desde mediados de agosto)', loc='right', fontsize=8.5, color='#555555', style='italic')
 fig.tight_layout()
 fig.savefig(OUT / 'fig3_gantt_v2.png', dpi=150, bbox_inches='tight', facecolor='white')
 print('Wrote', OUT / 'fig3_gantt_v2.png')
