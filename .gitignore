@@ -108,3 +108,15 @@ results/episodes/
 # Coordinator checkpoints and incremental sub-agent logs embed mixer deposit notes (secret + nullifier)
 **/coordinator_checkpoint.json
 **/sub_agents_incremental.jsonl
+
+# Memoria y borradores anteriores: viven en el repositorio privado del autor
+tfm/*.docx
+tfm/chapters/
+tfm/chapters_v2/
+scratchpad/compact_*.md
+scratchpad/v15_*.md
+# campaign.json con notas del mezclador (Sepolia 201, 500, 604, 801)
+results/sepolia_campaign/*seed201_sepolia/campaign.json
+results/sepolia_campaign/*seed500_sepolia/campaign.json
+results/sepolia_campaign/*seed604_sepolia/campaign.json
+results/sepolia_campaign/*seed801_sepolia/campaign.json
